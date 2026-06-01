@@ -2,11 +2,7 @@ import type { Config } from "tailwindcss";
 
 // Design tokens — see docs/DESIGN_SYSTEM.md for the rationale and usage rules.
 const config: Config = {
-  content: [
-    "./app/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./lib/**/*.{ts,tsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {

@@ -1,21 +1,14 @@
 # dependencies
 /node_modules
-/.pnp
-.pnp.js
 
-# next.js
-/.next/
-/out/
-next-env.d.ts
+# build output
+/dist
 
-# production
-/build
-
-# pwa generated
+# vite pwa generated (built into /dist, but ignore stray copies)
 /public/sw.js
 /public/sw.js.map
 /public/workbox-*.js
-/public/swe-worker-*.js
+/dev-dist
 
 # env
 .env
