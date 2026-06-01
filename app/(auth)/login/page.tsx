@@ -4,58 +4,30 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+// Optionally pre-fill the owner's email so you only need to type the password.
+// Set NEXT_PUBLIC_OWNER_EMAIL in Vercel to enable. The email is not secret.
+const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
+
 export default function LoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"email" | "code">("email");
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [email, setEmail] = useState(OWNER_EMAIL);
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function sendCode(e: React.FormEvent) {
+  async function signIn(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     const supabase = createClient();
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: true },
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
     });
 
-    if (otpError) {
-      setError(otpError.message);
-      setLoading(false);
-      return;
-    }
-    setStep("code");
-    setLoading(false);
-  }
-
-  async function verifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const supabase = createClient();
-    // Returning logins arrive as a magic-link OTP ("email"); a brand-new user's
-    // very first code arrives as a signup OTP. Try email first, then fall back.
-    let { error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: code.trim(),
-      type: "email",
-    });
-    if (verifyError) {
-      const retry = await supabase.auth.verifyOtp({
-        email,
-        token: code.trim(),
-        type: "signup",
-      });
-      verifyError = retry.error;
-    }
-
-    if (verifyError) {
-      setError(verifyError.message);
+    if (signInError) {
+      setError(signInError.message);
       setLoading(false);
       return;
     }
@@ -72,8 +44,8 @@ export default function LoginPage() {
         <p className="mt-1 text-label-secondary">What&apos;s up, Doc?</p>
       </div>
 
-      {step === "email" ? (
-        <form onSubmit={sendCode} className="mt-10 flex flex-col gap-3">
+      <form onSubmit={signIn} className="mt-10 flex flex-col gap-3">
+        {!OWNER_EMAIL && (
           <input
             type="email"
             inputMode="email"
@@ -84,53 +56,26 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             className="rounded-card bg-grouped px-4 py-4 outline-none placeholder:text-label-secondary"
           />
-          {error && <p className="text-sm text-expense">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="press rounded-card bg-label py-4 text-lg font-semibold text-white disabled:bg-separator"
-          >
-            {loading ? "Sending…" : "Email me a code"}
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={verifyCode} className="mt-10 flex flex-col gap-3">
-          <p className="text-center text-sm text-label-secondary">
-            We emailed a code to {email}.
-          </p>
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            autoFocus
-            required
-            maxLength={8}
-            placeholder="Enter code"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))}
-            className="rounded-card bg-grouped px-4 py-4 text-center text-2xl tracking-[0.3em] tabular-nums outline-none placeholder:text-base placeholder:tracking-normal placeholder:text-label-secondary"
-          />
-          {error && <p className="text-sm text-expense">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading || code.length < 6}
-            className="press rounded-card bg-label py-4 text-lg font-semibold text-white disabled:bg-separator"
-          >
-            {loading ? "Verifying…" : "Sign in"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setStep("email");
-              setCode("");
-              setError(null);
-            }}
-            className="press py-2 text-center text-sm text-carrot"
-          >
-            Use a different email
-          </button>
-        </form>
-      )}
+        )}
+        <input
+          type="password"
+          autoComplete="current-password"
+          autoFocus={!!OWNER_EMAIL}
+          required
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="rounded-card bg-grouped px-4 py-4 outline-none placeholder:text-label-secondary"
+        />
+        {error && <p className="text-sm text-expense">{error}</p>}
+        <button
+          type="submit"
+          disabled={loading || password.length === 0}
+          className="press rounded-card bg-label py-4 text-lg font-semibold text-white disabled:bg-separator"
+        >
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
     </main>
   );
 }
