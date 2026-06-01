@@ -9,7 +9,7 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
 
 - **Stack:** Vite + React + TypeScript + Tailwind, Supabase (Postgres + Auth) for data,
   deployed as static files on Vercel. PWA via `vite-plugin-pwa`.
-- **Currency:** USD + a per-entry LBP toggle (default 89,000 LBP/$, editable in Settings).
+- **Currency:** USD + a per-entry LBP toggle (default 89,500 LBP/$, editable in Settings).
   Stored normalized to **integer USD cents**, with the original currency/amount/rate kept
   for auditable export.
 - **Auth:** Supabase **email + password** (single owner). No emails sent, no rate limits.

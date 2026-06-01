@@ -6,8 +6,8 @@
 create table if not exists public.profiles (
   id           uuid primary key references auth.users(id) on delete cascade,
   email        text,
-  -- LBP per 1 USD; default 89000.
-  lbp_per_usd  integer not null default 89000 check (lbp_per_usd > 0),
+  -- LBP per 1 USD; default 89500.
+  lbp_per_usd  integer not null default 89500 check (lbp_per_usd > 0),
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
