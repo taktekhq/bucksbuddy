@@ -87,11 +87,14 @@ src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql
 docs/DESIGN_SYSTEM.md   reusable design system
-scripts/generate-icons.mjs
+scripts/icons-from-source.mjs
 ```
 
 ## Regenerating icons
 
+App icons are generated from `public/icons/carrot-source.png` (auto-cropped and
+centered on white). Requires `sharp`:
+
 ```bash
-node scripts/generate-icons.mjs   # writes public/icons/*
+npm i sharp && node scripts/icons-from-source.mjs   # writes public/icons/*
 ```
