@@ -10,7 +10,7 @@ exportable to CSV for accounting.
 - **Currency:** USD, plus an optional LBP toggle per entry (default rate 89,000 LBP / $1,
   editable in Settings). Everything is stored normalized to **integer USD cents**, with the
   original currency/amount/rate kept for auditable export.
-- **Auth:** Supabase email **6-digit code** (single owner) — enter your email, get a code, type it in. No leaving the app. Data is private via Row Level Security.
+- **Auth:** Supabase email **one-time code** (single owner) — enter your email, get a code, type it in. No leaving the app. Data is private via Row Level Security.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -37,13 +37,17 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 
 ### 3. Supabase Auth: enable the email code
 
-Sign-in uses a **6-digit email code** (not a magic link), so the email must contain
-the code token:
+Sign-in uses a **one-time email code** (not a magic link), so the emails must contain
+the code token `{{ .Token }}`. The app accepts whatever length your project is set to
+(Supabase default is 6 digits; some projects use 8).
 
-- **Authentication → Providers → Email:** enabled.
-- **Authentication → Emails → Templates → "Magic Link":** make sure the template
-  includes the code token `{{ .Token }}`. The default template only has the link
-  (`{{ .ConfirmationURL }}`), so add a line such as:
+- **Authentication → Providers → Email:** enabled. For a single-owner app, turning
+  **Confirm email OFF** is simplest — then both first-time and returning sign-ins use
+  the same code email. (If you leave it ON, also add the token to the "Confirm signup"
+  template below; the app verifies either way.)
+- **Authentication → Emails → Templates:** in both **"Magic Link"** and
+  **"Confirm signup"**, make sure the body includes the code token. The defaults only
+  have the link (`{{ .ConfirmationURL }}`), so add a line such as:
 
   ```html
   <p>Your BucksBuddy code is: <strong>{{ .Token }}</strong></p>
