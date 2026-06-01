@@ -1,80 +1,76 @@
-// Generates simple BucksBuddy app icons (carrot-orange rounded square with a
-// white "$"). No external deps — hand-rolls a PNG via zlib. Re-run with:
-//   node scripts/generate-icons.mjs
+// Generates BucksBuddy app icons: a simple carrot on a solid white background
+// (matching the 🥕 on the login screen). No external deps — hand-rolls a PNG via
+// zlib. Re-run with: node scripts/generate-icons.mjs
 import { deflateSync } from "node:zlib";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const OUT = new URL("../public/icons/", import.meta.url);
 mkdirSync(OUT, { recursive: true });
 
-const BG = [0xff, 0x7a, 0x00]; // carrot
-const FG = [0xff, 0xff, 0xff]; // white
+const WHITE = [0xff, 0xff, 0xff];
+const ORANGE = [0xff, 0x7a, 0x00]; // carrot
+const GREEN = [0x3d, 0xa3, 0x5d]; // leaves
 
-// 5x7 bitmap font for "$" rendered as a thick glyph via simple rects instead.
-function draw(size, maskable) {
+function draw(size) {
   const px = Buffer.alloc(size * size * 4);
-  const radius = maskable ? 0 : Math.floor(size * 0.22);
-  // safe zone inset for maskable so the glyph isn't clipped by the mask
-  const pad = maskable ? Math.floor(size * 0.32) : Math.floor(size * 0.26);
+  const cx = size / 2;
 
-  const inRounded = (x, y) => {
-    if (radius === 0) return true;
-    const minX = radius,
-      maxX = size - radius,
-      minY = radius,
-      maxY = size - radius;
-    if (x >= minX && x <= maxX) return true;
-    if (y >= minY && y <= maxY) return true;
-    const cx = x < minX ? minX : maxX;
-    const cy = y < minY ? minY : maxY;
-    return (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2;
+  // Carrot body: an inverted cone (wide shoulders, tip at the bottom).
+  const bodyTopY = 0.42 * size;
+  const tipY = 0.86 * size;
+  const bodyHalf = 0.16 * size;
+
+  // Three tapered leaf blades fanning up from the shoulders.
+  const baseY = bodyTopY + 0.015 * size;
+  const blades = [
+    { tx: cx, ty: 0.12 * size, hw: 0.055 * size },
+    { tx: cx - 0.13 * size, ty: 0.2 * size, hw: 0.05 * size },
+    { tx: cx + 0.13 * size, ty: 0.2 * size, hw: 0.05 * size },
+  ];
+
+  const inBody = (x, y) => {
+    if (y < bodyTopY || y > tipY) return false;
+    const t = (y - bodyTopY) / (tipY - bodyTopY);
+    const hw = bodyHalf * (1 - t);
+    return Math.abs(x - cx) <= hw;
   };
 
-  // "$" geometry: a vertical bar + two horizontal-ish strokes.
-  const gx0 = pad,
-    gx1 = size - pad;
-  const gw = gx1 - gx0;
-  const cx = size / 2;
-  const stroke = Math.max(2, Math.floor(gw * 0.18));
-  const half = stroke / 2;
-
-  const isGlyph = (x, y) => {
-    const t = pad,
-      b = size - pad;
-    const h = b - t;
-    const topBar = t,
-      midBar = t + h * 0.5,
-      botBar = b;
-    // vertical stem (the two little nubs of a $ pass through, slight overshoot)
-    if (Math.abs(x - cx) <= half && y >= t - stroke * 0.8 && y <= b + stroke * 0.8)
-      return true;
-    // the S body: three horizontal bars
-    for (const by of [topBar, midBar, botBar]) {
-      if (Math.abs(y - by) <= half && x >= gx0 && x <= gx1) return true;
-    }
-    // upper-left vertical (top → middle) and lower-right vertical (middle → bottom)
-    if (Math.abs(x - gx0) <= half && y >= topBar && y <= midBar) return true;
-    if (Math.abs(x - gx1) <= half && y >= midBar && y <= botBar) return true;
-    return false;
+  const inBlade = (x, y, b) => {
+    const dx = b.tx - cx;
+    const dy = b.ty - baseY;
+    const len2 = dx * dx + dy * dy;
+    const u = ((x - cx) * dx + (y - baseY) * dy) / len2;
+    if (u < 0 || u > 1) return false;
+    const projx = cx + u * dx;
+    const projy = baseY + u * dy;
+    const d = Math.hypot(x - projx, y - projy);
+    return d <= b.hw * (1 - u);
   };
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
-      const inside = inRounded(x, y);
-      const glyph = inside && isGlyph(x, y);
-      const c = glyph ? FG : BG;
+      let c = WHITE;
+      if (inBody(x, y)) {
+        c = ORANGE;
+      } else {
+        for (const b of blades) {
+          if (inBlade(x, y, b)) {
+            c = GREEN;
+            break;
+          }
+        }
+      }
       px[i] = c[0];
       px[i + 1] = c[1];
       px[i + 2] = c[2];
-      px[i + 3] = inside ? 0xff : 0x00;
+      px[i + 3] = 0xff; // opaque white background
     }
   }
   return px;
 }
 
 function encodePng(size, rgba) {
-  // raw image data with filter byte 0 per scanline
   const stride = size * 4;
   const raw = Buffer.alloc((stride + 1) * size);
   for (let y = 0; y < size; y++) {
@@ -95,8 +91,8 @@ function encodePng(size, rgba) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(size, 0);
   ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // RGBA
+  ihdr[8] = 8;
+  ihdr[9] = 6;
   ihdr[10] = 0;
   ihdr[11] = 0;
   ihdr[12] = 0;
@@ -110,7 +106,6 @@ function encodePng(size, rgba) {
   ]);
 }
 
-// CRC32
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -127,14 +122,14 @@ function crc32(buf) {
 }
 
 const targets = [
-  { name: "icon-192.png", size: 192, maskable: false },
-  { name: "icon-512.png", size: 512, maskable: false },
-  { name: "icon-maskable-512.png", size: 512, maskable: true },
-  { name: "apple-touch-icon.png", size: 180, maskable: false },
+  { name: "icon-192.png", size: 192 },
+  { name: "icon-512.png", size: 512 },
+  { name: "icon-maskable-512.png", size: 512 },
+  { name: "apple-touch-icon.png", size: 180 },
 ];
 
 for (const t of targets) {
-  const png = encodePng(t.size, draw(t.size, t.maskable));
+  const png = encodePng(t.size, draw(t.size));
   writeFileSync(new URL(t.name, OUT), png);
   console.log("wrote", t.name, png.length, "bytes");
 }

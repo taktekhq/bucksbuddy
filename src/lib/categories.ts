@@ -1,4 +1,6 @@
-// Fixed starter category list. No management UI by design.
+// Categories depend on direction: money IN uses a short income list, money OUT
+// uses the fuller expense list. A combined lookup resolves labels/emoji for any
+// stored id (used by the recent list and CSV export).
 
 export type Category = {
   id: string;
@@ -6,22 +8,32 @@ export type Category = {
   emoji: string;
 };
 
-export const CATEGORIES: Category[] = [
+export const INCOME_CATEGORIES: Category[] = [
+  { id: "salary", label: "Work", emoji: "💼" },
+  { id: "side_business", label: "Side Biz", emoji: "🧰" },
+  { id: "sale", label: "Sale", emoji: "🏷️" },
+  { id: "other", label: "Other", emoji: "⚪" },
+];
+
+export const EXPENSE_CATEGORIES: Category[] = [
   { id: "groceries", label: "Groceries", emoji: "🛒" },
   { id: "food", label: "Food", emoji: "🍔" },
   { id: "gas", label: "Gas", emoji: "⛽" },
   { id: "gifts", label: "Gifts", emoji: "🎁" },
-  { id: "work", label: "Work", emoji: "💼" },
   { id: "rent", label: "Rent", emoji: "🏠" },
   { id: "health", label: "Health", emoji: "❤️" },
   { id: "fun", label: "Fun", emoji: "🎉" },
+  { id: "work", label: "Work", emoji: "💼" },
   { id: "other", label: "Other", emoji: "⚪" },
 ];
 
-const byId = new Map(CATEGORIES.map((c) => [c.id, c]));
+export function categoriesFor(isIncome: boolean): Category[] {
+  return isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+}
 
-export function getCategory(id: string): Category | undefined {
-  return byId.get(id);
+const byId = new Map<string, Category>();
+for (const c of [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES]) {
+  if (!byId.has(c.id)) byId.set(c.id, c);
 }
 
 export function categoryLabel(id: string): string {

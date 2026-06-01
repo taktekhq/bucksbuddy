@@ -6,6 +6,7 @@ import { AmountDisplay } from "@/components/ui/AmountDisplay";
 import { Numpad, applyKey } from "@/components/ui/Numpad";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
+import { categoriesFor } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
 
 export function AddEntryFlow() {
@@ -19,6 +20,12 @@ export function AddEntryFlow() {
 
   const amount = parseAmountString(display);
   const canSave = category !== null && amount > 0 && !saving;
+
+  // Income and expense have different category sets, so reset the pick on toggle.
+  function changeDirection(next: boolean) {
+    setIsIncome(next);
+    setCategory(null);
+  }
 
   async function save() {
     if (!canSave || category === null) return;
@@ -57,20 +64,27 @@ export function AddEntryFlow() {
         <span className="w-12" />
       </header>
 
-      <div className="mt-2">
-        <InOutToggle isIncome={isIncome} onChange={setIsIncome} />
-      </div>
-
-      <div className="mt-5">
-        <CategoryGrid selected={category} onSelect={setCategory} />
-      </div>
-
-      <div className="mt-6 flex flex-col items-center gap-3">
-        <CurrencyToggle currency={currency} onChange={setCurrency} />
+      {/* Amount first — the thing you most want to type the moment you open. */}
+      <div className="mt-3 flex flex-col items-center gap-3">
         <AmountDisplay display={display} currency={currency} lbpPerUsd={lbpPerUsd} />
+        <CurrencyToggle currency={currency} onChange={setCurrency} />
       </div>
 
-      <div className="mt-auto pt-6">
+      {/* Direction directly below the amount. */}
+      <div className="mt-5">
+        <InOutToggle isIncome={isIncome} onChange={changeDirection} />
+      </div>
+
+      {/* Categories change with direction (income vs expense). */}
+      <div className="mt-4">
+        <CategoryGrid
+          categories={categoriesFor(isIncome)}
+          selected={category}
+          onSelect={setCategory}
+        />
+      </div>
+
+      <div className="mt-auto pt-5">
         <Numpad onPress={(k) => setDisplay((d) => applyKey(d, k))} />
 
         {error && <p className="mt-3 text-center text-sm text-expense">{error}</p>}
