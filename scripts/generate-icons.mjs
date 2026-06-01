@@ -8,32 +8,35 @@ const OUT = new URL("../public/icons/", import.meta.url);
 mkdirSync(OUT, { recursive: true });
 
 const WHITE = [0xff, 0xff, 0xff];
-const ORANGE = [0xff, 0x7a, 0x00]; // carrot
-const GREEN = [0x3d, 0xa3, 0x5d]; // leaves
+const ORANGE = [0xff, 0x7a, 0x00]; // carrot body
+const ORANGE_LT = [0xff, 0xa1, 0x4d]; // glossy highlight
+const ORANGE_DK = [0xdd, 0x5e, 0x00]; // ridge marks
+const GREEN = [0x4f, 0xb8, 0x6c]; // leaves
+const GREEN_DK = [0x2f, 0x8c, 0x4f]; // back leaves
 
 function draw(size) {
   const px = Buffer.alloc(size * size * 4);
   const cx = size / 2;
 
-  // Carrot body: an inverted cone (wide shoulders, tip at the bottom).
-  const bodyTopY = 0.42 * size;
-  const tipY = 0.86 * size;
-  const bodyHalf = 0.16 * size;
-
-  // Three tapered leaf blades fanning up from the shoulders.
-  const baseY = bodyTopY + 0.015 * size;
-  const blades = [
-    { tx: cx, ty: 0.12 * size, hw: 0.055 * size },
-    { tx: cx - 0.13 * size, ty: 0.2 * size, hw: 0.05 * size },
-    { tx: cx + 0.13 * size, ty: 0.2 * size, hw: 0.05 * size },
-  ];
-
-  const inBody = (x, y) => {
-    if (y < bodyTopY || y > tipY) return false;
+  // Carrot body: a rounded cone (convex sides, wide shoulders, pointed tip).
+  const bodyTopY = 0.4 * size;
+  const tipY = 0.88 * size;
+  const maxHalf = 0.185 * size;
+  const bodyHalf = (y) => {
+    if (y < bodyTopY || y > tipY) return null;
     const t = (y - bodyTopY) / (tipY - bodyTopY);
-    const hw = bodyHalf * (1 - t);
-    return Math.abs(x - cx) <= hw;
+    return maxHalf * Math.pow(1 - t, 0.72);
   };
+
+  // Leaf blades fanning up from the shoulders (two depth shades).
+  const baseY = bodyTopY + 0.02 * size;
+  const blades = [
+    { tx: cx, ty: 0.09 * size, hw: 0.055 * size, color: GREEN },
+    { tx: cx - 0.085 * size, ty: 0.13 * size, hw: 0.05 * size, color: GREEN },
+    { tx: cx + 0.085 * size, ty: 0.13 * size, hw: 0.05 * size, color: GREEN },
+    { tx: cx - 0.16 * size, ty: 0.22 * size, hw: 0.045 * size, color: GREEN_DK },
+    { tx: cx + 0.16 * size, ty: 0.22 * size, hw: 0.045 * size, color: GREEN_DK },
+  ];
 
   const inBlade = (x, y, b) => {
     const dx = b.tx - cx;
@@ -43,24 +46,44 @@ function draw(size) {
     if (u < 0 || u > 1) return false;
     const projx = cx + u * dx;
     const projy = baseY + u * dy;
-    const d = Math.hypot(x - projx, y - projy);
-    return d <= b.hw * (1 - u);
+    return Math.hypot(x - projx, y - projy) <= b.hw * (1 - u);
   };
+
+  // A few short ridge dashes alternating across the body.
+  const ridges = [0.2, 0.36, 0.52, 0.68].map((p, idx) => ({
+    y: bodyTopY + (tipY - bodyTopY) * p,
+    side: idx % 2 === 0 ? -1 : 1,
+  }));
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
       let c = WHITE;
-      if (inBody(x, y)) {
+      const hw = bodyHalf(y);
+      const dx = x - cx;
+
+      if (hw !== null && Math.abs(dx) <= hw) {
         c = ORANGE;
+        // glossy highlight band on the left third
+        if (dx < -hw + hw * 0.5) c = ORANGE_LT;
+        // ridge dashes
+        for (const r of ridges) {
+          const near = Math.abs(y - r.y) <= 0.012 * size;
+          const within =
+            r.side < 0
+              ? dx > -hw * 0.85 && dx < -hw * 0.15
+              : dx > hw * 0.15 && dx < hw * 0.85;
+          if (near && within) c = ORANGE_DK;
+        }
       } else {
         for (const b of blades) {
           if (inBlade(x, y, b)) {
-            c = GREEN;
+            c = b.color;
             break;
           }
         }
       }
+
       px[i] = c[0];
       px[i + 1] = c[1];
       px[i + 2] = c[2];
