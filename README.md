@@ -10,7 +10,7 @@ exportable to CSV for accounting.
 - **Currency:** USD, plus an optional LBP toggle per entry (default rate 89,000 LBP / $1,
   editable in Settings). Everything is stored normalized to **integer USD cents**, with the
   original currency/amount/rate kept for auditable export.
-- **Auth:** Supabase email **one-time code** (single owner) — enter your email, get a code, type it in. No leaving the app. Data is private via Row Level Security.
+- **Auth:** Supabase **email + password** (single owner) — no emails sent, no rate limits. Data is private via Row Level Security.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -32,30 +32,27 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard → **Project Settings → API → Project URL** |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same page → **Project API keys → `anon` / public** |
 | `NEXT_PUBLIC_SITE_URL` | Your deployed origin, e.g. `https://bucksbuddy.vercel.app` (no trailing slash). Local: `http://localhost:3000` |
+| `NEXT_PUBLIC_OWNER_EMAIL` *(optional)* | Your login email. If set, the login screen hides the email field so you only type a password. Not secret. |
 
 > You do **not** need the `service_role` key — RLS + the anon key + the user session is enough.
 
-### 3. Supabase Auth: enable the email code
+### 3. Supabase Auth: create your user (password sign-in)
 
-Sign-in uses a **one-time email code** (not a magic link), so the emails must contain
-the code token `{{ .Token }}`. The app accepts whatever length your project is set to
-(Supabase default is 6 digits; some projects use 8).
+Sign-in uses **email + password** — no emails are sent, so you never hit Supabase's
+email rate limit. Create your account once in the dashboard:
 
-- **Authentication → Providers → Email:** enabled. For a single-owner app, turning
-  **Confirm email OFF** is simplest — then both first-time and returning sign-ins use
-  the same code email. (If you leave it ON, also add the token to the "Confirm signup"
-  template below; the app verifies either way.)
-- **Authentication → Emails → Templates:** in both **"Magic Link"** and
-  **"Confirm signup"**, make sure the body includes the code token. The defaults only
-  have the link (`{{ .ConfirmationURL }}`), so add a line such as:
+- **Authentication → Users → Add user → Create new user.**
+  - Enter your email and a password.
+  - Tick **Auto Confirm User** (so no confirmation email is needed).
+  - Click **Create user**.
+- **Authentication → Providers → Email:** make sure **Email** is enabled (password
+  sign-in lives here). You can leave "Confirm email" however you like — it doesn't
+  matter when you create the user pre-confirmed in the dashboard.
 
-  ```html
-  <p>Your BucksBuddy code is: <strong>{{ .Token }}</strong></p>
-  ```
+To add or change the password later, open the user in **Authentication → Users**.
 
-- **Authentication → URL Configuration → Site URL:** set to your production URL
-  (used for emails). Redirect-URL allow-listing isn't required for the code flow,
-  but it's fine to leave defaults in place.
+> The password is stored hashed in Supabase, never in the app code. Per-user RLS
+> still keeps the data private. Use a strong password since the app URL is public.
 
 ## Local development
 
@@ -74,7 +71,7 @@ npm run build && npm start
 ## Install on iPhone
 
 Open the deployed URL in **Safari → Share → Add to Home Screen**. It launches
-standalone (no Safari chrome). Because sign-in uses an emailed code (not a link),
+standalone (no Safari chrome). Because sign-in is email + password (no email link),
 you stay inside the app the whole time — no Safari/PWA session mismatch.
 
 ## Project layout
