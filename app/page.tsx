@@ -49,14 +49,18 @@ export default async function HomePage() {
       </h2>
       <RecentList rows={(recent ?? []) as Transaction[]} />
 
-      {/* Big floating add button — the primary action. */}
-      <Link
-        href="/add"
-        className="press fixed bottom-[calc(1.5rem+var(--safe-bottom))] left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-label text-4xl font-light text-white shadow-card"
-        aria-label="Add entry"
-      >
-        +
-      </Link>
+      {/* Big floating add button — the primary action. Centered via a flex
+          wrapper (not a transform) so the .press scale animation stays clean. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(1.5rem+var(--safe-bottom))] flex justify-center">
+        <Link
+          href="/add"
+          prefetch
+          className="press pointer-events-auto flex h-16 w-16 items-center justify-center rounded-full bg-label text-4xl font-light text-white shadow-card"
+          aria-label="Add entry"
+        >
+          +
+        </Link>
+      </div>
     </main>
   );
 }
