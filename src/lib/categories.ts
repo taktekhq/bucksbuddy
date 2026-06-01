@@ -9,9 +9,10 @@ export type Category = {
 };
 
 export const INCOME_CATEGORIES: Category[] = [
-  { id: "salary", label: "Work", emoji: "💼" },
-  { id: "side_business", label: "Side Biz", emoji: "🧰" },
-  { id: "sale", label: "Sale", emoji: "🏷️" },
+  { id: "salary", label: "Salary", emoji: "💼" },
+  { id: "freelance", label: "Freelance", emoji: "💻" },
+  { id: "rent_income", label: "Rent", emoji: "🏠" },
+  { id: "refund", label: "Refund", emoji: "↩️" },
   { id: "other", label: "Other", emoji: "⚪" },
 ];
 

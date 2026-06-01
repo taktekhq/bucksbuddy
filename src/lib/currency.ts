@@ -3,7 +3,7 @@
 
 export type Currency = "USD" | "LBP";
 
-export const DEFAULT_LBP_PER_USD = 89000;
+export const DEFAULT_LBP_PER_USD = 89500;
 
 /**
  * Convert an as-entered amount (in `currency`) to normalized USD integer cents.
