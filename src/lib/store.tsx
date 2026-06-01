@@ -19,6 +19,11 @@ type Store = {
   lbpPerUsd: number;
   monthlyNetCents: number;
   addTransaction: (tx: NewTransaction) => Promise<{ error: string | null }>;
+  updateTransaction: (
+    id: string,
+    tx: NewTransaction,
+  ) => Promise<{ error: string | null }>;
+  deleteTransaction: (id: string) => Promise<{ error: string | null }>;
   setRate: (rate: number) => Promise<{ error: string | null }>;
   refresh: () => Promise<void>;
 };
@@ -69,6 +74,32 @@ export function StoreProvider({
     [userId],
   );
 
+  const updateTransaction = useCallback(async (id: string, tx: NewTransaction) => {
+    const { data, error } = await supabase
+      .from("transactions")
+      .update(tx)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) return { error: error.message };
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === id ? (data as Transaction) : t)),
+    );
+    return { error: null };
+  }, []);
+
+  const deleteTransaction = useCallback(async (id: string) => {
+    // Optimistic remove; restore on failure.
+    const prev = transactions;
+    setTransactions((cur) => cur.filter((t) => t.id !== id));
+    const { error } = await supabase.from("transactions").delete().eq("id", id);
+    if (error) {
+      setTransactions(prev);
+      return { error: error.message };
+    }
+    return { error: null };
+  }, [transactions]);
+
   const setRate = useCallback(
     async (rate: number) => {
       const { error } = await supabase
@@ -97,6 +128,8 @@ export function StoreProvider({
     lbpPerUsd,
     monthlyNetCents,
     addTransaction,
+    updateTransaction,
+    deleteTransaction,
     setRate,
     refresh,
   };
