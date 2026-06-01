@@ -64,8 +64,8 @@ async function make(name, size, fill) {
   console.log("wrote", name);
 }
 
-await make("icon-192.png", 192, 0.74);
-await make("icon-512.png", 512, 0.74);
-await make("apple-touch-icon.png", 180, 0.74);
+await make("icon-192.png", 192, 0.5);
+await make("icon-512.png", 512, 0.5);
+await make("apple-touch-icon.png", 180, 0.5);
 // Maskable: extra margin so the carrot survives the platform's circular mask.
-await make("icon-maskable-512.png", 512, 0.56);
+await make("icon-maskable-512.png", 512, 0.42);
