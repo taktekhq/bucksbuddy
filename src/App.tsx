@@ -3,7 +3,6 @@ import { useRoute } from "@/lib/router";
 import { StoreProvider } from "@/lib/store";
 import { Login } from "@/screens/Login";
 import { Home } from "@/screens/Home";
-import { Add } from "@/screens/Add";
 import { Settings } from "@/screens/Settings";
 
 function Splash() {
@@ -23,7 +22,7 @@ export default function App() {
 
   return (
     <StoreProvider userId={session.user.id}>
-      {route === "/add" ? <Add /> : route === "/settings" ? <Settings /> : <Home />}
+      {route === "/settings" ? <Settings /> : <Home />}
     </StoreProvider>
   );
 }

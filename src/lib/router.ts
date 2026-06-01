@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 
 // Minimal hash router. Routes are "/", "/add", "/settings". Hash-based so the
 // static SPA needs no server rewrites and the back button works.
-export type Route = "/" | "/add" | "/settings";
+export type Route = "/" | "/settings";
 
 function current(): Route {
   const h = window.location.hash.replace(/^#/, "");
-  if (h === "/add" || h === "/settings") return h;
+  if (h === "/settings") return h;
   return "/";
 }
 

@@ -1,15 +1,31 @@
+import { useState } from "react";
 import { NetTotal } from "@/components/ui/NetTotal";
-import { RecentList } from "@/components/RecentList";
+import { AddComposer } from "@/components/AddComposer";
+import { HistoryList } from "@/components/HistoryList";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { monthLabel } from "@/lib/dates";
+import type { Transaction } from "@/types/db";
 
 export function Home() {
-  const { transactions, monthlyNetCents, loading } = useStore();
+  const { transactions, monthlyNetCents, loading, deleteTransaction } = useStore();
+  const [editing, setEditing] = useState<Transaction | null>(null);
+
+  function handleEdit(tx: Transaction) {
+    setEditing(tx);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleDelete(tx: Transaction) {
+    if (window.confirm("Delete this entry?")) {
+      await deleteTransaction(tx.id);
+    }
+  }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-[calc(6rem+var(--safe-bottom))] pt-[calc(2rem+var(--safe-top))]">
-      <div className="flex justify-end">
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1.5rem+var(--safe-top))]">
+      <div className="flex items-start justify-between">
+        <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} compact />
         <button
           type="button"
           onClick={() => navigate("/settings")}
@@ -20,28 +36,22 @@ export function Home() {
         </button>
       </div>
 
-      <div className="py-8">
-        <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} />
-      </div>
+      <AddComposer editing={editing} onClearEdit={() => setEditing(null)} />
 
-      <h2 className="mb-2 px-1 text-sm font-semibold text-label-secondary">Recent</h2>
-      {loading && transactions.length === 0 ? (
-        <p className="py-10 text-center text-label-secondary">Loading…</p>
-      ) : (
-        <RecentList rows={transactions.slice(0, 20)} />
-      )}
-
-      {/* Floating add button — centered via a flex wrapper so the press scale
-          animation stays clean (no transform conflict with centering). */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(1.5rem+var(--safe-bottom))] flex justify-center">
-        <button
-          type="button"
-          onClick={() => navigate("/add")}
-          className="press pointer-events-auto flex h-16 w-16 items-center justify-center rounded-full bg-label text-4xl font-light text-white shadow-card"
-          aria-label="Add entry"
-        >
-          +
-        </button>
+      <div>
+        <div className="mb-2 flex items-center justify-between px-1">
+          <h2 className="text-sm font-semibold text-label-secondary">History</h2>
+          <span className="text-xs text-label-secondary">swipe to edit / delete</span>
+        </div>
+        {loading && transactions.length === 0 ? (
+          <p className="py-10 text-center text-label-secondary">Loading…</p>
+        ) : (
+          <HistoryList
+            rows={transactions}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        )}
       </div>
     </main>
   );
