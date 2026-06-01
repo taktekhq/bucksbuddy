@@ -6,16 +6,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // iOS-neutral base
+        // Warm, carrot-accented surfaces
         surface: "#FFFFFF",
-        grouped: "#F2F2F7", // iOS systemGroupedBackground
-        label: "#000000",
-        "label-secondary": "rgba(60,60,67,0.6)",
-        separator: "rgba(60,60,67,0.29)",
-        // semantic money colors (iOS systemGreen / systemRed)
+        grouped: "#FAF6F0", // warm cream page background
+        label: "#1A1714", // warm near-black
+        "label-secondary": "#7A7269", // warm gray
+        separator: "rgba(122,114,105,0.18)", // warm, low-contrast
+        // semantic money colors
         income: "#34C759",
-        expense: "#FF3B30",
-        // BucksBuddy playful accent (carrot)
+        expense: "#E5484D",
+        // BucksBuddy primary accent (carrot)
         carrot: "#FF7A00",
       },
       fontFamily: {

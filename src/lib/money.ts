@@ -13,9 +13,9 @@ export function formatUsdCents(cents: number): string {
   return usdFormatter.format(Math.abs(cents) / 100);
 }
 
-/** Format a signed net total as "+$87.50" / "-$12.50". */
+/** Format a signed net total as "$87.50" (positive) / "-$12.50" (negative). */
 export function formatSignedUsdCents(cents: number): string {
-  const sign = cents < 0 ? "-" : "+";
+  const sign = cents < 0 ? "-" : "";
   return `${sign}${formatUsdCents(cents)}`;
 }
 
