@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { InOutToggle } from "@/components/ui/InOutToggle";
@@ -67,13 +68,9 @@ export function AddEntryFlow({ lbpPerUsd }: Props) {
   return (
     <div className="flex min-h-dvh flex-col px-5 pb-[calc(1rem+var(--safe-bottom))] pt-[calc(0.5rem+var(--safe-top))]">
       <header className="flex items-center justify-between py-2">
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="press text-base text-carrot"
-        >
+        <Link href="/" prefetch className="press -m-2 p-2 text-base text-carrot">
           Cancel
-        </button>
+        </Link>
         <h1 className="text-base font-semibold">New Entry</h1>
         <span className="w-12" />
       </header>
