@@ -2,7 +2,7 @@
 
 A small, reusable design language for an Apple-clean, iPhone-first PWA with a
 playful Bugs Bunny ("What's up, Doc?") accent. Tokens live in
-[`tailwind.config.ts`](../tailwind.config.ts) and [`app/globals.css`](../app/globals.css);
+[`tailwind.config.ts`](../tailwind.config.ts) and [`src/index.css`](../src/index.css);
 this doc explains the *what* and *when* so the look can be reused in new screens
 or future projects.
 
@@ -35,7 +35,7 @@ Defined as Tailwind colors. Light-first; dark mode is future work.
 
 ## Typography
 
-System font stack (`-apple-system, "SF Pro"…`) set in `globals.css`.
+System font stack (`-apple-system, "SF Pro"…`) set in `src/index.css`.
 
 | Role | Classes | Notes |
 |---|---|---|
@@ -81,7 +81,7 @@ Each lives in `components/ui/`. States: **default → active/selected → presse
 
 ## Motion
 
-- **Press feedback:** the `.press` utility (`globals.css`) — `scale(0.96)` + subtle
+- **Press feedback:** the `.press` utility (`src/index.css`) — `scale(0.96)` + subtle
   color/opacity transition on `:active`. Apply to every tappable tile/key/button.
 - **Entrance:** `.animate-pop` (scale-in) for confirmations / newly shown elements.
 - **Haptics:** progressive enhancement only — `navigator.vibrate(8)` on numpad keys

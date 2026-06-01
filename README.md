@@ -4,13 +4,17 @@
 
 Record money in/out in seconds (In/Out → category → digits-only amount → save) and
 see a big **green** (net positive) or **red** (net negative) number for the month.
-Built with **Next.js (App Router) + Supabase + Tailwind**, installable as a PWA, and
-exportable to CSV for accounting.
+Built as an **ultra-light client-side SPA** — it loads once, your session lives in the
+browser, and every navigation is instant (no server, no per-tap round-trips).
 
-- **Currency:** USD, plus an optional LBP toggle per entry (default rate 89,000 LBP / $1,
-  editable in Settings). Everything is stored normalized to **integer USD cents**, with the
-  original currency/amount/rate kept for auditable export.
-- **Auth:** Supabase **email + password** (single owner) — no emails sent, no rate limits. Data is private via Row Level Security.
+- **Stack:** Vite + React + TypeScript + Tailwind, Supabase (Postgres + Auth) for data,
+  deployed as static files on Vercel. PWA via `vite-plugin-pwa`.
+- **Currency:** USD + a per-entry LBP toggle (default 89,000 LBP/$, editable in Settings).
+  Stored normalized to **integer USD cents**, with the original currency/amount/rate kept
+  for auditable export.
+- **Auth:** Supabase **email + password** (single owner). No emails sent, no rate limits.
+  Data is private via Row Level Security.
+- **Export:** CSV download (client-side) for accounting.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -18,71 +22,72 @@ exportable to CSV for accounting.
 ### 1. Run the database migration
 
 In the **Supabase Dashboard → SQL Editor**, paste and run
-[`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql).
-This creates the `profiles` and `transactions` tables, RLS policies, and the
-auto-create-profile-on-signup trigger.
+[`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). Creates the
+`profiles` + `transactions` tables, RLS policies, and the auto-create-profile trigger.
 
-### 2. Environment variables
+### 2. Create your user (password sign-in)
 
-Set these in **Vercel → Project → Settings → Environment Variables** (and in a local
-`.env.local`, copied from [`.env.example`](.env.example)):
+- **Authentication → Users → Add user → Create new user.**
+  - Enter your email + a password, tick **Auto Confirm User**, click **Create user**.
+- **Authentication → Providers → Email:** make sure **Email** is enabled.
+
+> The password is stored hashed in Supabase, never in the app. Use a strong one.
+
+### 3. Environment variables (Vercel → Settings → Environment Variables)
+
+The app accepts **either** `VITE_`-prefixed names **or** the older `NEXT_PUBLIC_` ones,
+so if you already set the `NEXT_PUBLIC_*` vars they keep working. `VITE_*` is preferred:
 
 | Variable | Where to find it |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard → **Project Settings → API → Project URL** |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same page → **Project API keys → `anon` / public** |
-| `NEXT_PUBLIC_SITE_URL` | Your deployed origin, e.g. `https://bucksbuddy.vercel.app` (no trailing slash). Local: `http://localhost:3000` |
-| `NEXT_PUBLIC_OWNER_EMAIL` *(optional)* | Your login email. If set, the login screen hides the email field so you only type a password. Not secret. |
+| `VITE_SUPABASE_URL` | Supabase → **Project Settings → API → Project URL** |
+| `VITE_SUPABASE_ANON_KEY` | Same page → **Project API keys → `anon` / public** |
+| `VITE_OWNER_EMAIL` *(optional)* | Your login email. If set, the login screen hides the email field so you only type a password. Not secret. |
 
-> You do **not** need the `service_role` key — RLS + the anon key + the user session is enough.
+> Vars are read at **build time**, so after adding/changing them, **redeploy**.
+> You do **not** need the `service_role` key or a `SITE_URL` anymore.
 
-### 3. Supabase Auth: create your user (password sign-in)
+### 4. Vercel build settings
 
-Sign-in uses **email + password** — no emails are sent, so you never hit Supabase's
-email rate limit. Create your account once in the dashboard:
-
-- **Authentication → Users → Add user → Create new user.**
-  - Enter your email and a password.
-  - Tick **Auto Confirm User** (so no confirmation email is needed).
-  - Click **Create user**.
-- **Authentication → Providers → Email:** make sure **Email** is enabled (password
-  sign-in lives here). You can leave "Confirm email" however you like — it doesn't
-  matter when you create the user pre-confirmed in the dashboard.
-
-To add or change the password later, open the user in **Authentication → Users**.
-
-> The password is stored hashed in Supabase, never in the app code. Per-user RLS
-> still keeps the data private. Use a strong password since the app URL is public.
+`vercel.json` pins the framework to **Vite** (build `npm run build`, output `dist`), so a
+fresh import builds correctly. If the project was previously imported as a Next.js project,
+just redeploy — the `vercel.json` overrides the old preset. No rewrites are needed
+(the app uses hash-based routing).
 
 ## Local development
 
 ```bash
 npm install
-cp .env.example .env.local   # then fill in the values
-npm run dev                  # http://localhost:3000
+cp .env.example .env.local   # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+npm run dev                  # http://localhost:5173
 ```
 
-The service worker is disabled in dev. To test the PWA, run a production build:
+Production build / preview:
 
 ```bash
-npm run build && npm start
+npm run build && npm run preview
 ```
 
 ## Install on iPhone
 
-Open the deployed URL in **Safari → Share → Add to Home Screen**. It launches
-standalone (no Safari chrome). Because sign-in is email + password (no email link),
-you stay inside the app the whole time — no Safari/PWA session mismatch.
+Open the deployed URL in **Safari → Share → Add to Home Screen**. It launches standalone.
+Sign-in is email + password (no email link), so you stay inside the app the whole time.
 
 ## Project layout
 
 ```
-app/            routes (home, add, settings, login, auth callbacks, export, manifest, sw)
-components/     UI (AddEntryFlow + ui/* building blocks, RecentList, RateEditor, SignOutButton)
-lib/            currency/money/dates/csv/categories + supabase clients (client/server/middleware)
-supabase/       migrations/0001_init.sql
-docs/           DESIGN_SYSTEM.md
-scripts/        generate-icons.mjs (regenerate app icons)
+index.html              app entry
+src/main.tsx            mount + register service worker
+src/App.tsx             auth gate + hash router
+src/screens/            Login, Home, Add, Settings
+src/components/          AddEntryFlow + ui/* building blocks, RecentList, RateEditor, SignOutButton
+src/lib/                supabase client, store (in-memory cache), router, useSession,
+                        currency/money/dates/csv/categories
+src/types/db.ts         row types
+vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
+supabase/migrations/    0001_init.sql
+docs/DESIGN_SYSTEM.md   reusable design system
+scripts/generate-icons.mjs
 ```
 
 ## Regenerating icons
