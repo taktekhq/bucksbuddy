@@ -1,5 +1,11 @@
-import { useRef, useState } from "react";
-import { categoryEmoji, categoryLabel } from "@/lib/categories";
+import { useRef } from "react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  type PanInfo,
+} from "framer-motion";
+import { categoryIcon, categoryLabel } from "@/lib/categories";
 import { formatUsdCents } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
@@ -21,50 +27,44 @@ function SwipeRow({
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
 }) {
-  const [dx, setDx] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const startX = useRef(0);
-  const startDx = useRef(0);
+  const x = useMotionValue(0);
   const moved = useRef(false);
+  const Icon = categoryIcon(tx.category);
 
-  function clamp(v: number) {
-    return Math.max(-ACTION_W, Math.min(ACTION_W, v));
+  function snapTo(target: number) {
+    animate(x, target, {
+      type: "spring",
+      stiffness: 500,
+      damping: 40,
+      mass: 0.6,
+    });
   }
 
-  function onStart(e: React.TouchEvent) {
-    setDragging(true);
-    moved.current = false;
-    startX.current = e.touches[0].clientX;
-    startDx.current = dx;
+  function onDragEnd(_: unknown, info: PanInfo) {
+    const current = x.get();
+    const velocity = info.velocity.x;
+    // Use velocity to commit/dismiss the swipe more naturally.
+    const projected = current + velocity * 0.08;
+    if (projected <= -ACTION_W / 2) snapTo(-ACTION_W);
+    else if (projected >= ACTION_W / 2) snapTo(ACTION_W);
+    else snapTo(0);
   }
-  function onMove(e: React.TouchEvent) {
-    if (!dragging) return;
-    const delta = e.touches[0].clientX - startX.current;
-    if (Math.abs(delta) > 6) moved.current = true;
-    setDx(clamp(startDx.current + delta));
-  }
-  function onEnd() {
-    setDragging(false);
-    if (dx <= -ACTION_W / 2) setDx(-ACTION_W);
-    else if (dx >= ACTION_W / 2) setDx(ACTION_W);
-    else setDx(0);
-  }
+
   function onContentClick() {
-    // Ignore the click synthesized right after a swipe; only a real tap closes.
     if (moved.current) {
       moved.current = false;
       return;
     }
-    if (dx !== 0) setDx(0);
+    if (x.get() !== 0) snapTo(0);
   }
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-hidden rounded-card">
       {/* Edit revealed by swiping right. */}
       <button
         type="button"
         onClick={() => {
-          setDx(0);
+          snapTo(0);
           onEdit(tx);
         }}
         className="absolute inset-y-0 left-0 flex items-center justify-center bg-carrot font-medium text-white"
@@ -76,7 +76,7 @@ function SwipeRow({
       <button
         type="button"
         onClick={() => {
-          setDx(0);
+          snapTo(0);
           onDelete(tx);
         }}
         className="absolute inset-y-0 right-0 flex items-center justify-center bg-expense font-medium text-white"
@@ -85,18 +85,22 @@ function SwipeRow({
         Delete
       </button>
 
-      <div
-        onTouchStart={onStart}
-        onTouchMove={onMove}
-        onTouchEnd={onEnd}
-        onClick={onContentClick}
-        className="relative flex items-center gap-3 bg-grouped px-4 py-3"
-        style={{
-          transform: `translateX(${dx}px)`,
-          transition: dragging ? "none" : "transform 0.2s ease",
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: -ACTION_W, right: ACTION_W }}
+        dragElastic={0.18}
+        dragMomentum={false}
+        onDrag={(_, info) => {
+          if (Math.abs(info.offset.x) > 6) moved.current = true;
         }}
+        onDragEnd={onDragEnd}
+        onClick={onContentClick}
+        style={{ x }}
+        className="relative flex items-center gap-3 bg-surface px-4 py-3.5"
       >
-        <span className="text-2xl">{categoryEmoji(tx.category)}</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-pill bg-grouped text-label">
+          <Icon className="h-5 w-5" strokeWidth={1.75} />
+        </span>
         <div className="flex-1">
           <p className="font-medium">{categoryLabel(tx.category)}</p>
           <p className="text-xs text-label-secondary">
@@ -112,7 +116,7 @@ function SwipeRow({
           {tx.is_income ? "+" : "-"}
           {formatUsdCents(tx.amount_usd_cents)}
         </span>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -135,7 +139,7 @@ export function HistoryList({
   }
 
   return (
-    <ul className="divide-y divide-separator overflow-hidden rounded-card">
+    <ul className="flex flex-col gap-1.5">
       {rows.map((tx) => (
         <li key={tx.id}>
           <SwipeRow tx={tx} onEdit={onEdit} onDelete={onDelete} />

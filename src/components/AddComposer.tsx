@@ -6,7 +6,7 @@ import { Numpad, applyKey } from "@/components/ui/Numpad";
 import { useStore } from "@/lib/store";
 import {
   categoriesFor,
-  categoryEmoji,
+  categoryIcon,
   categoryLabel,
 } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
@@ -108,13 +108,15 @@ export function AddComposer({
       ? `$${groupInt(display === "" ? "0" : display)}`
       : `${groupInt(display === "" ? "0" : display)} LBP`;
 
+  const SelectedIcon = category ? categoryIcon(category) : null;
+
   return (
-    <div className="overflow-hidden rounded-card bg-grouped">
+    <div className="overflow-hidden rounded-card bg-surface shadow-card">
       {/* AMOUNT — tap to expand currency + numpad; collapsed shows just the number. */}
       <button
         type="button"
         onClick={() => setExpanded(expanded === "amount" ? null : "amount")}
-        className="press flex w-full flex-col items-center gap-0.5 px-4 pt-4 pb-3"
+        className="press flex w-full flex-col items-center gap-0.5 px-4 pt-5 pb-3"
       >
         <span className="text-4xl font-semibold tracking-tight tabular-nums">
           {bigAmount}
@@ -131,14 +133,10 @@ export function AddComposer({
         </div>
       )}
 
-      <div className="h-px bg-separator" />
-
       {/* IN / OUT — always visible. */}
-      <div className="px-4 py-3">
+      <div className="px-4 py-2">
         <InOutToggle isIncome={isIncome} onChange={changeDirection} />
       </div>
-
-      <div className="h-px bg-separator" />
 
       {/* CATEGORY — collapsed shows the pick; expands to the grid. */}
       <button
@@ -147,13 +145,14 @@ export function AddComposer({
         className="press flex w-full items-center justify-between px-4 py-3.5"
       >
         <span className="text-base font-medium">Category</span>
-        <span className="text-base text-label-secondary">
-          {category ? `${categoryEmoji(category)} ${categoryLabel(category)}` : "Choose"}
+        <span className="flex items-center gap-1.5 text-base text-label-secondary">
+          {SelectedIcon && <SelectedIcon className="h-4 w-4" strokeWidth={1.75} />}
+          {category ? categoryLabel(category) : "Choose"}
         </span>
       </button>
 
       {expanded === "category" && (
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-5">
           <CategoryGrid
             categories={categoriesFor(isIncome)}
             selected={category}
@@ -162,14 +161,14 @@ export function AddComposer({
         </div>
       )}
 
-      <div className="px-4 pb-4 pt-1">
+      <div className="flex flex-col items-center px-4 pb-5 pt-1">
         {error && <p className="mb-2 text-center text-sm text-expense">{error}</p>}
         <button
           type="button"
           onClick={save}
           disabled={!canSave}
-          className={`press w-full rounded-card py-4 text-lg font-semibold text-white ${
-            canSave ? "bg-label" : "bg-separator"
+          className={`press rounded-pill px-10 py-3 text-base font-semibold text-white ${
+            canSave ? "bg-carrot" : "bg-separator"
           }`}
         >
           {saving ? "Saving…" : editing ? "Update" : "Save"}
@@ -178,7 +177,7 @@ export function AddComposer({
           <button
             type="button"
             onClick={onClearEdit}
-            className="press mt-2 w-full py-2 text-center text-sm text-carrot"
+            className="press mt-2 py-2 text-center text-sm text-carrot"
           >
             Cancel edit
           </button>

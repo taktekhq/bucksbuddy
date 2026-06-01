@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Settings } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
@@ -29,10 +30,10 @@ export function Home() {
         <button
           type="button"
           onClick={() => navigate("/settings")}
-          className="press text-2xl"
+          className="press p-1 text-label-secondary"
           aria-label="Settings"
         >
-          ⚙️
+          <Settings className="h-6 w-6" strokeWidth={1.75} />
         </button>
       </div>
 
