@@ -10,7 +10,7 @@ exportable to CSV for accounting.
 - **Currency:** USD, plus an optional LBP toggle per entry (default rate 89,000 LBP / $1,
   editable in Settings). Everything is stored normalized to **integer USD cents**, with the
   original currency/amount/rate kept for auditable export.
-- **Auth:** Supabase email magic-link (single owner). Data is private via Row Level Security.
+- **Auth:** Supabase email **6-digit code** (single owner) — enter your email, get a code, type it in. No leaving the app. Data is private via Row Level Security.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -35,16 +35,23 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 
 > You do **not** need the `service_role` key — RLS + the anon key + the user session is enough.
 
-### 3. Supabase Auth URL config
+### 3. Supabase Auth: enable the email code
 
-In **Supabase Dashboard → Authentication → URL Configuration**:
+Sign-in uses a **6-digit email code** (not a magic link), so the email must contain
+the code token:
 
-- **Site URL:** your production URL (e.g. `https://bucksbuddy.vercel.app`)
-- **Redirect URLs (allow-list):** add
-  - `http://localhost:3000/**`
-  - `https://<your-domain>.vercel.app/**`
-  - (optional) your Vercel preview pattern `https://*-<scope>.vercel.app/**`
-- **Authentication → Providers → Email:** enabled (magic links are on by default).
+- **Authentication → Providers → Email:** enabled.
+- **Authentication → Emails → Templates → "Magic Link":** make sure the template
+  includes the code token `{{ .Token }}`. The default template only has the link
+  (`{{ .ConfirmationURL }}`), so add a line such as:
+
+  ```html
+  <p>Your BucksBuddy code is: <strong>{{ .Token }}</strong></p>
+  ```
+
+- **Authentication → URL Configuration → Site URL:** set to your production URL
+  (used for emails). Redirect-URL allow-listing isn't required for the code flow,
+  but it's fine to leave defaults in place.
 
 ## Local development
 
@@ -63,11 +70,8 @@ npm run build && npm start
 ## Install on iPhone
 
 Open the deployed URL in **Safari → Share → Add to Home Screen**. It launches
-standalone (no Safari chrome).
-
-> **iOS magic-link note:** the email link opens in Safari, which has a separate
-> storage jar from the installed PWA. Easiest flow: sign in once in Safari, then
-> "Add to Home Screen" and use the installed app. This is an iOS limitation.
+standalone (no Safari chrome). Because sign-in uses an emailed code (not a link),
+you stay inside the app the whole time — no Safari/PWA session mismatch.
 
 ## Project layout
 
