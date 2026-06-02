@@ -1,25 +1,37 @@
-import { useEffect, useState } from "react";
-import { InOutToggle } from "@/components/ui/InOutToggle";
+import { useEffect, useRef, useState } from "react";
+import { Check, Delete, Tag } from "lucide-react";
 import { CurrencyToggle } from "@/components/ui/CurrencyToggle";
-import { CategoryGrid } from "@/components/ui/CategoryGrid";
-import { Numpad, applyKey } from "@/components/ui/Numpad";
+import { CategorySheet } from "@/components/ui/CategorySheet";
 import { useStore } from "@/lib/store";
-import {
-  categoriesFor,
-  categoryColor,
-  categoryIcon,
-  categoryLabel,
-} from "@/lib/categories";
+import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
 import { amountColorClass, formatUsdCents } from "@/lib/money";
+import { applyKey, buzz, HOLD_MS } from "@/lib/keypad";
 import type { Transaction } from "@/types/db";
-
-type Section = "amount" | "category" | null;
 
 function groupInt(s: string): string {
   const [i, d] = s.split(".");
   const grouped = i.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return d !== undefined ? `${grouped}.${d}` : grouped;
+}
+
+// A single digit / "." key on the dialer.
+function DialerKey({
+  k,
+  onPress,
+}: {
+  k: string;
+  onPress: (k: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPress(k)}
+      className="press rounded-card bg-grouped py-4 font-numeric text-2xl font-bold tabular-nums text-label transition active:bg-carrot-soft"
+    >
+      {k}
+    </button>
+  );
 }
 
 export function AddComposer({
@@ -34,10 +46,13 @@ export function AddComposer({
   const [category, setCategory] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>("USD");
   const [display, setDisplay] = useState("");
-  // Collapsed by default — the numpad only opens when the amount is tapped.
-  const [expanded, setExpanded] = useState<Section>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Long-press state for the ⌫ key (hold to clear the whole amount).
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longFired = useRef(false);
 
   // Load a transaction into the composer when editing starts; reset when cleared.
   useEffect(() => {
@@ -46,30 +61,63 @@ export function AddComposer({
       setCategory(editing.category);
       setCurrency(editing.original_currency);
       setDisplay(String(editing.original_amount));
-      setExpanded("amount");
       setError(null);
     } else {
       setIsIncome(false);
       setCategory(null);
       setCurrency("USD");
       setDisplay("");
-      setExpanded(null);
       setError(null);
     }
+    setSheetOpen(false);
   }, [editing]);
 
   const amount = parseAmountString(display);
   const usdCents = toUsdCents(amount, currency, lbpPerUsd);
   const canSave = category !== null && amount > 0 && !saving;
 
+  function press(k: string) {
+    buzz();
+    setDisplay((d) => applyKey(d, k));
+  }
+
+  // ⌫: tap deletes one char; hold (~400ms) clears the whole amount.
+  function startBackspaceHold() {
+    longFired.current = false;
+    holdTimer.current = setTimeout(() => {
+      longFired.current = true;
+      buzz(20);
+      setDisplay("");
+    }, HOLD_MS);
+  }
+  function endBackspaceHold() {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (!longFired.current) {
+      buzz();
+      setDisplay((d) => applyKey(d, "⌫"));
+    }
+    longFired.current = false;
+  }
+  function cancelBackspaceHold() {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    longFired.current = false;
+  }
+
   function changeDirection(next: boolean) {
+    // Income and expense have different lists, so a direction flip clears the pick.
     setIsIncome(next);
     setCategory(null);
   }
 
   function pickCategory(id: string) {
     setCategory(id);
-    setExpanded(null);
+    setSheetOpen(false);
   }
 
   async function save() {
@@ -97,106 +145,129 @@ export function AddComposer({
     }
     if (editing) onClearEdit();
     else {
-      // Reset for the next quick entry — collapsed again.
+      // Reset for the next quick entry.
       setDisplay("");
       setCategory(null);
-      setExpanded(null);
     }
   }
 
-  const sub = currency === "LBP" ? `≈ ${formatUsdCents(usdCents)}` : " ";
+  const sub = currency === "LBP" ? `≈ ${formatUsdCents(usdCents)}` : " ";
   const bigAmount =
     currency === "USD"
       ? `$${groupInt(display === "" ? "0" : display)}`
       : `${groupInt(display === "" ? "0" : display)} LBP`;
 
+  // Neutral until a direction is committed (via the category), then green/red.
+  const amountTint =
+    display === ""
+      ? "text-label-secondary"
+      : category
+        ? amountColorClass(isIncome)
+        : "text-label";
+
   const SelectedIcon = category ? categoryIcon(category) : null;
 
   return (
-    <div>
-      {/* AMOUNT — tap to expand currency + numpad; collapsed shows just the number. */}
-      <button
-        type="button"
-        onClick={() => setExpanded(expanded === "amount" ? null : "amount")}
-        className="press flex w-full flex-col items-center gap-0.5 px-4 pt-6 pb-3"
-      >
-        <span
-          className={`font-numeric text-4xl font-extrabold tabular-nums ${
-            display === "" ? "text-label-secondary" : amountColorClass(isIncome)
-          }`}
-        >
+    <div className="pb-3">
+      {/* AMOUNT — dialer-style, centered. */}
+      <div className="px-4 pt-6 pb-3 text-center">
+        <div className={`font-numeric text-5xl font-extrabold tabular-nums ${amountTint}`}>
           {bigAmount}
-        </span>
-        <span className="h-4 text-sm text-label-secondary">{sub}</span>
-      </button>
-
-      {expanded === "amount" && (
-        <div className="flex flex-col items-center gap-3 px-4 pb-4">
-          <CurrencyToggle currency={currency} onChange={setCurrency} />
-          <div className="w-full">
-            <Numpad onPress={(k) => setDisplay((d) => applyKey(d, k))} />
-          </div>
         </div>
-      )}
-
-      {/* IN / OUT — always visible. */}
-      <div className="px-4 py-2">
-        <InOutToggle isIncome={isIncome} onChange={changeDirection} />
+        <div className="mt-1 h-4 text-sm text-label-secondary">{sub}</div>
       </div>
 
-      {/* CATEGORY — collapsed shows the pick; expands to the grid. */}
-      <button
-        type="button"
-        onClick={() => setExpanded(expanded === "category" ? null : "category")}
-        className="press flex w-full items-center justify-between px-4 py-3.5"
-      >
-        <span className="text-base font-medium">Category</span>
-        <span className="flex items-center gap-1.5 text-base text-label-secondary">
-          {SelectedIcon && category && (
-            <SelectedIcon
-              className="h-4 w-4"
-              strokeWidth={1.75}
-              style={{ color: categoryColor(category) }}
-            />
-          )}
-          {category ? categoryLabel(category) : "Choose"}
-        </span>
-      </button>
-
-      {expanded === "category" && (
-        <div className="px-4 pb-5">
-          <CategoryGrid
-            categories={categoriesFor(isIncome)}
-            selected={category}
-            onSelect={pickCategory}
-          />
-        </div>
-      )}
-
-      <div className="flex flex-col items-center px-4 pb-6 pt-1">
-        {error && <p className="mb-2 text-center text-sm font-medium text-danger">{error}</p>}
+      {/* KEYPAD — 1-9, then . 0 [Category]. */}
+      <div className="grid grid-cols-3 gap-2 px-4">
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"].map((k) => (
+          <DialerKey key={k} k={k} onPress={press} />
+        ))}
         <button
           type="button"
-          onClick={save}
-          disabled={!canSave}
-          className={`press rounded-pill px-12 py-3.5 text-lg font-semibold text-white transition ${
-            canSave
-              ? "bg-carrot shadow-carrot"
-              : "bg-separator text-label-secondary shadow-none"
-          }`}
+          onClick={() => setSheetOpen(true)}
+          className="press flex flex-col items-center justify-center gap-0.5 rounded-card bg-grouped py-4 transition"
+          style={category ? { backgroundColor: `${categoryColor(category)}1A` } : undefined}
         >
-          {saving ? "Saving…" : editing ? "Save" : "Add"}
+          {category && SelectedIcon ? (
+            <>
+              <SelectedIcon
+                className="h-5 w-5"
+                strokeWidth={2}
+                style={{ color: categoryColor(category) }}
+              />
+              <span
+                className="text-[10px] font-medium leading-tight"
+                style={{ color: categoryColor(category) }}
+              >
+                {categoryLabel(category)}
+              </span>
+            </>
+          ) : (
+            <>
+              <Tag className="h-5 w-5 text-label-secondary" strokeWidth={2} />
+              <span className="text-[10px] font-medium leading-tight text-label-secondary">
+                Category
+              </span>
+            </>
+          )}
         </button>
-        {editing && (
+      </div>
+
+      {/* UTILITY ROW — currency toggle · save · backspace. */}
+      <div className="mt-3 flex items-center justify-between px-4">
+        <CurrencyToggle currency={currency} onChange={setCurrency} />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={save}
+            disabled={!canSave}
+            aria-label={editing ? "Save changes" : "Add entry"}
+            className={`press flex h-14 w-14 items-center justify-center rounded-full transition ${
+              canSave
+                ? "bg-carrot text-white shadow-carrot"
+                : "bg-separator text-label-secondary"
+            }`}
+          >
+            <Check className="h-6 w-6" strokeWidth={2.5} />
+          </button>
+          <button
+            type="button"
+            aria-label="Delete (hold to clear)"
+            onPointerDown={startBackspaceHold}
+            onPointerUp={endBackspaceHold}
+            onPointerLeave={cancelBackspaceHold}
+            onPointerCancel={cancelBackspaceHold}
+            onContextMenu={(e) => e.preventDefault()}
+            className="press flex h-14 w-14 items-center justify-center rounded-full bg-grouped text-carrot-dark transition active:bg-carrot-soft"
+          >
+            <Delete className="h-6 w-6" strokeWidth={2} />
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="mt-3 px-4 text-center text-sm font-medium text-danger">{error}</p>
+      )}
+      {editing && (
+        <div className="mt-1 text-center">
           <button
             type="button"
             onClick={onClearEdit}
-            className="press mt-2 py-2 text-center text-sm text-carrot"
+            className="press py-2 text-sm text-carrot"
           >
             Cancel edit
           </button>
-        )}
-      </div>
+        </div>
+      )}
+
+      <CategorySheet
+        open={sheetOpen}
+        isIncome={isIncome}
+        selected={category}
+        onChangeDirection={changeDirection}
+        onSelect={pickCategory}
+        onClose={() => setSheetOpen(false)}
+      />
     </div>
   );
 }
