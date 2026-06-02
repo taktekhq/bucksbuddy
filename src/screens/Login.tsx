@@ -29,7 +29,7 @@ export function Login() {
     <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6">
       <div className="flex flex-col items-center">
         <Carrot className="text-6xl" />
-        <h1 className="mt-4 font-display text-3xl font-bold text-label">
+        <h1 className="mt-4 font-display text-3xl font-bold uppercase text-label-muted">
           BucksBuddy
         </h1>
         <p className="mt-1 text-base text-label-secondary">What&apos;s up, Doc?</p>

@@ -46,7 +46,9 @@ export function Settings() {
         >
           Done
         </button>
-        <h1 className="font-display text-base font-bold">Settings</h1>
+        <h1 className="font-display text-base font-bold uppercase text-label-muted">
+          Settings
+        </h1>
         <span className="w-12" />
       </header>
 
