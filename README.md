@@ -25,6 +25,21 @@ In the **Supabase Dashboard → SQL Editor**, paste and run
 [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). Creates the
 `profiles` + `transactions` tables, RLS policies, and the auto-create-profile trigger.
 
+Then run [`supabase/migrations/0002_safe.sql`](supabase/migrations/0002_safe.sql) to add
+the `safe_entries` table (powers the savings **Safe** — see below). The app degrades
+gracefully if it isn't applied yet, but the Safe won't persist until you do.
+
+> **Savings Safe (proof of concept):** a separate, all-time pot you add money to and
+> take money out of, shown via a vault icon next to Settings. It's currently limited to
+> a short email allowlist in [`src/lib/features.ts`](src/lib/features.ts). The safe is
+> kept separate from your monthly net; when it holds money the home screen tints and
+> shows an "In the safe" balance.
+>
+> **Subcategories:** categories with a small dot (Health → Pharmacy, Fees → Mobile,
+> Food/Groceries/Coffee, …) open a second step to pick a finer label. Stored inline as
+> `parent/sub` in the existing `category` field — no schema change, existing rows
+> untouched.
+
 ### 2. Create your user (password sign-in)
 
 - **Authentication → Users → Add user → Create new user.**

@@ -32,3 +32,27 @@ export type NewTransaction = {
   rate_used: number;
   note?: string | null;
 };
+
+// A single movement in the savings Safe. is_deposit true = money added to the
+// safe, false = money taken out. The safe total is the all-time signed sum.
+export type SafeEntry = {
+  id: string;
+  user_id: string;
+  is_deposit: boolean;
+  amount_usd_cents: number;
+  original_currency: Currency;
+  original_amount: number;
+  rate_used: number;
+  note: string | null;
+  occurred_at: string;
+  created_at: string;
+};
+
+export type NewSafeEntry = {
+  is_deposit: boolean;
+  amount_usd_cents: number;
+  original_currency: Currency;
+  original_amount: number;
+  rate_used: number;
+  note?: string | null;
+};

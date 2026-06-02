@@ -11,7 +11,13 @@ import { supabase } from "@/lib/supabase";
 import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
-import type { NewTransaction, Transaction } from "@/types/db";
+import { canUseSafe } from "@/lib/features";
+import type {
+  NewSafeEntry,
+  NewTransaction,
+  SafeEntry,
+  Transaction,
+} from "@/types/db";
 
 type Store = {
   loading: boolean;
@@ -25,6 +31,12 @@ type Store = {
   ) => Promise<{ error: string | null }>;
   deleteTransaction: (id: string) => Promise<{ error: string | null }>;
   setRate: (rate: number) => Promise<{ error: string | null }>;
+  // Savings Safe (gated to allowlisted users — see lib/features).
+  safeEnabled: boolean;
+  safeEntries: SafeEntry[];
+  safeTotalCents: number;
+  addSafeEntry: (entry: NewSafeEntry) => Promise<{ error: string | null }>;
+  deleteSafeEntry: (id: string) => Promise<{ error: string | null }>;
   refresh: () => Promise<void>;
 };
 
@@ -32,14 +44,18 @@ const StoreContext = createContext<Store | null>(null);
 
 export function StoreProvider({
   userId,
+  userEmail,
   children,
 }: {
   userId: string;
+  userEmail: string | null;
   children: ReactNode;
 }) {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [lbpPerUsd, setLbpPerUsd] = useState(DEFAULT_LBP_PER_USD);
+  const [safeEntries, setSafeEntries] = useState<SafeEntry[]>([]);
+  const safeEnabled = canUseSafe(userEmail);
 
   const refresh = useCallback(async () => {
     const [{ data: profile }, { data: txs }] = await Promise.all([
@@ -52,8 +68,19 @@ export function StoreProvider({
     ]);
     if (profile?.lbp_per_usd) setLbpPerUsd(profile.lbp_per_usd);
     setTransactions((txs ?? []) as Transaction[]);
+
+    // Only allowlisted users touch the safe. Tolerate a missing table (the
+    // 0002 migration not applied yet) by ignoring the error and showing empty.
+    if (safeEnabled) {
+      const { data: safe } = await supabase
+        .from("safe_entries")
+        .select("*")
+        .order("occurred_at", { ascending: false })
+        .limit(500);
+      setSafeEntries((safe ?? []) as SafeEntry[]);
+    }
     setLoading(false);
-  }, [userId]);
+  }, [userId, safeEnabled]);
 
   useEffect(() => {
     void refresh();
@@ -113,6 +140,38 @@ export function StoreProvider({
     [userId],
   );
 
+  const addSafeEntry = useCallback(
+    async (entry: NewSafeEntry) => {
+      const { data, error } = await supabase
+        .from("safe_entries")
+        .insert({ ...entry, user_id: userId })
+        .select()
+        .single();
+      if (error) return { error: error.message };
+      setSafeEntries((prev) => [data as SafeEntry, ...prev]);
+      return { error: null };
+    },
+    [userId],
+  );
+
+  const deleteSafeEntry = useCallback(
+    async (id: string) => {
+      // Optimistic remove; restore on failure.
+      const prev = safeEntries;
+      setSafeEntries((cur) => cur.filter((e) => e.id !== id));
+      const { error } = await supabase
+        .from("safe_entries")
+        .delete()
+        .eq("id", id);
+      if (error) {
+        setSafeEntries(prev);
+        return { error: error.message };
+      }
+      return { error: null };
+    },
+    [safeEntries],
+  );
+
   const monthlyNetCents = useMemo(() => {
     const { from, to } = currentMonthRange();
     const inMonth = transactions.filter((t) => {
@@ -121,6 +180,17 @@ export function StoreProvider({
     });
     return netCents(inMonth);
   }, [transactions]);
+
+  // The safe is an all-time running total: deposits add, withdrawals subtract.
+  const safeTotalCents = useMemo(
+    () =>
+      safeEntries.reduce(
+        (sum, e) =>
+          sum + (e.is_deposit ? e.amount_usd_cents : -e.amount_usd_cents),
+        0,
+      ),
+    [safeEntries],
+  );
 
   const value: Store = {
     loading,
@@ -131,6 +201,11 @@ export function StoreProvider({
     updateTransaction,
     deleteTransaction,
     setRate,
+    safeEnabled,
+    safeEntries,
+    safeTotalCents,
+    addSafeEntry,
+    deleteSafeEntry,
     refresh,
   };
 

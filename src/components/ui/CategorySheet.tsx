@@ -1,20 +1,32 @@
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
+import { ChevronLeft } from "lucide-react";
 import { InOutToggle } from "@/components/ui/InOutToggle";
 import { CategoryGrid } from "@/components/ui/CategoryGrid";
-import { categoriesFor } from "@/lib/categories";
+import {
+  categoriesFor,
+  categoryColor,
+  categoryIcon,
+  categoryLabel,
+  composeCategory,
+  splitCategory,
+  subcategoriesFor,
+} from "@/lib/categories";
 
 type Props = {
   open: boolean;
   isIncome: boolean;
   selected: string | null;
   onChangeDirection: (isIncome: boolean) => void;
+  // Receives the stored id: "parent" or "parent/sub".
   onSelect: (id: string) => void;
   onClose: () => void;
 };
 
-// Bottom sheet: the colorful category grid on top (its height varies with the
-// list), the In/Out toggle pinned at the bottom (it's the fixed anchor). Drag
-// the sheet down to dismiss.
+// Bottom sheet with two steps. Step 1: the colorful category grid + the In/Out
+// toggle pinned at the bottom. Step 2 (only for categories that have them): the
+// subcategory picker, reached by tapping a category with a dot. Drag down to
+// dismiss.
 export function CategorySheet({
   open,
   isIncome,
@@ -23,9 +35,27 @@ export function CategorySheet({
   onSelect,
   onClose,
 }: Props) {
+  // Which parent's subcategories are currently shown (null = the grid step).
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Always reopen on the grid step.
+  useEffect(() => {
+    if (open) setExpanded(null);
+  }, [open]);
+
   function handleDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose();
   }
+
+  function pickCategory(baseId: string) {
+    if (subcategoriesFor(baseId).length > 0) {
+      setExpanded(baseId);
+    } else {
+      onSelect(baseId);
+    }
+  }
+
+  const selectedBase = selected ? splitCategory(selected).base : null;
 
   return (
     <AnimatePresence>
@@ -52,20 +82,108 @@ export function CategorySheet({
             {/* Grabber. */}
             <div className="mx-auto mb-4 h-1.5 w-10 cursor-grab rounded-full bg-grouped" />
 
-            {/* Categories on top (variable height). */}
-            <CategoryGrid
-              categories={categoriesFor(isIncome)}
-              selected={selected}
-              onSelect={onSelect}
-            />
+            {expanded ? (
+              <SubcategoryStep
+                baseId={expanded}
+                selected={selected}
+                onBack={() => setExpanded(null)}
+                onSelect={onSelect}
+              />
+            ) : (
+              <>
+                {/* Categories on top (variable height). */}
+                <CategoryGrid
+                  categories={categoriesFor(isIncome)}
+                  selected={selectedBase}
+                  onSelect={pickCategory}
+                />
 
-            {/* In/Out pinned at the bottom. */}
-            <div className="mt-4">
-              <InOutToggle isIncome={isIncome} onChange={onChangeDirection} />
-            </div>
+                {/* In/Out pinned at the bottom. */}
+                <div className="mt-4">
+                  <InOutToggle isIncome={isIncome} onChange={onChangeDirection} />
+                </div>
+              </>
+            )}
           </motion.div>
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+// Step 2: a back header that doubles as "use the parent only", then the
+// subcategory chips tinted with the parent's color.
+function SubcategoryStep({
+  baseId,
+  selected,
+  onBack,
+  onSelect,
+}: {
+  baseId: string;
+  selected: string | null;
+  onBack: () => void;
+  onSelect: (id: string) => void;
+}) {
+  const color = categoryColor(baseId);
+  const Icon = categoryIcon(baseId);
+  const label = categoryLabel(baseId);
+  const subs = subcategoriesFor(baseId);
+  const { base: selBase, sub: selSub } = selected
+    ? splitCategory(selected)
+    : { base: null, sub: null };
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to categories"
+          className="press -m-2 p-2 text-label-secondary"
+        >
+          <ChevronLeft className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+        <span
+          className="flex h-8 w-8 items-center justify-center rounded-full text-white"
+          style={{ backgroundColor: color }}
+        >
+          <Icon className="h-4 w-4" strokeWidth={2} />
+        </span>
+        <span className="font-bold text-label">{label}</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        {/* "Just the parent" — no subcategory. */}
+        <button
+          type="button"
+          onClick={() => onSelect(composeCategory(baseId, null))}
+          className="press rounded-card px-3 py-3.5 text-sm font-medium"
+          style={{
+            backgroundColor:
+              selBase === baseId && !selSub ? color : `${color}1A`,
+            color: selBase === baseId && !selSub ? "#FFFFFF" : color,
+          }}
+        >
+          Just {label}
+        </button>
+        {subs.map((s) => {
+          const active = selBase === baseId && selSub === s.id;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onSelect(composeCategory(baseId, s.id))}
+              className="press rounded-card px-3 py-3.5 text-sm font-medium"
+              style={{
+                backgroundColor: active ? color : `${color}1A`,
+                color: active ? "#FFFFFF" : color,
+              }}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
