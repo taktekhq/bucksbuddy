@@ -82,12 +82,3 @@ select {
 .animate-pop {
   animation: pop-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-
-/* Big live numbers use Grobold, a heavy display face whose ink spills past its
-   layout box. When the value changes, iOS Safari's repaint rect is too small to
-   cover that overflow and leaves "ghost" pixels of the old digits behind.
-   Promoting the element to its own compositing layer forces an atomic repaint,
-   which clears the trails. */
-.num-display {
-  transform: translateZ(0);
-}

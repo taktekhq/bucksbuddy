@@ -115,7 +115,7 @@ function SwipeRow({
             {tx.original_currency === "LBP" && " · LBP"}
           </p>
         </div>
-        <span className={`font-display font-semibold tabular-nums ${amountColorClass(tx.is_income)}`}>
+        <span className={`font-numeric font-semibold tabular-nums ${amountColorClass(tx.is_income)}`}>
           {tx.is_income ? "+" : "-"}
           {formatUsdCents(tx.amount_usd_cents)}
         </span>
