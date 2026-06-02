@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { InOutToggle } from "@/components/ui/InOutToggle";
 import { CategoryGrid } from "@/components/ui/CategoryGrid";
 import { categoriesFor } from "@/lib/categories";
@@ -12,8 +12,9 @@ type Props = {
   onClose: () => void;
 };
 
-// iOS-style bottom sheet for picking direction + category. In/Out lives on top
-// and filters the grid; tapping a category selects it and dismisses.
+// Bottom sheet: the colorful category grid on top (its height varies with the
+// list), the In/Out toggle pinned at the bottom (it's the fixed anchor). Drag
+// the sheet down to dismiss.
 export function CategorySheet({
   open,
   isIncome,
@@ -22,6 +23,10 @@ export function CategorySheet({
   onSelect,
   onClose,
 }: Props) {
+  function handleDragEnd(_: unknown, info: PanInfo) {
+    if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+  }
+
   return (
     <AnimatePresence>
       {open && (
@@ -34,21 +39,30 @@ export function CategorySheet({
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-[28px] bg-surface px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-3 shadow-card"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md touch-none rounded-t-[28px] bg-surface px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-2 shadow-card"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "tween", duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={handleDragEnd}
           >
-            <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-grouped" />
-            <div className="mb-3">
-              <InOutToggle isIncome={isIncome} onChange={onChangeDirection} />
-            </div>
+            {/* Grabber. */}
+            <div className="mx-auto mb-4 h-1.5 w-10 cursor-grab rounded-full bg-grouped" />
+
+            {/* Categories on top (variable height). */}
             <CategoryGrid
               categories={categoriesFor(isIncome)}
               selected={selected}
               onSelect={onSelect}
             />
+
+            {/* In/Out pinned at the bottom. */}
+            <div className="mt-4">
+              <InOutToggle isIncome={isIncome} onChange={onChangeDirection} />
+            </div>
           </motion.div>
         </>
       )}

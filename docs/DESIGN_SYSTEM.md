@@ -46,7 +46,7 @@ Defined as Tailwind colors. Light-first; dark mode is future work.
 |---|---|---|
 | `canvas` | `#F2F2F7` | App background (iOS systemGroupedBackground) |
 | `surface` | `#FFFFFF` | Cards, sheets, rows, inputs-on-cards |
-| `grouped` | `#E9E9EF` | Numpad keys, inactive tiles, toggle tracks |
+| `grouped` | `#E9E9EF` | Input fields, inactive tiles, toggle tracks |
 | `label` | `#1C1C1E` | Primary text, icons |
 | `label-muted` | `#48484A` | Softened dark grey — the BucksBuddy wordmark |
 | `label-secondary` | `#8E8E93` | Captions, dates, placeholders, sub-labels |
@@ -86,7 +86,7 @@ Three roles, two custom decisions:
   so nothing breaks offline; ships a single weight, and `font-synthesis: none`
   keeps the browser from faking a heavier one.
 - **`font-numeric` → SF Pro Rounded.** Every digit of money — totals, the live
-  amount, numpad, history. Stays Apple: friendly and rounded, but with **real
+  amount, the entry field, history. Stays Apple: friendly and rounded, but with **real
   tabular figures**, so columns line up, typing doesn't jitter, and the heavy
   cartoon ink can't leave ghost trails on iOS. Run it **heavy** (`font-extrabold`
   on big numbers, `font-bold` elsewhere) so the money holds its own next to the
@@ -106,10 +106,8 @@ Three roles, two custom decisions:
 | Month caption | `text-[13px] font-medium uppercase tracking-wide text-label-secondary` (SF, **not** Grobold) | "JUNE 2026" **above** the hero number |
 | Button label | `text-lg font-semibold text-white` (SF, **not** Grobold) | Primary carrot pill — "Add"/"Save" |
 | Net total (hero) | `font-numeric text-4xl font-bold tabular-nums` + green/red, left-aligned, month caption above | Home hero card |
-| Amount (entry) | `font-numeric text-5xl font-bold tabular-nums` + green/red | The dial's live amount |
-| Amount entry | `font-numeric text-4xl font-extrabold tabular-nums` + green/red | Composer live amount |
+| Amount (entry) | `font-numeric text-3xl font-bold tabular-nums` (native `<input>`) | The always-visible amount field |
 | History amount | `font-numeric font-medium tabular-nums` + green/red | Entry rows — kept light |
-| Numpad keys | `font-numeric text-xl font-bold tabular-nums` | Keypad |
 | Body | base (16px), SF | **Min 16px on any `<input>`** or iOS auto-zooms |
 | Caption | `text-xs`/`text-sm` + `text-label-secondary` | Dates, hints |
 
@@ -125,7 +123,7 @@ never numbers and never long body copy.
   `canvas`.
 - **Navigation:** a **single page** (no tab bar). Top to bottom: the wordmark +
   settings nav, the month-net card, a tappable **"What's up, Doc?"** section that
-  reveals the add dial, then History. Settings is a separate hash route reached
+  holds the always-visible add form, then History. Settings is a separate hash route reached
   from the gear. Editing a History row opens the dial with the entry loaded and
   scrolls to the top.
 - **Hero (month-net card):** clean Apple stat — an uppercase SF **month caption
@@ -137,12 +135,12 @@ never numbers and never long body copy.
 - **Safe areas:** `viewport-fit=cover` + `env(safe-area-inset-*)`, exposed as the
   `--safe-top`/`--safe-bottom` CSS vars and `safe-top`/`safe-bottom` tokens.
   Bottom controls clear the home indicator: `pb-[calc(2rem+var(--safe-bottom))]`.
-- **Touch targets:** minimum 44×44pt. Numpad keys (`py-4`) and category tiles
+- **Touch targets:** minimum 44×44pt. Buttons (`py-3.5`) and category tiles
   (`py-5`) keep generous padding.
 
 ## Radii, shadows, surfaces
 
-- `rounded-card` = **22px** for cards, tiles, numpad keys, swipe-row containers.
+- `rounded-card` = **22px** for cards, tiles, inputs, swipe-row containers.
 - `rounded-pill` for segmented controls, currency toggles, and the primary action.
 - `shadow-card` — light Apple elevation for white cards on the gray canvas. Keep
   it subtle; heavy drop shadows read as visually "heavy" on this layout.
@@ -162,19 +160,22 @@ Each lives in `components/ui/` (or `components/`). States:
   `bg-carrot text-white shadow-carrot`; unselected tiles get a **soft tint of the
   category's own color** (`categoryColor()` from `lib/categories.ts`, ~10% alpha
   background + full-strength icon) so the grid reads colorful, not bland gray.
-- **CurrencyToggle** — small USD/LBP pill; active = `bg-white text-carrot shadow-segment`.
-- **Numpad** — digits + `.` + `⌫`. **No `<input>`** — emits keys; parent holds a
-  string (`applyKey` enforces single dot / max 2 decimals). `⌫` is carrot-tinted;
-  **hold it (~400ms) to clear the whole amount** (emits the `clear` key + a
-  stronger haptic). A short tap deletes one character.
 - **NetTotal** — **left-aligned** Apple stat inside the Home money card: an
   uppercase SF month caption on top, the number in `font-numeric font-bold`
   **green/red** (via `netColorClass`) directly below.
-- **AddComposer** — **money-first** dial, revealed by "What's up, Doc?": a quiet
-  `$/LBP` toggle, then the **big live amount** (`font-numeric text-5xl`, tinted by
-  direction), a quiet keypad (`1-9 . 0 ⌫`; backspace deletes on `click`, holds to
-  clear), a **Category** form-row that opens the `CategorySheet` (In/Out + grid),
-  and a flat carrot **Add/Save** pill.
+- **AddComposer** — **always-visible, money-first** form (Whish-style), under the
+  "What's up, Doc?" header:
+  1. **Amount card** — a tinted `$`/`LL` circle + a real `<input inputMode="decimal">`
+     (the **native keyboard**, no custom keypad) + a tappable currency code that
+     toggles `$ ⇄ LBP`.
+  2. **Category card** — wide; before a pick it's a dashed "Add Category" button,
+     after it shows the colored category avatar, an `Income`/`Expense` caption
+     above the label, and a `Change ›` button. Opens the `CategorySheet`.
+  3. **CTA** — flat carrot pill, contextual: "Enter an amount" → "Choose a
+     category" → "Add $10.00" / "Save $10.00".
+- **CategorySheet** — bottom sheet: the colorful **grid on top** (variable
+  height), the **In/Out toggle pinned at the bottom** (fixed anchor). **Drag the
+  sheet down to dismiss** (`framer-motion` `drag="y"`).
 - **HistoryList row** — lucide icon in a round chip tinted with the **category's
   own color** (`categoryColor()`, ~10% alpha bg + full-strength icon) + label +
   date + **green/red** signed amount. Rows are cards (`shadow-card`), spaced with
@@ -196,9 +197,8 @@ Keep it light. The personality is in the color and voice, not heavy animation.
 - **Mascot:** static. The carrot never moves.
 - **Drag (history rows):** `framer-motion` `drag="x"`, low `dragElastic` (0.06),
   light crisp **tween** snap (160ms) — no springy overshoot. Velocity-aware commit.
-- **Haptics:** progressive enhancement only — `navigator.vibrate(8)` on numpad
-  keys, a stronger `vibrate(20)` on hold-to-clear (Android). iOS ignores it;
-  never block the flow on haptics.
+- **Drag (sheet):** the `CategorySheet` is `drag="y"`; a downward drag past a
+  small threshold (or a fast flick) dismisses it.
 
 ## Reuse guide
 

@@ -1,14 +1,25 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronRight, Delete } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronRight, Tag } from "lucide-react";
 import { CategorySheet } from "@/components/ui/CategorySheet";
 import { useStore } from "@/lib/store";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
-import { amountColorClass, formatUsdCents } from "@/lib/money";
-import { applyKey, buzz, HOLD_MS } from "@/lib/keypad";
+import { formatUsdCents } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
-const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"];
+const INCOME_COLOR = "#34C759";
+const EXPENSE_COLOR = "#FF3B30";
+const SYMBOL: Record<Currency, string> = { USD: "$", LBP: "LL" };
+
+// Keep the typed string clean: digits, a single dot, max two decimals.
+function sanitizeAmount(raw: string): string {
+  let v = raw.replace(/[^\d.]/g, "");
+  const i = v.indexOf(".");
+  if (i !== -1) {
+    v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, "").slice(0, 2);
+  }
+  return v;
+}
 
 function groupInt(s: string): string {
   const [i, d] = s.split(".");
@@ -32,11 +43,6 @@ export function AddComposer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Backspace: a plain onClick deletes one char (reliable on touch); a long
-  // press clears everything and suppresses the click that follows.
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearedByHold = useRef(false);
-
   useEffect(() => {
     if (editing) {
       setIsIncome(editing.is_income);
@@ -57,34 +63,6 @@ export function AddComposer({
   const amount = parseAmountString(display);
   const usdCents = toUsdCents(amount, currency, lbpPerUsd);
   const canSave = category !== null && amount > 0 && !saving;
-
-  function press(k: string) {
-    buzz();
-    setDisplay((d) => applyKey(d, k));
-  }
-
-  function backspaceDown() {
-    clearedByHold.current = false;
-    holdTimer.current = setTimeout(() => {
-      clearedByHold.current = true;
-      buzz(20);
-      setDisplay("");
-    }, HOLD_MS);
-  }
-  function backspaceUp() {
-    if (holdTimer.current) {
-      clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-    }
-  }
-  function backspaceClick() {
-    if (clearedByHold.current) {
-      clearedByHold.current = false;
-      return; // the hold already cleared; ignore this tap
-    }
-    buzz();
-    setDisplay((d) => applyKey(d, "⌫"));
-  }
 
   function changeDirection(next: boolean) {
     setIsIncome(next);
@@ -126,124 +104,116 @@ export function AddComposer({
     }
   }
 
-  const sub = currency === "LBP" ? `≈ ${formatUsdCents(usdCents)}` : " ";
-  const bigAmount =
-    currency === "USD"
-      ? `$${groupInt(display === "" ? "0" : display)}`
-      : `${groupInt(display === "" ? "0" : display)} LBP`;
-  const amountTint =
-    display === ""
-      ? "text-label-secondary"
-      : category
-        ? amountColorClass(isIncome)
-        : "text-label";
-
   const SelectedIcon = category ? categoryIcon(category) : null;
+  const catColor = category ? categoryColor(category) : "#8E8E93";
+  const dirColor = isIncome ? INCOME_COLOR : EXPENSE_COLOR;
+
+  const amountLabel =
+    currency === "USD" ? formatUsdCents(usdCents) : `${groupInt(display)} LBP`;
+  const cta = saving
+    ? "Saving…"
+    : !canSave
+      ? amount <= 0
+        ? "Enter an amount"
+        : "Choose a category"
+      : `${editing ? "Save" : "Add"} ${amountLabel}`;
 
   return (
-    <div className="px-4 pb-6 pt-4">
-      {/* Currency toggle, quiet, top-right. */}
-      <div className="flex justify-end">
-        <div className="inline-grid grid-cols-2 gap-1 rounded-pill bg-grouped p-1 text-xs font-semibold">
-          {(["USD", "LBP"] as Currency[]).map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setCurrency(c)}
-              className={`press rounded-pill px-3 py-1 transition ${
-                currency === c
-                  ? "bg-surface text-carrot shadow-segment"
-                  : "text-label-secondary"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Money first — the amount is the hero of this screen. */}
-      <div className="mt-1 text-center">
-        <div className={`font-numeric text-5xl font-bold tabular-nums ${amountTint}`}>
-          {bigAmount}
-        </div>
-        <div className="mt-1 h-4 text-sm text-label-secondary">{sub}</div>
-      </div>
-
-      {/* Keypad — quiet keys, press fills grey. */}
-      <div className="mx-auto mt-4 grid max-w-[18rem] grid-cols-3 gap-2">
-        {KEYS.map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => press(k)}
-            className="press rounded-2xl py-3.5 font-numeric text-2xl font-medium tabular-nums text-label transition active:bg-grouped"
-          >
-            {k}
-          </button>
-        ))}
+    <div className="flex flex-col gap-3 px-4 pb-5 pt-4">
+      {/* AMOUNT — always visible, edited with the native keyboard. */}
+      <div className="flex items-center gap-3 rounded-card bg-grouped px-4 py-3.5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-base font-bold text-carrot">
+          {SYMBOL[currency]}
+        </span>
+        <input
+          inputMode="decimal"
+          value={display}
+          onChange={(e) => setDisplay(sanitizeAmount(e.target.value))}
+          placeholder="0.00"
+          aria-label="Amount"
+          className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-label outline-none placeholder:text-label-secondary"
+        />
         <button
           type="button"
-          aria-label="Delete (hold to clear)"
-          onPointerDown={backspaceDown}
-          onPointerUp={backspaceUp}
-          onPointerLeave={backspaceUp}
-          onPointerCancel={backspaceUp}
-          onClick={backspaceClick}
-          onContextMenu={(e) => e.preventDefault()}
-          className="press flex items-center justify-center rounded-2xl py-3.5 text-label-secondary transition active:bg-grouped"
+          onClick={() => setCurrency((c) => (c === "USD" ? "LBP" : "USD"))}
+          aria-label="Switch currency"
+          className="press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-surface"
         >
-          <Delete className="h-6 w-6" strokeWidth={2} />
+          {currency}
         </button>
       </div>
+      {currency === "LBP" && amount > 0 && (
+        <p className="-mt-1 px-1 text-xs text-label-secondary">
+          ≈ {formatUsdCents(usdCents)}
+        </p>
+      )}
 
-      {/* Category — an iOS form row that opens the picker sheet. */}
-      <button
-        type="button"
-        onClick={() => setSheetOpen(true)}
-        className="press mt-4 flex w-full items-center justify-between rounded-card bg-grouped px-4 py-3.5"
-      >
-        <span className="text-base text-label">Category</span>
-        <span className="flex items-center gap-1.5 text-base">
-          {category && SelectedIcon ? (
-            <>
-              <SelectedIcon
-                className="h-4 w-4"
-                strokeWidth={2}
-                style={{ color: categoryColor(category) }}
-              />
-              <span className="font-medium" style={{ color: categoryColor(category) }}>
-                {categoryLabel(category)}
-              </span>
-            </>
-          ) : (
-            <span className="text-label-secondary">Choose</span>
-          )}
-          <ChevronRight className="h-4 w-4 text-label-secondary" strokeWidth={2} />
-        </span>
-      </button>
+      {/* CATEGORY — wide card; opens the sheet. Shows the pick + direction. */}
+      {category && SelectedIcon ? (
+        <div className="flex items-center gap-3 rounded-card bg-grouped px-4 py-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
+            style={{ backgroundColor: catColor }}
+          >
+            <SelectedIcon className="h-5 w-5" strokeWidth={2} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div
+              className="text-[11px] font-semibold uppercase tracking-wide"
+              style={{ color: dirColor }}
+            >
+              {isIncome ? "Income" : "Expense"}
+            </div>
+            <div className="truncate font-bold text-label">
+              {categoryLabel(category)}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            className="press shrink-0 rounded-pill border border-carrot px-3 py-1 text-sm font-semibold text-carrot"
+          >
+            Change ›
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="press flex w-full items-center gap-3 rounded-card border border-dashed border-carrot/40 bg-carrot-soft/40 px-4 py-3.5"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-carrot">
+            <Tag className="h-5 w-5" strokeWidth={2} />
+          </span>
+          <div className="text-left">
+            <div className="font-bold text-label">Add Category</div>
+            <div className="text-sm text-label-secondary">Income or expense</div>
+          </div>
+          <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-label-secondary" strokeWidth={2} />
+        </button>
+      )}
 
-      {/* Save. */}
+      {/* CTA — contextual, shows the amount when ready. */}
       <button
         type="button"
         onClick={save}
         disabled={!canSave}
-        className={`press mt-3 w-full rounded-pill py-3.5 text-lg font-semibold text-white transition ${
+        className={`press mt-1 w-full rounded-pill py-3.5 text-lg font-semibold text-white transition ${
           canSave ? "bg-carrot" : "bg-separator text-label-secondary"
         }`}
       >
-        {saving ? "Saving…" : editing ? "Save" : "Add"}
+        {cta}
       </button>
 
       {error && (
-        <p className="mt-2 text-center text-sm font-medium text-danger">{error}</p>
+        <p className="text-center text-sm font-medium text-danger">{error}</p>
       )}
       {editing && (
-        <div className="mt-1 text-center">
+        <div className="text-center">
           <button
             type="button"
             onClick={onClearEdit}
-            className="press py-2 text-sm text-carrot"
+            className="press py-1 text-sm text-carrot"
           >
             Cancel edit
           </button>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
@@ -13,17 +13,14 @@ import type { Transaction } from "@/types/db";
 export function Home() {
   const { transactions, monthlyNetCents, loading, deleteTransaction } = useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
-  const [dialOpen, setDialOpen] = useState(false);
 
   function handleEdit(tx: Transaction) {
     setEditing(tx);
-    setDialOpen(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function clearEdit() {
     setEditing(null);
-    setDialOpen(false);
   }
 
   async function handleDelete(tx: Transaction) {
@@ -61,27 +58,12 @@ export function Home() {
         </div>
       </section>
 
-      {/* "What's up, Doc?" → tap to reveal the dial. */}
+      {/* "What's up, Doc?" — the add form is always visible and ready. */}
       <section className="flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={() => setDialOpen((o) => !o)}
-          className="press flex w-full items-center justify-between pr-2"
-          aria-expanded={dialOpen}
-        >
-          <SectionHeader>What&apos;s up, Doc?</SectionHeader>
-          <ChevronDown
-            className={`h-5 w-5 text-label-secondary transition-transform ${
-              dialOpen ? "rotate-180" : ""
-            }`}
-            strokeWidth={2.5}
-          />
-        </button>
-        {dialOpen && (
-          <div className="animate-pop rounded-card bg-surface shadow-card">
-            <AddComposer editing={editing} onClearEdit={clearEdit} />
-          </div>
-        )}
+        <SectionHeader>What&apos;s up, Doc?</SectionHeader>
+        <div className="rounded-card bg-surface shadow-card">
+          <AddComposer editing={editing} onClearEdit={clearEdit} />
+        </div>
       </section>
 
       {/* History. */}
