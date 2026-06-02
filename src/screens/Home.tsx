@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Settings, Vault } from "lucide-react";
+import { Coins, Eye, EyeOff, Settings, Vault } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
@@ -9,7 +9,11 @@ import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { monthLabel } from "@/lib/dates";
 import { formatUsdCents } from "@/lib/money";
+import { formatGrams } from "@/lib/gold";
 import type { Transaction } from "@/types/db";
+
+// Amber/gold that reads on the light card (the metal, but legible).
+const GOLD_INK = "#A16207";
 
 export function Home() {
   const {
@@ -19,15 +23,16 @@ export function Home() {
     deleteTransaction,
     safeEnabled,
     safeTotalCents,
+    safeGoldGrams,
   } = useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
 
   // The safe balance is private by default — tap the eye to reveal it.
   const [safeShown, setSafeShown] = useState(false);
 
-  // When there's money tucked away, the whole page picks up a soft savings tint
-  // so it's obvious at a glance that the safe is in play.
-  const hasSavings = safeEnabled && safeTotalCents > 0;
+  // When there's money or gold tucked away, the whole page picks up a soft
+  // savings tint so it's obvious at a glance that the safe is in play.
+  const hasSavings = safeEnabled && (safeTotalCents > 0 || safeGoldGrams > 0);
 
   function handleEdit(tx: Transaction) {
     setEditing(tx);
@@ -107,8 +112,17 @@ export function Home() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-income">
                     In the safe
                   </div>
-                  <div className="font-numeric text-xl font-bold tabular-nums text-income">
-                    {safeShown ? formatUsdCents(safeTotalCents) : "••••"}
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                    <span className="font-numeric text-xl font-bold tabular-nums text-income">
+                      {safeShown ? formatUsdCents(safeTotalCents) : "••••"}
+                    </span>
+                    <span
+                      className="flex items-center gap-1 font-numeric text-sm font-bold tabular-nums"
+                      style={{ color: GOLD_INK }}
+                    >
+                      <Coins className="h-3.5 w-3.5" strokeWidth={2} />
+                      {safeShown ? formatGrams(safeGoldGrams) : "•••"}
+                    </span>
                   </div>
                 </div>
               </button>
