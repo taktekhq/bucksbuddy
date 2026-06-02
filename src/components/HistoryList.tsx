@@ -6,7 +6,7 @@ import {
   type PanInfo,
 } from "framer-motion";
 import { Pencil, Trash2 } from "lucide-react";
-import { categoryIcon, categoryLabel } from "@/lib/categories";
+import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { amountColorClass, formatUsdCents } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
@@ -31,6 +31,7 @@ function SwipeRow({
   const x = useMotionValue(0);
   const moved = useRef(false);
   const Icon = categoryIcon(tx.category);
+  const color = categoryColor(tx.category);
 
   function snapTo(target: number) {
     // Light, crisp snap — quick tween, no springy overshoot.
@@ -101,7 +102,10 @@ function SwipeRow({
         style={{ x }}
         className="relative flex items-center gap-3 bg-surface px-4 py-3.5"
       >
-        <span className="flex h-10 w-10 items-center justify-center rounded-pill bg-carrot-soft text-carrot-dark">
+        <span
+          className="flex h-10 w-10 items-center justify-center rounded-pill"
+          style={{ backgroundColor: `${color}1A`, color }}
+        >
           <Icon className="h-5 w-5" strokeWidth={2} />
         </span>
         <div className="flex-1">

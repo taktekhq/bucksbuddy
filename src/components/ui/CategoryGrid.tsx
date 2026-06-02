@@ -18,12 +18,17 @@ export function CategoryGrid({ categories, selected, onSelect }: Props) {
             type="button"
             onClick={() => onSelect(c.id)}
             className={`press flex flex-col items-center justify-center gap-1.5 rounded-card py-5 transition ${
-              active
-                ? "bg-carrot text-white shadow-carrot"
-                : "bg-grouped text-label"
+              active ? "bg-carrot text-white shadow-carrot" : "text-label"
             }`}
+            // Inactive tiles get a soft tint of the category's own color so the
+            // grid reads colorful, not bland gray. Active selection stays carrot.
+            style={active ? undefined : { backgroundColor: `${c.color}1A` }}
           >
-            <Icon className="h-7 w-7" strokeWidth={2} />
+            <Icon
+              className="h-7 w-7"
+              strokeWidth={2}
+              style={active ? undefined : { color: c.color }}
+            />
             <span className="text-xs font-medium">{c.label}</span>
           </button>
         );

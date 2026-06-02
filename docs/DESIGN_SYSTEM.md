@@ -68,9 +68,12 @@ Defined as Tailwind colors. Light-first; dark mode is future work.
 
 ## Typography
 
-Two families: **SF system stack** for all body/UI chrome, **Fredoka**
-(`font-display`, rounded + bouncy, loaded in `index.html`) for the cartoon
-moments. Fredoka falls back to SF Pro Rounded / system, so nothing breaks offline.
+Two families: **SF system stack** for all body/UI chrome, **Grobold**
+(`font-display`, the chunky Looney Tunes cartoon face, self-hosted via
+`@font-face` from `/public/fonts/`) for the cartoon moments. Grobold falls back
+to SF Pro Rounded / system, so nothing breaks offline. It ships a single weight,
+and `font-synthesis: none` keeps the browser from faking a heavier one — the
+`font-bold`/`font-semibold` classes below still drive the SF body stack.
 
 | Role | Classes | Notes |
 |---|---|---|
@@ -86,7 +89,7 @@ moments. Fredoka falls back to SF Pro Rounded / system, so nothing breaks offlin
 | Caption | `text-xs`/`text-sm` + `text-label-secondary` | Dates, hints |
 
 Always use `tabular-nums` for money so digits don't jitter. Display font is for
-*emphasis*; never set long body copy in Fredoka.
+*emphasis*; never set long body copy in Grobold.
 
 ## Spacing & layout
 

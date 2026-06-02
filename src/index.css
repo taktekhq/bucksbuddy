@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Grobold — the Looney Tunes cartoon display face (self-hosted). Used for the
+   "fun" hijack: the BucksBuddy title, big amounts, and primary buttons. It
+   ships a single Regular weight, so we never want the browser to fake a bolder
+   one (that's the heavy, ugly look we're avoiding) — see font-synthesis below. */
+@font-face {
+  font-family: "Grobold";
+  src:
+    url("/fonts/grobold.woff2") format("woff2"),
+    url("/fonts/grobold.ttf") format("truetype");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
@@ -23,6 +37,9 @@ body {
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Real system weights still render bold; single-weight Grobold won't get
+     faux-bolded into the chunky mess we're moving away from. */
+  font-synthesis: none;
   /* iOS: kill the gray tap flash and rubber-band overscroll for an app-like feel. */
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;

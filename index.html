@@ -13,12 +13,14 @@
     <meta name="apple-mobile-web-app-title" content="BucksBuddy" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="description" content="What's up, Doc? Your dead-simple money tracker." />
-    <!-- Display font for the cartoon hijack; SF handles all body/UI text. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Display font (Grobold) is self-hosted via @font-face; preload it so the
+         cartoon hijack shows up fast. SF handles all body/UI text. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      href="/fonts/grobold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
     />
     <title>BucksBuddy</title>
   </head>
