@@ -55,7 +55,7 @@ export function Login() {
           onChange={(e) => setPassword(e.target.value)}
           className="rounded-card bg-grouped px-4 py-4 outline-none placeholder:text-label-secondary"
         />
-        {error && <p className="text-sm text-expense">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         <button
           type="submit"
           disabled={loading || password.length === 0}

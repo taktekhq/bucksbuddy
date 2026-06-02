@@ -67,7 +67,7 @@ function SwipeRow({
           snapTo(0);
           onEdit(tx);
         }}
-        className="absolute inset-y-0 left-0 flex items-center justify-center bg-carrot font-medium text-white"
+        className="absolute inset-y-0 left-0 flex items-center justify-center bg-grouped font-medium text-label"
         style={{ width: ACTION_W }}
       >
         Edit
@@ -79,7 +79,7 @@ function SwipeRow({
           snapTo(0);
           onDelete(tx);
         }}
-        className="absolute inset-y-0 right-0 flex items-center justify-center bg-expense font-medium text-white"
+        className="absolute inset-y-0 right-0 flex items-center justify-center bg-label font-medium text-white"
         style={{ width: ACTION_W }}
       >
         Delete
@@ -108,11 +108,7 @@ function SwipeRow({
             {tx.original_currency === "LBP" && " · LBP"}
           </p>
         </div>
-        <span
-          className={`font-semibold tabular-nums ${
-            tx.is_income ? "text-income" : "text-expense"
-          }`}
-        >
+        <span className="font-semibold tabular-nums text-label">
           {tx.is_income ? "+" : "-"}
           {formatUsdCents(tx.amount_usd_cents)}
         </span>

@@ -18,7 +18,7 @@ export function CategoryGrid({ categories, selected, onSelect }: Props) {
             type="button"
             onClick={() => onSelect(c.id)}
             className={`press flex flex-col items-center justify-center gap-1.5 rounded-card py-5 ${
-              active ? "bg-carrot text-white" : "bg-grouped text-label"
+              active ? "bg-label text-white" : "bg-grouped text-label"
             }`}
           >
             <Icon className="h-7 w-7" strokeWidth={1.75} />

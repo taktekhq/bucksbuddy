@@ -42,7 +42,7 @@ export function Settings() {
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="press -m-2 p-2 text-base text-carrot"
+          className="press -m-2 p-2 text-base text-label"
         >
           Done
         </button>

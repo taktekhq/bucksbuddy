@@ -11,7 +11,7 @@ export function InOutToggle({ isIncome, onChange }: Props) {
         type="button"
         onClick={() => onChange(false)}
         className={`press rounded-pill py-2.5 text-base font-semibold ${
-          !isIncome ? "bg-white text-expense shadow-card" : "text-label-secondary"
+          !isIncome ? "bg-white text-label shadow-card" : "text-label-secondary"
         }`}
       >
         Out
@@ -20,7 +20,7 @@ export function InOutToggle({ isIncome, onChange }: Props) {
         type="button"
         onClick={() => onChange(true)}
         className={`press rounded-pill py-2.5 text-base font-semibold ${
-          isIncome ? "bg-white text-income shadow-card" : "text-label-secondary"
+          isIncome ? "bg-white text-label shadow-card" : "text-label-secondary"
         }`}
       >
         In

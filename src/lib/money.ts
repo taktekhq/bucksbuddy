@@ -19,9 +19,9 @@ export function formatSignedUsdCents(cents: number): string {
   return `${sign}${formatUsdCents(cents)}`;
 }
 
-/** Tailwind text-color class for a net value. */
-export function netColorClass(cents: number): string {
-  return cents < 0 ? "text-expense" : "text-income";
+/** Tailwind text-color class for a net value (monochrome — sign carries direction). */
+export function netColorClass(_cents: number): string {
+  return "text-label";
 }
 
 /** Sum transactions into a signed net in USD cents. */
