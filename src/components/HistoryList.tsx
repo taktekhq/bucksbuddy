@@ -6,7 +6,13 @@ import {
   type PanInfo,
 } from "framer-motion";
 import { Pencil, Trash2 } from "lucide-react";
-import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
+import {
+  SAFE_CATEGORY_ID,
+  SAFE_SEED_CATEGORY_ID,
+  categoryColor,
+  categoryIcon,
+  categoryLabel,
+} from "@/lib/categories";
 import { amountColorClass, formatUsdCents } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
@@ -22,18 +28,27 @@ function dateLabel(iso: string): string {
 
 function SwipeRow({
   tx,
+  seeded,
+  partner,
   onEdit,
   onDelete,
 }: {
   tx: Transaction;
+  // True when this Safe deposit is the visible half of an "existing savings"
+  // pair: it reads as a "+" and deleting it removes its income partner too.
+  seeded: boolean;
+  partner?: Transaction;
   onEdit: (tx: Transaction) => void;
-  onDelete: (tx: Transaction) => void;
+  onDelete: (tx: Transaction, partner?: Transaction) => void;
 }) {
   const x = useMotionValue(0);
   const moved = useRef(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const Icon = categoryIcon(tx.category);
   const color = categoryColor(tx.category);
+  // Existing-savings rows count as money in: show a green "+" and a clear label.
+  const showAsIncome = seeded || tx.is_income;
+  const label = seeded ? "Existing savings" : categoryLabel(tx.category);
 
   function clearResetTimer() {
     if (resetTimer.current !== null) {
@@ -80,26 +95,29 @@ function SwipeRow({
 
   return (
     <div className="relative overflow-hidden rounded-card shadow-card">
-      {/* Edit revealed by swiping right. */}
-      <button
-        type="button"
-        aria-label="Edit"
-        onClick={() => {
-          snapTo(0);
-          onEdit(tx);
-        }}
-        className="absolute inset-y-0 left-0 flex items-center justify-center bg-carrot text-white"
-        style={{ width: ACTION_W }}
-      >
-        <Pencil className="h-5 w-5" strokeWidth={2} />
-      </button>
+      {/* Edit revealed by swiping right. Existing-savings rows are paired, so
+          editing one half would desync them — delete-and-redo instead. */}
+      {!seeded && (
+        <button
+          type="button"
+          aria-label="Edit"
+          onClick={() => {
+            snapTo(0);
+            onEdit(tx);
+          }}
+          className="absolute inset-y-0 left-0 flex items-center justify-center bg-carrot text-white"
+          style={{ width: ACTION_W }}
+        >
+          <Pencil className="h-5 w-5" strokeWidth={2} />
+        </button>
+      )}
       {/* Delete revealed by swiping left. */}
       <button
         type="button"
         aria-label="Delete"
         onClick={() => {
           snapTo(0);
-          onDelete(tx);
+          onDelete(tx, partner);
         }}
         className="absolute inset-y-0 right-0 flex items-center justify-center bg-expense text-white"
         style={{ width: ACTION_W }}
@@ -109,7 +127,7 @@ function SwipeRow({
 
       <motion.div
         drag="x"
-        dragConstraints={{ left: -ACTION_W, right: ACTION_W }}
+        dragConstraints={{ left: -ACTION_W, right: seeded ? 0 : ACTION_W }}
         dragElastic={0.06}
         dragMomentum={false}
         onDragStart={clearResetTimer}
@@ -128,7 +146,7 @@ function SwipeRow({
           <Icon className="h-5 w-5" strokeWidth={2} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-label">{categoryLabel(tx.category)}</p>
+          <p className="font-medium text-label">{label}</p>
           {tx.note && (
             <p className="truncate text-xs text-label-secondary">{tx.note}</p>
           )}
@@ -137,13 +155,40 @@ function SwipeRow({
             {tx.original_currency === "LBP" && " · LBP"}
           </p>
         </div>
-        <span className={`font-numeric font-medium tabular-nums ${amountColorClass(tx.is_income)}`}>
-          {tx.is_income ? "+" : "-"}
+        <span className={`font-numeric font-medium tabular-nums ${amountColorClass(showAsIncome)}`}>
+          {showAsIncome ? "+" : "-"}
           {formatUsdCents(tx.amount_usd_cents)}
         </span>
       </motion.div>
     </div>
   );
+}
+
+// An "existing savings" entry is two rows sharing an amount and timestamp: an
+// income seed (category safe_seed) and the Safe deposit it cancels. Merge each
+// pair so history shows one line — the deposit, rendered as a "+". The seed is
+// hidden, and the two are linked so deleting the visible row removes both.
+function pairExistingSavings(rows: Transaction[]) {
+  const key = (t: Transaction) => `${t.amount_usd_cents}|${t.occurred_at}`;
+  const depositsByKey = new Map<string, Transaction>();
+  for (const t of rows) {
+    if (t.category === SAFE_CATEGORY_ID && !t.is_income && !depositsByKey.has(key(t))) {
+      depositsByKey.set(key(t), t);
+    }
+  }
+  const hiddenSeedIds = new Set<string>();
+  const seededDepositIds = new Set<string>();
+  const partnerById = new Map<string, Transaction>();
+  for (const t of rows) {
+    if (t.category !== SAFE_SEED_CATEGORY_ID || !t.is_income) continue;
+    const deposit = depositsByKey.get(key(t));
+    if (deposit && !seededDepositIds.has(deposit.id)) {
+      hiddenSeedIds.add(t.id);
+      seededDepositIds.add(deposit.id);
+      partnerById.set(deposit.id, t);
+    }
+  }
+  return { hiddenSeedIds, seededDepositIds, partnerById };
 }
 
 export function HistoryList({
@@ -153,7 +198,7 @@ export function HistoryList({
 }: {
   rows: Transaction[];
   onEdit: (tx: Transaction) => void;
-  onDelete: (tx: Transaction) => void;
+  onDelete: (tx: Transaction, partner?: Transaction) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -163,13 +208,24 @@ export function HistoryList({
     );
   }
 
+  const { hiddenSeedIds, seededDepositIds, partnerById } =
+    pairExistingSavings(rows);
+
   return (
     <ul className="flex flex-col gap-1.5">
-      {rows.map((tx) => (
-        <li key={tx.id}>
-          <SwipeRow tx={tx} onEdit={onEdit} onDelete={onDelete} />
-        </li>
-      ))}
+      {rows
+        .filter((tx) => !hiddenSeedIds.has(tx.id))
+        .map((tx) => (
+          <li key={tx.id}>
+            <SwipeRow
+              tx={tx}
+              seeded={seededDepositIds.has(tx.id)}
+              partner={partnerById.get(tx.id)}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          </li>
+        ))}
     </ul>
   );
 }

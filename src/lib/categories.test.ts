@@ -11,6 +11,8 @@ import {
   INCOME_CATEGORIES,
   SAFE_CATEGORY,
   SAFE_CATEGORY_ID,
+  SAFE_SEED_CATEGORY,
+  SAFE_SEED_CATEGORY_ID,
   splitCategory,
   subcategoriesFor,
   subcategoryLabel,
@@ -113,5 +115,13 @@ describe("the safe category", () => {
     expect(SAFE_CATEGORY_ID).toBe("safe");
     expect(SAFE_CATEGORY.id).toBe("safe");
     expect(categoryLabel("safe")).toBe("Safe");
+  });
+});
+
+describe("the existing-savings seed category", () => {
+  it("is exported with a stable id and resolves to a friendly label", () => {
+    expect(SAFE_SEED_CATEGORY_ID).toBe("safe_seed");
+    expect(SAFE_SEED_CATEGORY.id).toBe("safe_seed");
+    expect(categoryLabel("safe_seed")).toBe("Existing savings");
   });
 });

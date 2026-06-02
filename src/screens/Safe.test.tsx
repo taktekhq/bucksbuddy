@@ -102,6 +102,76 @@ describe("Safe", () => {
     );
   });
 
+  it("logs 'money I already had' as a paired deposit + income that nets out", async () => {
+    render(<Safe />);
+    // The toggle is offered for cash deposits and starts off.
+    const toggle = screen.getByRole("button", { name: /Money I already had/ });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.type(screen.getByLabelText("Amount"), "1000");
+    // The CTA reflects that this won't touch the balance.
+    await userEvent.click(
+      screen.getByRole("button", { name: /Log \$1,000\.00 I already had/ }),
+    );
+
+    // Two transactions: the Safe deposit (Out) and a matching income (In),
+    // sharing one timestamp so the balance nets to zero.
+    expect(storeValue.addTransaction).toHaveBeenCalledTimes(2);
+    expect(storeValue.addTransaction).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        is_income: false,
+        category: "safe",
+        amount_usd_cents: 100000,
+      }),
+    );
+    expect(storeValue.addTransaction).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        is_income: true,
+        category: "safe_seed",
+        amount_usd_cents: 100000,
+      }),
+    );
+    const calls = storeValue.addTransaction.mock.calls as unknown as Array<
+      [{ occurred_at?: string }]
+    >;
+    expect(calls[0][0].occurred_at).toBe(calls[1][0].occurred_at);
+  });
+
+  it("stops after the deposit if the income partner fails, surfacing the error", async () => {
+    storeValue = makeStoreValue({
+      addTransaction: vi.fn(async () => ({ error: "vault jammed" })),
+    });
+    render(<Safe />);
+    await userEvent.click(screen.getByRole("button", { name: /Money I already had/ }));
+    await userEvent.type(screen.getByLabelText("Amount"), "1000");
+    await userEvent.click(
+      screen.getByRole("button", { name: /Log \$1,000\.00 I already had/ }),
+    );
+    // The deposit was attempted; the failure stops us before the income partner.
+    expect(storeValue.addTransaction).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("vault jammed")).toBeInTheDocument();
+  });
+
+  it("hides the 'money I already had' toggle for take-outs and gold", async () => {
+    render(<Safe />);
+    expect(
+      screen.getByRole("button", { name: /Money I already had/ }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Take out/ }));
+    expect(
+      screen.queryByRole("button", { name: /Money I already had/ }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^Add$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Gold/ }));
+    expect(
+      screen.queryByRole("button", { name: /Money I already had/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("takes cash out of the safe (withdraw → income) with a note", async () => {
     render(<Safe />);
     await userEvent.click(screen.getByRole("button", { name: /Take out/ }));
