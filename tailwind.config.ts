@@ -17,6 +17,7 @@ const config: Config = {
         surface: "#FFFFFF", // cards, sheets, rows
         grouped: "#E9E9EF", // numpad keys, inactive tiles, toggle tracks
         label: "#1C1C1E", // primary text, icons
+        "label-muted": "#48484A", // softened dark grey — the wordmark
         "label-secondary": "#8E8E93", // captions, dates, placeholders
         separator: "rgba(60,60,67,0.12)", // disabled fills / faint hairlines
 

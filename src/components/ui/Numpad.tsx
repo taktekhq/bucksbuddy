@@ -66,7 +66,7 @@ export function Numpad({ onPress }: Props) {
             onPointerLeave={cancelBackspaceHold}
             onPointerCancel={cancelBackspaceHold}
             onContextMenu={(e) => e.preventDefault()}
-            className="press rounded-card bg-grouped py-4 font-numeric text-xl font-semibold tabular-nums text-carrot-dark transition active:bg-carrot-soft"
+            className="press rounded-card bg-grouped py-4 font-numeric text-xl font-bold tabular-nums text-carrot-dark transition active:bg-carrot-soft"
           >
             {k}
           </button>
@@ -75,7 +75,7 @@ export function Numpad({ onPress }: Props) {
             key={k}
             type="button"
             onClick={() => handle(k)}
-            className="press rounded-card bg-grouped py-4 font-numeric text-xl font-semibold tabular-nums text-label transition active:bg-carrot-soft"
+            className="press rounded-card bg-grouped py-4 font-numeric text-xl font-bold tabular-nums text-label transition active:bg-carrot-soft"
           >
             {k}
           </button>
