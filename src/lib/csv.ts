@@ -1,5 +1,9 @@
 import type { Transaction } from "@/types/db";
-import { categoryLabel } from "@/lib/categories";
+import {
+  categoryLabel,
+  categorySubLabel,
+  splitCategory,
+} from "@/lib/categories";
 
 function escapeCsv(value: string | number): string {
   const s = String(value);
@@ -14,6 +18,7 @@ export function transactionsToCsv(rows: Transaction[]): string {
     "date",
     "type",
     "category",
+    "subcategory",
     "original_amount",
     "original_currency",
     "rate_used_lbp_per_usd",
@@ -25,7 +30,8 @@ export function transactionsToCsv(rows: Transaction[]): string {
     [
       r.occurred_at,
       r.is_income ? "In" : "Out",
-      categoryLabel(r.category),
+      categoryLabel(splitCategory(r.category).base),
+      categorySubLabel(r.category) ?? "",
       r.original_amount,
       r.original_currency,
       r.rate_used,
