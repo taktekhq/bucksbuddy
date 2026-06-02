@@ -123,11 +123,11 @@ never numbers and never long body copy.
 - **Shell:** content capped at `max-w-md`, centered, `px-4` gutter, safe-area
   padding top and bottom. Screens are a vertical stack of **cards** on the
   `canvas`.
-- **Navigation:** a bottom `TabBar` with two tabs — **Add** (the dial, the
-  default landing tab — open and record) and **Home** (the Bugs-ism title +
-  month-net card + History). Settings is a separate hash route reached from the
-  Home gear. Editing is lifted to the shell so a History row loads into the dial
-  and switches to the Add tab.
+- **Navigation:** a **single page** (no tab bar). Top to bottom: the wordmark +
+  settings nav, the Bugs-ism title + month-net card, a tappable **"What's up,
+  Doc?"** section that reveals the dial, then History. Settings is a separate
+  hash route reached from the gear. Editing a History row opens the dial with the
+  entry loaded and scrolls to the top.
 - **Hero (month-net card):** the Bugs-ism is the **section title above** the
   card; inside, the number leads (heaviest weight, tight leading/tracking) with
   the **month directly under it**. Left-aligned.

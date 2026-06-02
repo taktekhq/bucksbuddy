@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Settings } from "lucide-react";
+import { ChevronDown, Settings } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
+import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
@@ -10,10 +11,23 @@ import { monthLabel } from "@/lib/dates";
 import { randomBugsLine } from "@/lib/voice";
 import type { Transaction } from "@/types/db";
 
-export function Summary({ onEdit }: { onEdit: (tx: Transaction) => void }) {
+export function Home() {
   const { transactions, monthlyNetCents, loading, deleteTransaction } = useStore();
+  const [editing, setEditing] = useState<Transaction | null>(null);
+  const [dialOpen, setDialOpen] = useState(false);
   // One Bugs-ism per visit, used as the title above the money card.
   const [bugs] = useState(randomBugsLine);
+
+  function handleEdit(tx: Transaction) {
+    setEditing(tx);
+    setDialOpen(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function clearEdit() {
+    setEditing(null);
+    setDialOpen(false);
+  }
 
   async function handleDelete(tx: Transaction) {
     if (window.confirm("Delete this entry?")) {
@@ -51,13 +65,36 @@ export function Summary({ onEdit }: { onEdit: (tx: Transaction) => void }) {
         </div>
       </section>
 
+      {/* "What's up, Doc?" → tap to reveal the dial. */}
+      <section className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => setDialOpen((o) => !o)}
+          className="press flex w-full items-center justify-between pr-2"
+          aria-expanded={dialOpen}
+        >
+          <SectionHeader>What&apos;s up, Doc?</SectionHeader>
+          <ChevronDown
+            className={`h-5 w-5 text-label-secondary transition-transform ${
+              dialOpen ? "rotate-180" : ""
+            }`}
+            strokeWidth={2.5}
+          />
+        </button>
+        {dialOpen && (
+          <div className="animate-pop rounded-card bg-surface shadow-card">
+            <AddComposer editing={editing} onClearEdit={clearEdit} />
+          </div>
+        )}
+      </section>
+
       {/* History. */}
       <section className="flex flex-col gap-2">
         <SectionHeader>History</SectionHeader>
         {loading && transactions.length === 0 ? (
           <p className="py-10 text-center text-label-secondary">Loading…</p>
         ) : (
-          <HistoryList rows={transactions} onEdit={onEdit} onDelete={handleDelete} />
+          <HistoryList rows={transactions} onEdit={handleEdit} onDelete={handleDelete} />
         )}
       </section>
     </main>
