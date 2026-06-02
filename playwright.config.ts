@@ -13,7 +13,8 @@ const PORT = 4173;
 export default defineConfig({
   testDir: "./e2e",
   // Snapshots (baseline PNGs) live alongside the specs and are committed.
-  snapshotPathTemplate: "{testDir}/__screenshots__/{testFilePath}/{arg}{ext}",
+  snapshotPathTemplate:
+    "{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}-{platform}{ext}",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
