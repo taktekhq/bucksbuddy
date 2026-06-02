@@ -11,7 +11,6 @@ import { supabase } from "@/lib/supabase";
 import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
-import { canUseSafe } from "@/lib/features";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import type {
   NewSafeGoldEntry,
@@ -32,10 +31,9 @@ type Store = {
   ) => Promise<{ error: string | null }>;
   deleteTransaction: (id: string) => Promise<{ error: string | null }>;
   setRate: (rate: number) => Promise<{ error: string | null }>;
-  // Savings Safe (gated to allowlisted users — see lib/features).
-  safeEnabled: boolean;
-  // Cash in the safe = all-time net of "safe"-category transactions: money sent
-  // to the safe (Out) adds, money taken back (In) subtracts.
+  // Savings Safe. Cash in the safe = all-time net of "safe"-category
+  // transactions: money sent to the safe (Out) adds, money taken back (In)
+  // subtracts.
   safeTotalCents: number;
   // Gold in the Safe, tracked in grams.
   safeGoldEntries: SafeGoldEntry[];
@@ -51,44 +49,38 @@ const StoreContext = createContext<Store | null>(null);
 
 export function StoreProvider({
   userId,
-  userEmail,
   children,
 }: {
   userId: string;
-  userEmail: string | null;
   children: ReactNode;
 }) {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [lbpPerUsd, setLbpPerUsd] = useState(DEFAULT_LBP_PER_USD);
   const [safeGoldEntries, setSafeGoldEntries] = useState<SafeGoldEntry[]>([]);
-  const safeEnabled = canUseSafe(userEmail);
 
   const refresh = useCallback(async () => {
-    const [{ data: profile }, { data: txs }] = await Promise.all([
+    const [{ data: profile }, { data: txs }, { data: gold }] = await Promise.all([
       supabase.from("profiles").select("lbp_per_usd").eq("id", userId).single(),
       supabase
         .from("transactions")
         .select("*")
         .order("occurred_at", { ascending: false })
         .limit(500),
-    ]);
-    if (profile?.lbp_per_usd) setLbpPerUsd(profile.lbp_per_usd);
-    setTransactions((txs ?? []) as Transaction[]);
-
-    // Cash in the safe rides along in `transactions` (category "safe"). Only the
-    // gold ledger is separate. Tolerate a missing table (the 0003 migration not
-    // applied yet) by ignoring the error and showing empty.
-    if (safeEnabled) {
-      const { data: gold } = await supabase
+      // Cash in the safe rides along in `transactions` (category "safe"); only
+      // the gold ledger is separate. Tolerate a missing table (the 0002 gold
+      // migration not applied yet) by ignoring the error and showing empty.
+      supabase
         .from("safe_gold_entries")
         .select("*")
         .order("occurred_at", { ascending: false })
-        .limit(500);
-      setSafeGoldEntries((gold ?? []) as SafeGoldEntry[]);
-    }
+        .limit(500),
+    ]);
+    if (profile?.lbp_per_usd) setLbpPerUsd(profile.lbp_per_usd);
+    setTransactions((txs ?? []) as Transaction[]);
+    setSafeGoldEntries((gold ?? []) as SafeGoldEntry[]);
     setLoading(false);
-  }, [userId, safeEnabled]);
+  }, [userId]);
 
   useEffect(() => {
     void refresh();
@@ -220,7 +212,6 @@ export function StoreProvider({
     updateTransaction,
     deleteTransaction,
     setRate,
-    safeEnabled,
     safeTotalCents,
     safeGoldEntries,
     safeGoldGrams,

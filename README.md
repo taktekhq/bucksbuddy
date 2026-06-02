@@ -35,9 +35,8 @@ needs no migration — it rides along in `transactions`.
 > `drop table if exists public.safe_entries;` in the SQL Editor — optional, it's empty and
 > ignored either way._
 
-> **Savings Safe (proof of concept):** a vault icon next to Settings opens a dark "Safe"
-> screen. It's limited to a short email allowlist in
-> [`src/lib/features.ts`](src/lib/features.ts).
+> **Savings Safe:** a vault icon next to Settings opens a dark "Safe" screen (available
+> to everyone).
 > - **Cash** moved to the safe is recorded as a normal transaction with the `safe`
 >   category — so it leaves your spendable balance (Out) and shows in history; taking it
 >   back is an In. The safe's cash total is the all-time net of those transactions.

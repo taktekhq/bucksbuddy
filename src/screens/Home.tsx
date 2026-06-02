@@ -22,7 +22,6 @@ export function Home() {
     monthlyNetCents,
     loading,
     deleteTransaction,
-    safeEnabled,
     safeTotalCents,
     safeGoldGrams,
   } = useStore();
@@ -33,7 +32,7 @@ export function Home() {
 
   // When there's money or gold tucked away, the whole page picks up a soft
   // savings tint so it's obvious at a glance that the safe is in play.
-  const hasSavings = safeEnabled && (safeTotalCents > 0 || safeGoldGrams > 0);
+  const hasSavings = safeTotalCents > 0 || safeGoldGrams > 0;
 
   // Match the status bar to the top of the page (mint when tinted, else canvas).
   useThemeColor(hasSavings ? "#E6F8EE" : "#F2F2F7");
@@ -76,16 +75,14 @@ export function Home() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          {safeEnabled && (
-            <button
-              type="button"
-              onClick={() => navigate("/safe")}
-              className="press -m-2 p-2 text-label-secondary"
-              aria-label="Safe"
-            >
-              <Vault className="h-6 w-6" strokeWidth={1.75} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => navigate("/safe")}
+            className="press -m-2 p-2 text-label-secondary"
+            aria-label="Safe"
+          >
+            <Vault className="h-6 w-6" strokeWidth={1.75} />
+          </button>
           <button
             type="button"
             onClick={() => navigate("/settings")}
@@ -102,50 +99,48 @@ export function Home() {
       <section>
         <div className="rounded-card bg-surface px-5 py-5 shadow-card">
           <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} />
-          {safeEnabled && (
-            <div className="mt-4 flex items-center gap-3 rounded-card bg-income/10 px-4 py-3">
-              <button
-                type="button"
-                onClick={() => navigate("/safe")}
-                className="press flex min-w-0 flex-1 items-center gap-3 text-left"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-income/15 text-income">
-                  <Vault className="h-5 w-5" strokeWidth={2} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-income">
-                    In the safe
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                    <span className="flex items-center gap-1 font-numeric text-xl font-bold tabular-nums text-income">
-                      <Banknote className="h-4 w-4 shrink-0" strokeWidth={2} />
-                      {safeShown ? formatUsdCents(safeTotalCents) : "••••"}
-                    </span>
-                    <span
-                      className="flex items-center gap-1 font-numeric text-sm font-bold tabular-nums"
-                      style={{ color: GOLD_INK }}
-                    >
-                      <Coins className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                      {safeShown ? formatGrams(safeGoldGrams) : "•••"}
-                    </span>
-                  </div>
+          <div className="mt-4 flex items-center gap-3 rounded-card bg-income/10 px-4 py-3">
+            <button
+              type="button"
+              onClick={() => navigate("/safe")}
+              className="press flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-income/15 text-income">
+                <Vault className="h-5 w-5" strokeWidth={2} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-income">
+                  In the safe
                 </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSafeShown((v) => !v)}
-                aria-label={safeShown ? "Hide safe balance" : "Show safe balance"}
-                aria-pressed={safeShown}
-                className="press -m-2 shrink-0 p-2 text-income/70"
-              >
-                {safeShown ? (
-                  <EyeOff className="h-5 w-5" strokeWidth={2} />
-                ) : (
-                  <Eye className="h-5 w-5" strokeWidth={2} />
-                )}
-              </button>
-            </div>
-          )}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                  <span className="flex items-center gap-1 font-numeric text-xl font-bold tabular-nums text-income">
+                    <Banknote className="h-4 w-4 shrink-0" strokeWidth={2} />
+                    {safeShown ? formatUsdCents(safeTotalCents) : "••••"}
+                  </span>
+                  <span
+                    className="flex items-center gap-1 font-numeric text-sm font-bold tabular-nums"
+                    style={{ color: GOLD_INK }}
+                  >
+                    <Coins className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                    {safeShown ? formatGrams(safeGoldGrams) : "•••"}
+                  </span>
+                </div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSafeShown((v) => !v)}
+              aria-label={safeShown ? "Hide safe balance" : "Show safe balance"}
+              aria-pressed={safeShown}
+              className="press -m-2 shrink-0 p-2 text-income/70"
+            >
+              {safeShown ? (
+                <EyeOff className="h-5 w-5" strokeWidth={2} />
+              ) : (
+                <Eye className="h-5 w-5" strokeWidth={2} />
+              )}
+            </button>
+          </div>
         </div>
       </section>
 
