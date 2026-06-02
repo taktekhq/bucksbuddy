@@ -1,41 +1,44 @@
 import { useState } from "react";
+import { Check } from "lucide-react";
 import { useStore } from "@/lib/store";
 
+// An inset grouped row: label left, value input right. Saves on blur (no button)
+// and flashes a green check, matching the iOS settings feel.
 export function RateEditor() {
   const { lbpPerUsd, setRate } = useStore();
   const [value, setValue] = useState(String(lbpPerUsd));
-  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [saved, setSaved] = useState(false);
 
-  async function save() {
+  async function commit() {
     const n = Number.parseInt(value, 10);
-    if (!Number.isFinite(n) || n <= 0) return;
-    setStatus("saving");
+    if (!Number.isFinite(n) || n <= 0) {
+      setValue(String(lbpPerUsd)); // revert junk
+      return;
+    }
+    if (n === lbpPerUsd) return;
     await setRate(n);
-    setStatus("saved");
-    setTimeout(() => setStatus("idle"), 1500);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
   }
 
   return (
-    <div className="rounded-card bg-surface p-4 shadow-card">
-      <label className="text-sm font-medium text-label-secondary">
-        Exchange rate (LBP per $1)
-      </label>
-      <div className="mt-2 flex gap-2">
-        <input
-          type="text"
-          inputMode="numeric"
-          value={value}
-          onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
-          className="flex-1 rounded-card bg-grouped px-4 py-3 tabular-nums outline-none ring-carrot/40 transition focus:ring-2"
-        />
-        <button
-          type="button"
-          onClick={save}
-          disabled={status === "saving"}
-          className="press rounded-card bg-carrot px-5 font-semibold text-white shadow-carrot disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
-        >
-          {status === "saved" ? "Saved" : "Save"}
-        </button>
+    <div className="overflow-hidden rounded-card bg-surface shadow-card">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <label htmlFor="rate" className="text-base text-label">
+          LBP per $1
+        </label>
+        <div className="flex items-center gap-2">
+          {saved && <Check className="h-4 w-4 text-income" strokeWidth={3} />}
+          <input
+            id="rate"
+            type="text"
+            inputMode="numeric"
+            value={value}
+            onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
+            onBlur={commit}
+            className="w-28 rounded-lg bg-grouped px-3 py-2 text-right text-base tabular-nums outline-none ring-carrot/40 transition focus:ring-2"
+          />
+        </div>
       </div>
     </div>
   );

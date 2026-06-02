@@ -224,7 +224,7 @@ export function AddComposer({
             aria-label={editing ? "Save changes" : "Add entry"}
             className={`press flex h-14 w-14 items-center justify-center rounded-full transition ${
               canSave
-                ? "bg-carrot text-white shadow-carrot"
+                ? "bg-carrot text-white"
                 : "bg-separator text-label-secondary"
             }`}
           >
