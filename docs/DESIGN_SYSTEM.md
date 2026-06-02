@@ -76,13 +76,15 @@ Defined as Tailwind colors. Light-first; dark mode is future work.
 Three roles, two custom decisions:
 
 - **`font-display` → Grobold.** The chunky Looney Tunes cartoon face, self-hosted
-  via `@font-face` from `/public/fonts/`. **Headers, the wordmark, and button
-  labels only** — never numbers, never body. Two hard rules: **always `uppercase`**
-  (the font is built for it), and **never pure black** — Grobold reads heavy, so
-  use `label-muted` (dark grey), `label-secondary`, or white-on-carrot, never
-  `label` (#1C1C1E). Falls back to SF Pro Rounded / system so nothing breaks
-  offline. It ships a single weight, and `font-synthesis: none` keeps the browser
-  from faking a heavier one.
+  via `@font-face` from `/public/fonts/`. **Grey only: the logo (wordmark) and
+  section headers (History, Settings, the hero's Bugs-ism quip).** Never on
+  numbers, body, buttons, or anything colored (no white-on-carrot, no green/red).
+  Two hard rules: **always `uppercase`** (the font is built for it), and **never
+  pure black** — Grobold reads heavy, so it lives in `label-muted` (dark grey) or
+  `label-secondary`, never `label` (#1C1C1E). The wordmark stacks on two lines
+  (`Bucks` / `Buddy`) with `leading-none`. Falls back to SF Pro Rounded / system
+  so nothing breaks offline; ships a single weight, and `font-synthesis: none`
+  keeps the browser from faking a heavier one.
 - **`font-numeric` → SF Pro Rounded.** Every digit of money — totals, the live
   amount, numpad, history. Stays Apple: friendly and rounded, but with **real
   tabular figures**, so columns line up, typing doesn't jitter, and the heavy
@@ -99,12 +101,13 @@ Three roles, two custom decisions:
 
 | Role | Classes | Notes |
 |---|---|---|
-| Wordmark | `font-display text-lg font-bold uppercase text-label-muted` | "BucksBuddy" in the nav, beside the 🥕 — kept small, dark grey |
-| Section header | `font-display text-sm font-semibold uppercase tracking-wide text-label-secondary` | "History", month label |
-| Title / nav | `font-display text-base font-bold uppercase text-label-muted` | Screen headers (e.g. Settings) |
-| Button label | `font-display text-lg font-semibold uppercase text-white` | Primary carrot pill |
-| Net total (hero) | `font-numeric text-5xl font-extrabold tabular-nums` + green/red | Home hero card |
-| Net total (compact) | `font-numeric text-4xl font-extrabold tabular-nums` + green/red | Smaller contexts |
+| Wordmark | `font-display text-sm font-bold uppercase leading-none text-label-muted` | Stacked `Bucks`/`Buddy` lockup beside the 🥕 — small, two lines, dark grey |
+| Section header | `font-display text-sm font-semibold uppercase tracking-wide text-label-secondary` | "History", Settings title |
+| Hero quip | `font-display text-xs uppercase tracking-wide text-label-secondary` | Bugs-ism under the hero number |
+| Month caption | `text-sm font-medium text-label-secondary` (SF, **not** Grobold) | "June 2026" above the hero |
+| Button label | `text-lg font-semibold text-white` (SF, **not** Grobold) | Primary carrot pill — "Add"/"Save" |
+| Net total (hero) | `font-numeric text-5xl font-black tabular-nums` + green/red, **left-aligned** | Home hero card — heaviest weight |
+| Net total (compact) | `font-numeric text-4xl font-black tabular-nums` + green/red | Smaller contexts |
 | Amount entry | `font-numeric text-4xl font-extrabold tabular-nums` + green/red | Composer live amount |
 | History amount | `font-numeric font-bold tabular-nums` + green/red | Entry rows |
 | Numpad keys | `font-numeric text-xl font-bold tabular-nums` | Keypad |
@@ -157,9 +160,10 @@ Each lives in `components/ui/` (or `components/`). States:
   string (`applyKey` enforces single dot / max 2 decimals). `⌫` is carrot-tinted;
   **hold it (~400ms) to clear the whole amount** (emits the `clear` key + a
   stronger haptic). A short tap deletes one character.
-- **NetTotal** — hero number in `font-numeric`, **green/red** via `netColorClass`,
-  with a cheeky changing quip under it ("net this month · Eh, lookin' rich, Doc.").
-  The month label above it is a Grobold (`font-display`) section header.
+- **NetTotal** — **left-aligned** Apple-style stat: a plain SF month caption
+  ("June 2026"), the hero number in `font-numeric font-black` **green/red** (via
+  `netColorClass`, heaviest weight), and a small grey Grobold Bugs-ism under it
+  ("Eh, lookin' rich, Doc.").
 - **AddComposer** — **collapsed by default**: the live amount shows as a tappable
   header; the numpad only opens when it's tapped. The amount is `font-numeric`,
   tinted by direction (green In, red Out, gray when empty). Primary action is a

@@ -30,8 +30,12 @@ export function Home() {
       <header className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <Carrot className="text-2xl" />
-          <span className="font-display text-lg font-bold uppercase text-label-muted">
-            BucksBuddy
+          {/* Stacked BUCKS / BUDDY lockup — smaller font + tight leading keeps the
+              two lines at roughly the height of the single line it replaced. */}
+          <span className="font-display text-sm font-bold uppercase leading-none text-label-muted">
+            Bucks
+            <br />
+            Buddy
           </span>
         </div>
         <button
@@ -55,11 +59,10 @@ export function Home() {
       </section>
 
       <div>
-        <div className="mb-2 flex items-center justify-between px-2">
+        <div className="mb-2 px-2">
           <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-label-secondary">
             History
           </h2>
-          <span className="text-xs text-label-secondary">swipe to edit / delete</span>
         </div>
         {loading && transactions.length === 0 ? (
           <p className="py-10 text-center text-label-secondary">Loading…</p>

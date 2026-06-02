@@ -14,37 +14,22 @@ function quip(cents: number): string {
 }
 
 export function NetTotal({ cents, monthLabel, compact = false }: Props) {
-  if (compact) {
-    return (
-      <div>
-        <p className="font-display text-xs font-semibold uppercase tracking-wide text-label-secondary">
-          {monthLabel}
-        </p>
-        <p
-          className={`font-numeric text-4xl font-extrabold tabular-nums ${netColorClass(
-            cents,
-          )}`}
-        >
-          {formatSignedUsdCents(cents)}
-        </p>
-        <p className="text-xs text-label-secondary">net this month · {quip(cents)}</p>
-      </div>
-    );
-  }
-
+  // Left-aligned, Apple-style stat: a plain SF month caption, the hero number in
+  // the heaviest weight, and a small Grobold (grey) Bugs-ism underneath.
+  const size = compact ? "text-4xl" : "text-5xl";
   return (
-    <div className="text-center">
-      <p className="font-display text-sm font-semibold uppercase tracking-wide text-label-secondary">
-        {monthLabel}
-      </p>
+    <div>
+      <p className="text-sm font-medium text-label-secondary">{monthLabel}</p>
       <p
-        className={`mt-2 font-numeric text-5xl font-extrabold tabular-nums ${netColorClass(
+        className={`mt-1 font-numeric ${size} font-black tabular-nums ${netColorClass(
           cents,
         )}`}
       >
         {formatSignedUsdCents(cents)}
       </p>
-      <p className="mt-1 text-sm text-label-secondary">net this month · {quip(cents)}</p>
+      <p className="mt-1 font-display text-xs uppercase tracking-wide text-label-secondary">
+        {quip(cents)}
+      </p>
     </div>
   );
 }
