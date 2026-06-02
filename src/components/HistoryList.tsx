@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   animate,
   motion,
@@ -11,6 +11,7 @@ import { amountColorClass, formatUsdCents } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
 const ACTION_W = 76; // px revealed per side
+const AUTO_RESET_MS = 2000; // close an open row if no action is taken
 
 function dateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -30,8 +31,16 @@ function SwipeRow({
 }) {
   const x = useMotionValue(0);
   const moved = useRef(false);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const Icon = categoryIcon(tx.category);
   const color = categoryColor(tx.category);
+
+  function clearResetTimer() {
+    if (resetTimer.current !== null) {
+      clearTimeout(resetTimer.current);
+      resetTimer.current = null;
+    }
+  }
 
   function snapTo(target: number) {
     // Light, crisp snap — quick tween, no springy overshoot.
@@ -40,7 +49,16 @@ function SwipeRow({
       duration: 0.16,
       ease: [0.2, 0, 0, 1],
     });
+    // When a row settles open, auto-close it after a short delay if the
+    // user doesn't tap Edit/Delete. Closing rows cancel any pending timer.
+    clearResetTimer();
+    if (target !== 0) {
+      resetTimer.current = setTimeout(() => snapTo(0), AUTO_RESET_MS);
+    }
   }
+
+  // Clean up the pending timer if the row unmounts.
+  useEffect(() => clearResetTimer, []);
 
   function onDragEnd(_: unknown, info: PanInfo) {
     const current = x.get();
@@ -94,6 +112,7 @@ function SwipeRow({
         dragConstraints={{ left: -ACTION_W, right: ACTION_W }}
         dragElastic={0.06}
         dragMomentum={false}
+        onDragStart={clearResetTimer}
         onDrag={(_, info) => {
           if (Math.abs(info.offset.x) > 6) moved.current = true;
         }}
@@ -108,8 +127,11 @@ function SwipeRow({
         >
           <Icon className="h-5 w-5" strokeWidth={2} />
         </span>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <p className="font-medium text-label">{categoryLabel(tx.category)}</p>
+          {tx.note && (
+            <p className="truncate text-xs text-label-secondary">{tx.note}</p>
+          )}
           <p className="text-xs text-label-secondary">
             {dateLabel(tx.occurred_at)}
             {tx.original_currency === "LBP" && " · LBP"}
