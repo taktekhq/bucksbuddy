@@ -5,6 +5,7 @@
 import {
   Briefcase,
   CircleParking,
+  Dumbbell,
   Fuel,
   Gift,
   HeartPulse,
@@ -41,6 +42,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
   { id: "rent", label: "Rent", icon: Home },
   { id: "health", label: "Health", icon: HeartPulse },
   { id: "fun", label: "Fun", icon: PartyPopper },
+  { id: "gym", label: "Gym", icon: Dumbbell },
   { id: "work", label: "Work", icon: Briefcase },
   { id: "parking", label: "Parking", icon: CircleParking },
   { id: "other", label: "Other", icon: MoreHorizontal },
