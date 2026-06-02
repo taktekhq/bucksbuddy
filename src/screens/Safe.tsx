@@ -3,7 +3,6 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Banknote,
-  Check,
   ChevronLeft,
   Coins,
   StickyNote,
@@ -13,7 +12,7 @@ import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
-import { SAFE_CATEGORY_ID, SAFE_SEED_CATEGORY_ID } from "@/lib/categories";
+import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
 import { formatSignedUsdCents, formatUsdCents } from "@/lib/money";
 import { fetchGoldUsdPerGram, formatGrams } from "@/lib/gold";
@@ -104,9 +103,6 @@ export function Safe() {
 
   const [asset, setAsset] = useState<Asset>("cash");
   const [isDeposit, setIsDeposit] = useState(true);
-  // "Money I already had": log existing savings into the safe without it coming
-  // out of this month's balance. Only meaningful when adding cash.
-  const [fromExisting, setFromExisting] = useState(false);
   const [currency, setCurrency] = useState<Currency>("USD");
   const [display, setDisplay] = useState("");
   const [note, setNote] = useState("");
@@ -142,10 +138,6 @@ export function Safe() {
     setError(null);
   }
 
-  // Only cash deposits can be "money I already had".
-  const showExisting = !isGold && isDeposit;
-  const asExisting = showExisting && fromExisting;
-
   async function save() {
     // Defensive: the CTA is disabled unless canSave, so this never returns.
     /* v8 ignore next */
@@ -155,57 +147,19 @@ export function Safe() {
 
     const trimmedNote = note.trim();
     const noteValue = trimmedNote === "" ? null : trimmedNote;
-
-    let saveError: string | null = null;
-    if (isGold) {
-      ({ error: saveError } = await addSafeGoldEntry({
-        is_deposit: isDeposit,
-        grams,
-        note: noteValue,
-      }));
-    } else if (asExisting) {
-      // Money you already had: record the cash landing in the safe AND an income
-      // of the same amount, sharing one timestamp. The pair nets to zero on your
-      // spendable balance — so logging old savings doesn't dent the month, it
-      // just grows the safe. History merges the two back into one "+" line.
-      const occurredAt = new Date().toISOString();
-      const base = {
-        amount_usd_cents: usdCents,
-        original_currency: currency,
-        original_amount: amount,
-        rate_used: lbpPerUsd,
-        note: noteValue,
-        occurred_at: occurredAt,
-      };
-      // Deposit first: if the income partner fails, what's left is a plain
-      // (balance-reducing) safe deposit — a consistent, recoverable state.
-      const deposit = await addTransaction({
-        ...base,
-        is_income: false,
-        category: SAFE_CATEGORY_ID,
-      });
-      saveError = deposit.error;
-      if (!saveError) {
-        const seed = await addTransaction({
-          ...base,
-          is_income: true,
-          category: SAFE_SEED_CATEGORY_ID,
+    const { error: saveError } = isGold
+      ? await addSafeGoldEntry({ is_deposit: isDeposit, grams, note: noteValue })
+      : await addTransaction({
+          // Adding to the safe leaves your balance → an expense (Out).
+          // Taking it back comes in → income (In).
+          is_income: !isDeposit,
+          category: SAFE_CATEGORY_ID,
+          amount_usd_cents: usdCents,
+          original_currency: currency,
+          original_amount: amount,
+          rate_used: lbpPerUsd,
+          note: noteValue,
         });
-        saveError = seed.error;
-      }
-    } else {
-      ({ error: saveError } = await addTransaction({
-        // Adding to the safe leaves your balance → an expense (Out).
-        // Taking it back comes in → income (In).
-        is_income: !isDeposit,
-        category: SAFE_CATEGORY_ID,
-        amount_usd_cents: usdCents,
-        original_currency: currency,
-        original_amount: amount,
-        rate_used: lbpPerUsd,
-        note: noteValue,
-      }));
-    }
 
     setSaving(false);
     if (saveError) {
@@ -264,9 +218,7 @@ export function Safe() {
     : (isGold ? grams : amount) <= 0
       ? `Enter ${isGold ? "an amount of gold" : "an amount"}`
       : isDeposit
-        ? asExisting
-          ? `Log ${amountLabel} I already had`
-          : `Add ${amountLabel} to safe`
+        ? `Add ${amountLabel} to safe`
         : `Take ${amountLabel} out`;
 
   const actionColor = isGold ? GOLD : isDeposit ? "#1FB85A" : "#E0631A";
@@ -399,38 +351,6 @@ export function Safe() {
               Take out
             </button>
           </div>
-
-          {/* "Money I already had" — log existing savings without it coming out
-              of your balance. Only for cash deposits. */}
-          {showExisting && (
-            <button
-              type="button"
-              onClick={() => setFromExisting((v) => !v)}
-              aria-pressed={fromExisting}
-              className="press flex items-center gap-3 rounded-card border border-white/15 bg-black/15 px-4 py-3 text-left"
-            >
-              <span
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition"
-                style={
-                  fromExisting
-                    ? { backgroundColor: MINT, borderColor: MINT }
-                    : { borderColor: "rgba(255,255,255,0.3)" }
-                }
-              >
-                {fromExisting && (
-                  <Check className="h-4 w-4" strokeWidth={3} color="#06281E" />
-                )}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-white">
-                  Money I already had
-                </span>
-                <span className="block text-xs text-white/55">
-                  Grows the safe without touching your balance.
-                </span>
-              </span>
-            </button>
-          )}
 
           {/* Amount (cash) or grams (gold). */}
           <div className="flex items-center gap-3 rounded-card border border-white/15 bg-black/15 px-4 py-3.5">

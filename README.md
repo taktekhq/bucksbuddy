@@ -40,11 +40,6 @@ needs no migration — it rides along in `transactions`.
 > - **Cash** moved to the safe is recorded as a normal transaction with the `safe`
 >   category — so it leaves your spendable balance (Out) and shows in history; taking it
 >   back is an In. The safe's cash total is the all-time net of those transactions.
-> - **"Money I already had"** (existing savings) logs cash into the safe _without_
->   denting your balance: it writes the `safe` deposit plus a matching `safe_seed`
->   income of the same amount and timestamp, so your spendable total nets to zero
->   while the safe still grows. History merges the pair into one green "+" line and
->   deletes both together. No schema change — both are ordinary `transactions` rows.
 > - **Gold** is tracked separately in **grams** (`safe_gold_entries`); it isn't converted,
 >   though the screen shows an approximate USD value from a free live price API when
 >   reachable.

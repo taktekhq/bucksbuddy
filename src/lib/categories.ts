@@ -179,26 +179,8 @@ export const SAFE_CATEGORY: Category = {
   color: "#1FB85A",
 };
 
-// The income half of an "existing savings" entry — money you already had, not
-// money out of this month's salary. It's paired with a Safe deposit of the same
-// amount and timestamp so your spendable balance nets to zero while the safe
-// still grows. History merges the pair back into one "+" line. Not offered in
-// the picker — the Safe screen creates it. Keep the stored id stable.
-export const SAFE_SEED_CATEGORY_ID = "safe_seed";
-export const SAFE_SEED_CATEGORY: Category = {
-  id: SAFE_SEED_CATEGORY_ID,
-  label: "Existing savings",
-  icon: Vault,
-  color: "#1FB85A",
-};
-
 const byId = new Map<string, Category>();
-for (const c of [
-  ...EXPENSE_CATEGORIES,
-  ...INCOME_CATEGORIES,
-  SAFE_CATEGORY,
-  SAFE_SEED_CATEGORY,
-]) {
+for (const c of [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES, SAFE_CATEGORY]) {
   if (!byId.has(c.id)) byId.set(c.id, c);
 }
 
