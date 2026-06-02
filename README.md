@@ -25,12 +25,15 @@ In the **Supabase Dashboard → SQL Editor**, paste and run
 [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). Creates the
 `profiles` + `transactions` tables, RLS policies, and the auto-create-profile trigger.
 
-Then run the Safe migrations (powers the savings **Safe** — see below), in order:
-[`0003_safe_gold.sql`](supabase/migrations/0003_safe_gold.sql) adds the `safe_gold_entries`
-table (gold, in grams), and [`0004_drop_safe_entries.sql`](supabase/migrations/0004_drop_safe_entries.sql)
-removes the old `safe_entries` table (cash now lives in `transactions`). The app degrades
-gracefully if they aren't applied yet. _(`0002_safe.sql` created the now-retired
-`safe_entries` table; if you already ran it, `0004` cleans it up.)_
+Then run [`0002_safe_gold.sql`](supabase/migrations/0002_safe_gold.sql) to add the
+`safe_gold_entries` table (gold, in grams) for the savings **Safe** — see below. The app
+degrades gracefully if it isn't applied yet (gold just reads as `0 g`). Cash in the Safe
+needs no migration — it rides along in `transactions`.
+
+> _Tidy-up note: an earlier build created a `safe_entries` table that's no longer used.
+> If you ran that, you can remove the leftover with a one-time
+> `drop table if exists public.safe_entries;` in the SQL Editor — optional, it's empty and
+> ignored either way._
 
 > **Savings Safe (proof of concept):** a vault icon next to Settings opens a dark "Safe"
 > screen. It's limited to a short email allowlist in
@@ -107,7 +110,7 @@ src/lib/                supabase client, store (in-memory cache), router, useSes
                         currency/money/dates/csv/categories
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
-supabase/migrations/    0001_init.sql
+supabase/migrations/    0001_init.sql, 0002_safe_gold.sql
 docs/DESIGN_SYSTEM.md   reusable design system
 scripts/icons-from-source.mjs
 ```

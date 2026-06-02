@@ -1,9 +1,9 @@
 -- BucksBuddy: gold in the Safe.
 -- Gold is tracked in GRAMS as the source of truth — no currency conversion is
 -- stored. (The app may show an approximate value from a live price API, but
--- that's display-only and never persisted.) Kept in its own table so the
--- money-centric safe_entries stays clean.
--- Run this in Supabase Dashboard → SQL Editor (after 0002_safe.sql).
+-- that's display-only and never persisted.) Kept in its own table, separate
+-- from the money-centric transactions ledger.
+-- Run this in Supabase Dashboard → SQL Editor (after 0001_init.sql).
 
 create table if not exists public.safe_gold_entries (
   id          uuid primary key default gen_random_uuid(),
