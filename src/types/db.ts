@@ -31,6 +31,9 @@ export type NewTransaction = {
   original_amount: number;
   rate_used: number;
   note?: string | null;
+  // Normally defaulted server-side to now(). We set it explicitly only to pair
+  // an "existing savings" income with its Safe deposit (same timestamp).
+  occurred_at?: string;
 };
 
 // Cash in the Safe is not its own table: it's recorded as normal transactions
