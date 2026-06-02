@@ -121,7 +121,7 @@ export function AddComposer({
   return (
     <div className="flex flex-col gap-3 px-4 pb-5 pt-4">
       {/* AMOUNT — always visible, edited with the native keyboard. */}
-      <div className="flex items-center gap-3 rounded-card bg-grouped px-4 py-3.5">
+      <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3.5">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-base font-bold text-carrot">
           {SYMBOL[currency]}
         </span>
@@ -137,7 +137,7 @@ export function AddComposer({
           type="button"
           onClick={() => setCurrency((c) => (c === "USD" ? "LBP" : "USD"))}
           aria-label="Switch currency"
-          className="press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-surface"
+          className="press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-grouped"
         >
           {currency}
         </button>
@@ -150,7 +150,7 @@ export function AddComposer({
 
       {/* CATEGORY — wide card; opens the sheet. Shows the pick + direction. */}
       {category && SelectedIcon ? (
-        <div className="flex items-center gap-3 rounded-card bg-grouped px-4 py-3">
+        <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3">
           <span
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
             style={{ backgroundColor: catColor }}
