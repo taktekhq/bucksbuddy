@@ -11,7 +11,11 @@
     <meta name="theme-color" content="#F2F2F7" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="BucksBuddy" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- black-translucent lets the page background show behind the status bar
+         (the only thing iOS 26 still honors; theme-color is ignored there).
+         Status-bar icons are forced white, so App renders a subtle scrim in the
+         notch area to keep them legible on light screens. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="What's up, Doc? Your dead-simple money tracker." />
     <!-- Display font (Grobold) is self-hosted via @font-face; preload it so the
          cartoon hijack shows up fast. SF handles all body/UI text. -->
