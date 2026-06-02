@@ -5,9 +5,11 @@
 The base is a plain, grouped-iOS experience: a soft gray canvas, white cards with
 light elevation, SF system type, generous touch targets, big numbers. The Looney
 Tunes energy is a light seasoning — one loud **carrot-orange** accent (the 🥕
-emoji's orange), a rounded **display font** for the numbers, a cheeky "What's up,
-Doc?" voice, the static carrot mascot, and **money that's finally allowed to be
-green & red**. Motion stays calm; the carrot doesn't move.
+emoji's orange), the **Grobold cartoon font** on headers, the wordmark, and
+buttons, a cheeky "What's up, Doc?" voice, the static carrot mascot, and **money
+that's finally allowed to be green & red**. The numbers themselves stay Apple
+(friendly SF Pro Rounded) so the money is always crisp and trustworthy. Motion
+stays calm; the carrot doesn't move.
 
 Tokens live in [`tailwind.config.ts`](../tailwind.config.ts) and
 [`src/index.css`](../src/index.css); this doc explains the *what* and *when* so the
@@ -20,8 +22,10 @@ look can be reused on new screens.
 ## Brand & voice
 
 - **Name / voice:** BucksBuddy — friendly, fast, cheeky, Looney. "What's up, Doc?"
-  is the greeting; sprinkle Bugs-isms sparingly ("That's it!", "Hang on…",
-  "That's all, folks. 🥕", "Spendin' like a wabbit."). Keep it short and human.
+  is the greeting; sprinkle Bugs-isms sparingly in greetings, quips, and empty
+  states ("That's all, folks. 🥕", "Spendin' like a wabbit.", "Nothin' here yet,
+  Doc."). Keep it short and human. **Primary action labels stay Apple-plain**
+  ("Add", "Save", "Done") — the personality lives around them, not on the button.
 - **Mascot:** the **🥕 emoji** — rendered as the real system emoji on purpose, so
   on Apple devices it's the exact carrot the brief asked for. Use the
   [`Carrot`](../src/components/ui/Carrot.tsx) component. **It sits still** — the
@@ -68,28 +72,41 @@ Defined as Tailwind colors. Light-first; dark mode is future work.
 
 ## Typography
 
-Two families: **SF system stack** for all body/UI chrome, **Grobold**
-(`font-display`, the chunky Looney Tunes cartoon face, self-hosted via
-`@font-face` from `/public/fonts/`) for the cartoon moments. Grobold falls back
-to SF Pro Rounded / system, so nothing breaks offline. It ships a single weight,
-and `font-synthesis: none` keeps the browser from faking a heavier one — the
-`font-bold`/`font-semibold` classes below still drive the SF body stack.
+Three roles, two custom decisions:
+
+- **`font-display` → Grobold.** The chunky Looney Tunes cartoon face, self-hosted
+  via `@font-face` from `/public/fonts/`. **Headers, the wordmark, and button
+  labels only** — never numbers, never body. Falls back to SF Pro Rounded /
+  system so nothing breaks offline. It ships a single weight, and
+  `font-synthesis: none` keeps the browser from faking a heavier one.
+- **`font-numeric` → SF Pro Rounded.** Every digit of money — totals, the live
+  amount, numpad, history. Stays Apple: friendly and rounded, but with **real
+  tabular figures**, so columns line up, typing doesn't jitter, and the heavy
+  cartoon ink can't leave ghost trails on iOS. Falls back to the system stack.
+- **default → SF system stack.** All body/UI chrome, labels, captions.
+
+> **Why numbers aren't Grobold.** Grobold has no true tabular figures and its
+> heavy ink overflows the glyph box, which caused mis-aligned, oversized digits
+> and repaint "ghosting" on iOS. Money is data you scan and trust, so it stays in
+> a crisp Apple face; the cartoon is reserved for the chrome around it.
 
 | Role | Classes | Notes |
 |---|---|---|
-| Wordmark | `font-display text-xl font-bold` | "BucksBuddy" in the nav, beside the 🥕 |
-| Net total (hero) | `font-display text-6xl font-bold tracking-tight tabular-nums` + green/red | Home hero card |
-| Net total (compact) | `font-display text-4xl font-bold …` | Smaller contexts |
-| Amount entry | `font-display text-5xl font-bold tabular-nums` + green/red | Composer live amount |
-| History amount | `font-display font-semibold tabular-nums` + green/red | Entry rows |
-| Numpad keys | `font-display text-2xl font-semibold tabular-nums` | Keypad |
+| Wordmark | `font-display text-lg font-bold` | "BucksBuddy" in the nav, beside the 🥕 — kept small |
 | Section header | `font-display text-sm font-semibold uppercase tracking-wide` | "History", month label |
-| Title / nav | `font-display text-base font-bold` / SF `text-base font-semibold` | Screen headers |
+| Title / nav | `font-display text-base font-bold` | Screen headers (e.g. Settings) |
+| Button label | `font-display text-lg font-semibold` | Primary carrot pill |
+| Net total (hero) | `font-numeric text-5xl font-bold tabular-nums` + green/red | Home hero card |
+| Net total (compact) | `font-numeric text-4xl font-bold tabular-nums` + green/red | Smaller contexts |
+| Amount entry | `font-numeric text-4xl font-bold tabular-nums` + green/red | Composer live amount |
+| History amount | `font-numeric font-semibold tabular-nums` + green/red | Entry rows |
+| Numpad keys | `font-numeric text-xl font-semibold tabular-nums` | Keypad |
 | Body | base (16px), SF | **Min 16px on any `<input>`** or iOS auto-zooms |
 | Caption | `text-xs`/`text-sm` + `text-label-secondary` | Dates, hints |
 
-Always use `tabular-nums` for money so digits don't jitter. Display font is for
-*emphasis*; never set long body copy in Grobold.
+Always use `font-numeric tabular-nums` for money so digits line up and don't
+jitter. Grobold (`font-display`) is for *emphasis* — headers, wordmark, buttons —
+never numbers and never long body copy.
 
 ## Spacing & layout
 
@@ -125,19 +142,23 @@ Each lives in `components/ui/` (or `components/`). States:
   **money color**: Out = `bg-expense text-white`, In = `bg-income text-white`;
   inactive = `text-label-secondary`. Direction reads at a glance.
 - **CategoryGrid** — 3-col tiles (lucide icon + label). Selected =
-  `bg-carrot text-white shadow-carrot`; unselected = `bg-grouped text-label`.
+  `bg-carrot text-white shadow-carrot`; unselected tiles get a **soft tint of the
+  category's own color** (`categoryColor()` from `lib/categories.ts`, ~10% alpha
+  background + full-strength icon) so the grid reads colorful, not bland gray.
 - **CurrencyToggle** — small USD/LBP pill; active = `bg-white text-carrot shadow-segment`.
 - **Numpad** — digits + `.` + `⌫`. **No `<input>`** — emits keys; parent holds a
   string (`applyKey` enforces single dot / max 2 decimals). `⌫` is carrot-tinted;
   **hold it (~400ms) to clear the whole amount** (emits the `clear` key + a
   stronger haptic). A short tap deletes one character.
-- **NetTotal** — hero number in `font-display`, **green/red** via `netColorClass`,
+- **NetTotal** — hero number in `font-numeric`, **green/red** via `netColorClass`,
   with a cheeky changing quip under it ("net this month · Eh, lookin' rich, Doc.").
+  The month label above it is a Grobold (`font-display`) section header.
 - **AddComposer** — **collapsed by default**: the live amount shows as a tappable
-  header; the numpad only opens when it's tapped. The amount is `font-display`,
+  header; the numpad only opens when it's tapped. The amount is `font-numeric`,
   tinted by direction (green In, red Out, gray when empty). Primary action is a
-  carrot pill ("That's it!" / "Update").
-- **HistoryList row** — lucide icon in a `bg-carrot-soft` round chip + label +
+  carrot pill with a plain Apple label ("Add" / "Save").
+- **HistoryList row** — lucide icon in a round chip tinted with the **category's
+  own color** (`categoryColor()`, ~10% alpha bg + full-strength icon) + label +
   date + **green/red** signed amount. Rows are cards (`shadow-card`), spaced with
   `gap-1.5`, no divide-y hairlines. Swipe reveals **icon** actions: **Edit =
   carrot panel** (Pencil); **Delete = red (`bg-expense`) panel** (Trash2). Drag
@@ -164,7 +185,8 @@ Keep it light. The personality is in the color and voice, not heavy animation.
 ## Reuse guide
 
 1. Consume tokens via Tailwind classes (`bg-canvas`, `bg-surface`, `shadow-card`,
-   `bg-carrot`, `text-income`/`text-expense`, `font-display`) — never hardcode hex/px.
+   `bg-carrot`, `text-income`/`text-expense`, `font-display` for headers/buttons,
+   `font-numeric` for money) — never hardcode hex/px.
 2. Money formatting → always `lib/money.ts`; currency math → `lib/currency.ts`.
 3. New screens follow the shell: `mx-auto max-w-md px-4`, safe-area padding, a
    vertical stack of `rounded-card bg-surface shadow-card` sections on the canvas.

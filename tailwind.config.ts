@@ -4,8 +4,9 @@ import type { Config } from "tailwindcss";
 //
 // Concept: "an Apple app, hijacked by Bugs Bunny." The base is a plain,
 // grouped-iOS surface (light gray canvas, white cards, SF type). The Looney
-// Tunes energy comes from one loud accent — CARROT ORANGE — a bouncy display
-// font, springy cartoon motion, and money that finally gets to be green & red.
+// Tunes energy comes from one loud accent — CARROT ORANGE — the Grobold cartoon
+// display font on headers/branding, and money that finally gets to be green &
+// red. Numbers stay Apple: friendly SF Pro Rounded with true tabular figures.
 const config: Config = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
@@ -46,14 +47,28 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
-        // Display = the cartoon hijack (Looney Tunes "Grobold"). Falls back to
-        // a rounded system face while the self-hosted font loads.
+        // Display = the cartoon hijack (Looney Tunes "Grobold"), reserved for
+        // headers, the wordmark, and button labels. Falls back to a rounded
+        // system face while the self-hosted font loads.
         display: [
           "Grobold",
           "-apple-system",
           "BlinkMacSystemFont",
           "SF Pro Rounded",
           "Segoe UI",
+          "sans-serif",
+        ],
+        // Numeric = all money/digits. Stays Apple — friendly SF Pro Rounded with
+        // real tabular figures so columns line up and nothing jitters or ghosts.
+        numeric: [
+          "SF Pro Rounded",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "SF Pro Text",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica Neue",
+          "Arial",
           "sans-serif",
         ],
       },

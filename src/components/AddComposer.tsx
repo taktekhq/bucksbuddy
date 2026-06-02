@@ -121,7 +121,7 @@ export function AddComposer({
         className="press flex w-full flex-col items-center gap-0.5 px-4 pt-6 pb-3"
       >
         <span
-          className={`num-display font-display text-4xl font-bold tabular-nums ${
+          className={`font-numeric text-4xl font-bold tabular-nums ${
             display === "" ? "text-label-secondary" : amountColorClass(isIncome)
           }`}
         >
@@ -185,7 +185,7 @@ export function AddComposer({
               : "bg-separator text-label-secondary shadow-none"
           }`}
         >
-          {saving ? "Hang on…" : editing ? "Update" : "That's it!"}
+          {saving ? "Saving…" : editing ? "Save" : "Add"}
         </button>
         {editing && (
           <button
