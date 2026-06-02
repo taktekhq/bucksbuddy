@@ -7,6 +7,7 @@ import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
+import { useThemeColor } from "@/lib/useThemeColor";
 import { monthLabel } from "@/lib/dates";
 import { formatUsdCents } from "@/lib/money";
 import { formatGrams } from "@/lib/gold";
@@ -33,6 +34,9 @@ export function Home() {
   // When there's money or gold tucked away, the whole page picks up a soft
   // savings tint so it's obvious at a glance that the safe is in play.
   const hasSavings = safeEnabled && (safeTotalCents > 0 || safeGoldGrams > 0);
+
+  // Match the status bar to the top of the page (mint when tinted, else canvas).
+  useThemeColor(hasSavings ? "#E6F8EE" : "#F2F2F7");
 
   function handleEdit(tx: Transaction) {
     setEditing(tx);
