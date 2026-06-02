@@ -127,8 +127,11 @@ function SwipeRow({
         >
           <Icon className="h-5 w-5" strokeWidth={2} />
         </span>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <p className="font-medium text-label">{categoryLabel(tx.category)}</p>
+          {tx.note && (
+            <p className="truncate text-xs text-label-secondary">{tx.note}</p>
+          )}
           <p className="text-xs text-label-secondary">
             {dateLabel(tx.occurred_at)}
             {tx.original_currency === "LBP" && " · LBP"}

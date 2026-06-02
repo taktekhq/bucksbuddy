@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, Tag } from "lucide-react";
+import { ChevronRight, StickyNote, Tag } from "lucide-react";
 import { CategorySheet } from "@/components/ui/CategorySheet";
 import { useStore } from "@/lib/store";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
@@ -39,6 +39,7 @@ export function AddComposer({
   const [category, setCategory] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>("USD");
   const [display, setDisplay] = useState("");
+  const [note, setNote] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,12 +50,14 @@ export function AddComposer({
       setCategory(editing.category);
       setCurrency(editing.original_currency);
       setDisplay(String(editing.original_amount));
+      setNote(editing.note ?? "");
       setError(null);
     } else {
       setIsIncome(false);
       setCategory(null);
       setCurrency("USD");
       setDisplay("");
+      setNote("");
       setError(null);
     }
     setSheetOpen(false);
@@ -79,6 +82,7 @@ export function AddComposer({
     setSaving(true);
     setError(null);
 
+    const trimmedNote = note.trim();
     const payload = {
       is_income: isIncome,
       category,
@@ -86,6 +90,7 @@ export function AddComposer({
       original_currency: currency,
       original_amount: amount,
       rate_used: lbpPerUsd,
+      note: trimmedNote === "" ? null : trimmedNote,
     };
 
     const { error: saveError } = editing
@@ -101,6 +106,7 @@ export function AddComposer({
     else {
       setDisplay("");
       setCategory(null);
+      setNote("");
     }
   }
 
@@ -191,6 +197,21 @@ export function AddComposer({
           </div>
           <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-label-secondary" strokeWidth={2} />
         </button>
+      )}
+
+      {/* NOTE — optional, available once a category is chosen. */}
+      {category && (
+        <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3">
+          <StickyNote className="h-5 w-5 shrink-0 text-label-secondary" strokeWidth={2} />
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Add a note (optional)"
+            aria-label="Note"
+            maxLength={140}
+            className="min-w-0 flex-1 bg-transparent text-base text-label outline-none placeholder:text-label-secondary"
+          />
+        </div>
       )}
 
       {/* CTA — contextual, shows the amount when ready. */}
