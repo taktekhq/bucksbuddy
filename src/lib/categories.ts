@@ -11,6 +11,7 @@ import {
   HeartPulse,
   Home,
   KeyRound,
+  Landmark,
   Laptop,
   MoreHorizontal,
   PartyPopper,
@@ -48,6 +49,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
   { id: "gym", label: "Gym", icon: Dumbbell, color: "#007AFF" },
   { id: "work", label: "Work", icon: Briefcase, color: "#5856D6" },
   { id: "parking", label: "Parking", icon: CircleParking, color: "#30B0C7" },
+  { id: "fees", label: "Fees", icon: Landmark, color: "#AF52DE" },
   { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
 
