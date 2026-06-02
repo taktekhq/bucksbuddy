@@ -28,7 +28,7 @@ function dateLabel(iso: string): string {
 
 function SwipeRow({
   tx,
-  seeded = false,
+  seeded,
   partner,
   onEdit,
   onDelete,
@@ -36,7 +36,7 @@ function SwipeRow({
   tx: Transaction;
   // True when this Safe deposit is the visible half of an "existing savings"
   // pair: it reads as a "+" and deleting it removes its income partner too.
-  seeded?: boolean;
+  seeded: boolean;
   partner?: Transaction;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction, partner?: Transaction) => void;

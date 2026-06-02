@@ -93,4 +93,31 @@ describe("Home", () => {
     expect(storeValue.deleteTransaction).toHaveBeenCalledWith("t1");
     confirmSpy.mockRestore();
   });
+
+  it("deletes both halves of an existing-savings pair together", async () => {
+    const at = "2026-06-02T10:00:00.000Z";
+    const deposit = tx({
+      id: "dep1",
+      category: "safe",
+      is_income: false,
+      amount_usd_cents: 100000,
+      occurred_at: at,
+    });
+    const seed = tx({
+      id: "seed1",
+      category: "safe_seed",
+      is_income: true,
+      amount_usd_cents: 100000,
+      occurred_at: at,
+    });
+    storeValue = makeStoreValue({ transactions: [deposit, seed] });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<Home />);
+
+    // The pair shows as a single row; deleting it removes the income partner too.
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(storeValue.deleteTransaction).toHaveBeenCalledWith("dep1");
+    expect(storeValue.deleteTransaction).toHaveBeenCalledWith("seed1");
+    confirmSpy.mockRestore();
+  });
 });
