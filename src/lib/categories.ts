@@ -4,6 +4,7 @@
 
 import {
   Briefcase,
+  Car,
   CircleParking,
   Dumbbell,
   Fuel,
@@ -15,8 +16,10 @@ import {
   Laptop,
   MoreHorizontal,
   PartyPopper,
+  ShoppingBag,
   ShoppingCart,
   Undo2,
+  Users,
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
@@ -35,6 +38,7 @@ export const INCOME_CATEGORIES: Category[] = [
   { id: "freelance", label: "Freelance", icon: Laptop, color: "#007AFF" },
   { id: "rent_income", label: "Rent", icon: KeyRound, color: "#30B0C7" },
   { id: "refund", label: "Refund", icon: Undo2, color: "#AF52DE" },
+  { id: "family", label: "Family", icon: Users, color: "#00C7BE" },
   { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
 
@@ -50,6 +54,9 @@ export const EXPENSE_CATEGORIES: Category[] = [
   { id: "work", label: "Work", icon: Briefcase, color: "#5856D6" },
   { id: "parking", label: "Parking", icon: CircleParking, color: "#30B0C7" },
   { id: "fees", label: "Fees", icon: Landmark, color: "#AF52DE" },
+  { id: "transport", label: "Transport", icon: Car, color: "#32ADE6" },
+  { id: "shopping", label: "Shopping", icon: ShoppingBag, color: "#A2845E" },
+  { id: "family", label: "Family", icon: Users, color: "#00C7BE" },
   { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
 
