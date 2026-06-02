@@ -131,7 +131,7 @@ export function AddComposer({
           onChange={(e) => setDisplay(sanitizeAmount(e.target.value))}
           placeholder="0.00"
           aria-label="Amount"
-          className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-label-secondary outline-none placeholder:text-label-secondary"
+          className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-label outline-none placeholder:text-label-secondary"
         />
         <button
           type="button"
@@ -164,7 +164,7 @@ export function AddComposer({
             >
               {isIncome ? "Income" : "Expense"}
             </div>
-            <div className="truncate font-bold text-label-secondary">
+            <div className="truncate font-bold text-label">
               {categoryLabel(category)}
             </div>
           </div>
