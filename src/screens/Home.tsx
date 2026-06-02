@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Settings, Vault } from "lucide-react";
+import { Eye, EyeOff, Settings, Vault } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
@@ -21,6 +21,9 @@ export function Home() {
     safeTotalCents,
   } = useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
+
+  // The safe balance is private by default — tap the eye to reveal it.
+  const [safeShown, setSafeShown] = useState(false);
 
   // When there's money tucked away, the whole page picks up a soft savings tint
   // so it's obvious at a glance that the safe is in play.
@@ -63,7 +66,7 @@ export function Home() {
             Buddy
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-4">
           {safeEnabled && (
             <button
               type="button"
@@ -91,24 +94,38 @@ export function Home() {
         <div className="rounded-card bg-surface px-5 py-5 shadow-card">
           <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} />
           {safeEnabled && (
-            <button
-              type="button"
-              onClick={() => navigate("/safe")}
-              className="press mt-4 flex w-full items-center gap-3 rounded-card bg-income/10 px-4 py-3 text-left"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-income/15 text-income">
-                <Vault className="h-5 w-5" strokeWidth={2} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-income">
-                  In the safe
+            <div className="mt-4 flex items-center gap-3 rounded-card bg-income/10 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => navigate("/safe")}
+                className="press flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-income/15 text-income">
+                  <Vault className="h-5 w-5" strokeWidth={2} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-income">
+                    In the safe
+                  </div>
+                  <div className="font-numeric text-xl font-bold tabular-nums text-income">
+                    {safeShown ? formatUsdCents(safeTotalCents) : "••••"}
+                  </div>
                 </div>
-                <div className="font-numeric text-xl font-bold tabular-nums text-income">
-                  {formatUsdCents(safeTotalCents)}
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-income/60" strokeWidth={2} />
-            </button>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSafeShown((v) => !v)}
+                aria-label={safeShown ? "Hide safe balance" : "Show safe balance"}
+                aria-pressed={safeShown}
+                className="press -m-2 shrink-0 p-2 text-income/70"
+              >
+                {safeShown ? (
+                  <EyeOff className="h-5 w-5" strokeWidth={2} />
+                ) : (
+                  <Eye className="h-5 w-5" strokeWidth={2} />
+                )}
+              </button>
+            </div>
           )}
         </div>
       </section>
