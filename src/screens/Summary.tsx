@@ -1,22 +1,19 @@
 import { useState } from "react";
 import { Settings } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
-import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { monthLabel } from "@/lib/dates";
+import { randomBugsLine } from "@/lib/voice";
 import type { Transaction } from "@/types/db";
 
-export function Home() {
+export function Summary({ onEdit }: { onEdit: (tx: Transaction) => void }) {
   const { transactions, monthlyNetCents, loading, deleteTransaction } = useStore();
-  const [editing, setEditing] = useState<Transaction | null>(null);
-
-  function handleEdit(tx: Transaction) {
-    setEditing(tx);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  // One Bugs-ism per visit, used as the title above the money card.
+  const [bugs] = useState(randomBugsLine);
 
   async function handleDelete(tx: Transaction) {
     if (window.confirm("Delete this entry?")) {
@@ -25,13 +22,11 @@ export function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col gap-4 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
-      {/* Quiet carrot mark + wordmark + settings — the plain Apple nav bar. */}
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
+      {/* Carrot mark + wordmark + settings — the plain Apple nav bar. */}
       <header className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <Carrot className="text-2xl" />
-          {/* Stacked BUCKS / BUDDY lockup — smaller font + tight leading keeps the
-              two lines at roughly the height of the single line it replaced. */}
           <span className="font-display text-sm font-bold uppercase leading-none text-label-muted">
             Bucks
             <br />
@@ -48,32 +43,23 @@ export function Home() {
         </button>
       </header>
 
-      {/* Hero: net this month, green/red. */}
-      <section className="rounded-card bg-surface px-5 py-6 shadow-card">
-        <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} />
-      </section>
-
-      {/* Composer card. */}
-      <section className="rounded-card bg-surface shadow-card">
-        <AddComposer editing={editing} onClearEdit={() => setEditing(null)} />
-      </section>
-
-      <div>
-        <div className="mb-2 px-2">
-          <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-label-secondary">
-            History
-          </h2>
+      {/* Bugs-ism title → money-for-the-month card (month sits under the number). */}
+      <section className="flex flex-col gap-2">
+        <SectionHeader>{bugs}</SectionHeader>
+        <div className="rounded-card bg-surface px-5 py-6 shadow-card">
+          <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} />
         </div>
+      </section>
+
+      {/* History. */}
+      <section className="flex flex-col gap-2">
+        <SectionHeader>History</SectionHeader>
         {loading && transactions.length === 0 ? (
           <p className="py-10 text-center text-label-secondary">Loading…</p>
         ) : (
-          <HistoryList
-            rows={transactions}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
+          <HistoryList rows={transactions} onEdit={onEdit} onDelete={handleDelete} />
         )}
-      </div>
+      </section>
     </main>
   );
 }
