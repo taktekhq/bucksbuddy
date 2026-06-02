@@ -36,7 +36,7 @@ export function RateEditor() {
             value={value}
             onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
             onBlur={commit}
-            className="w-28 rounded-lg bg-grouped px-3 py-2 text-right text-base tabular-nums outline-none ring-carrot/40 transition focus:ring-2"
+            className="w-28 rounded-lg bg-grouped px-3 py-2 text-right text-base tabular-nums text-label-secondary outline-none ring-carrot/40 transition focus:ring-2"
           />
         </div>
       </div>
