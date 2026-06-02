@@ -67,7 +67,7 @@ function SwipeRow({
           snapTo(0);
           onEdit(tx);
         }}
-        className="absolute inset-y-0 left-0 flex items-center justify-center bg-grouped font-medium text-label"
+        className="absolute inset-y-0 left-0 flex items-center justify-center bg-carrot font-medium text-white"
         style={{ width: ACTION_W }}
       >
         Edit

@@ -168,7 +168,7 @@ export function AddComposer({
           onClick={save}
           disabled={!canSave}
           className={`press rounded-pill px-10 py-3 text-base font-semibold text-white ${
-            canSave ? "bg-label" : "bg-separator"
+            canSave ? "bg-carrot" : "bg-separator"
           }`}
         >
           {saving ? "Saving…" : editing ? "Update" : "Save"}
@@ -177,7 +177,7 @@ export function AddComposer({
           <button
             type="button"
             onClick={onClearEdit}
-            className="press mt-2 py-2 text-center text-sm text-label-secondary"
+            className="press mt-2 py-2 text-center text-sm text-carrot"
           >
             Cancel edit
           </button>
