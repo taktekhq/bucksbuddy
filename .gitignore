@@ -4,6 +4,9 @@
 # build output
 /dist
 
+# test coverage
+/coverage
+
 # vite pwa generated (built into /dist, but ignore stray copies)
 /public/sw.js
 /public/sw.js.map
