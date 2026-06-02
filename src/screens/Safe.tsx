@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -7,14 +7,21 @@ import {
   Trash2,
   Vault,
 } from "lucide-react";
-import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
-import { formatSignedUsdCents, formatUsdCents, netColorClass } from "@/lib/money";
+import { formatSignedUsdCents, formatUsdCents } from "@/lib/money";
 import type { SafeEntry } from "@/types/db";
 
 const SYMBOL: Record<Currency, string> = { USD: "$", LBP: "LL" };
+
+// The Safe lives in its own dark "vault" world — a deliberately different
+// mentality from the bright daily tracker. The whole viewport goes deep green
+// while you're in here, restored on the way out.
+const VAULT_BG = "linear-gradient(180deg, #0A3A2A 0%, #06281E 55%, #03150F 100%)";
+const GOLD = "#FFD479";
+const MINT = "#7CE6AA";
+const TAKE = "#FFA866";
 
 // Keep the typed string clean: digits, a single dot, max two decimals.
 function sanitizeAmount(raw: string): string {
@@ -49,6 +56,16 @@ export function Safe() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Paint the entire page (beyond the phone-width column too) the vault color
+  // while this screen is mounted; put it back when we leave.
+  useEffect(() => {
+    const prev = document.body.style.background;
+    document.body.style.background = VAULT_BG;
+    return () => {
+      document.body.style.background = prev;
+    };
+  }, []);
 
   const amount = parseAmountString(display);
   const usdCents = toUsdCents(amount, currency, lbpPerUsd);
@@ -95,42 +112,37 @@ export function Safe() {
         : `Take ${amountLabel} out`;
 
   return (
-    <main
-      className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]"
-      style={{
-        background: "linear-gradient(180deg, #E6F8EE 0%, #F2F2F7 320px)",
-      }}
-    >
-      {/* Plain iOS nav: back chevron + centered title. */}
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))] text-white">
+      {/* Dark nav: back chevron + centered title. */}
       <header className="relative flex items-center justify-center py-1">
         <button
           type="button"
           onClick={() => navigate("/")}
           aria-label="Back"
-          className="press absolute left-0 -m-2 p-2 text-carrot"
+          className="press absolute left-0 -m-2 p-2"
+          style={{ color: GOLD }}
         >
           <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
         </button>
-        <h1 className="font-display text-base font-bold uppercase text-label-muted">
+        <h1 className="font-display text-base font-bold uppercase tracking-wide text-white/90">
           The Safe
         </h1>
       </header>
 
-      {/* TOTAL — the all-time amount tucked away. */}
+      {/* TOTAL — the all-time amount tucked away. Gold, like a vault. */}
       <section>
-        <div className="rounded-card bg-surface px-5 py-6 shadow-card">
-          <div className="flex items-center gap-2 text-[13px] font-medium uppercase tracking-wide text-label-secondary">
+        <div className="rounded-card bg-white/[0.06] px-5 py-7 ring-1 ring-white/10 backdrop-blur">
+          <div className="flex items-center gap-2 text-[13px] font-medium uppercase tracking-wide text-white/55">
             <Vault className="h-4 w-4" strokeWidth={2} />
             In the safe
           </div>
           <p
-            className={`mt-1 font-numeric text-4xl font-bold tabular-nums ${netColorClass(
-              safeTotalCents,
-            )}`}
+            className="mt-1 font-numeric text-5xl font-bold tabular-nums"
+            style={{ color: safeTotalCents < 0 ? "#FF8A8A" : GOLD }}
           >
             {formatSignedUsdCents(safeTotalCents)}
           </p>
-          <p className="mt-1 text-xs text-label-secondary">
+          <p className="mt-1.5 text-xs text-white/45">
             A running total — kept separate from your monthly money.
           </p>
         </div>
@@ -138,18 +150,19 @@ export function Safe() {
 
       {/* COMPOSER — add to or take from the safe. */}
       <section className="flex flex-col gap-2">
-        <SectionHeader>Move money</SectionHeader>
-        <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
+        <h2 className="px-2 font-display text-sm font-semibold uppercase tracking-wide text-white/55">
+          Move money
+        </h2>
+        <div className="flex flex-col gap-3 rounded-card bg-white/[0.06] p-4 ring-1 ring-white/10 backdrop-blur">
           {/* Add / Take toggle. */}
-          <div className="grid grid-cols-2 gap-1 rounded-pill bg-grouped p-1">
+          <div className="grid grid-cols-2 gap-1 rounded-pill bg-black/25 p-1">
             <button
               type="button"
               onClick={() => setIsDeposit(true)}
               className={`press flex items-center justify-center gap-1.5 rounded-pill py-2.5 text-base font-semibold transition ${
-                isDeposit
-                  ? "bg-income text-white shadow-segment"
-                  : "text-label-secondary"
+                isDeposit ? "text-white shadow-segment" : "text-white/55"
               }`}
+              style={isDeposit ? { backgroundColor: "#1FB85A" } : undefined}
             >
               <ArrowDownToLine className="h-4 w-4" strokeWidth={2.5} />
               Add
@@ -158,10 +171,9 @@ export function Safe() {
               type="button"
               onClick={() => setIsDeposit(false)}
               className={`press flex items-center justify-center gap-1.5 rounded-pill py-2.5 text-base font-semibold transition ${
-                !isDeposit
-                  ? "bg-carrot text-white shadow-segment"
-                  : "text-label-secondary"
+                !isDeposit ? "text-white shadow-segment" : "text-white/55"
               }`}
+              style={!isDeposit ? { backgroundColor: "#E0631A" } : undefined}
             >
               <ArrowUpFromLine className="h-4 w-4" strokeWidth={2.5} />
               Take out
@@ -169,8 +181,11 @@ export function Safe() {
           </div>
 
           {/* Amount. */}
-          <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-base font-bold text-carrot">
+          <div className="flex items-center gap-3 rounded-card border border-white/15 bg-black/15 px-4 py-3.5">
+            <span
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-base font-bold"
+              style={{ color: MINT }}
+            >
               {SYMBOL[currency]}
             </span>
             <input
@@ -179,33 +194,33 @@ export function Safe() {
               onChange={(e) => setDisplay(sanitizeAmount(e.target.value))}
               placeholder="0.00"
               aria-label="Amount"
-              className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-label outline-none placeholder:text-label-secondary"
+              className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-white outline-none placeholder:text-white/35"
             />
             <button
               type="button"
               onClick={() => setCurrency((c) => (c === "USD" ? "LBP" : "USD"))}
               aria-label="Switch currency"
-              className="press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-grouped"
+              className="press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-white/70 active:bg-white/10"
             >
               {currency}
             </button>
           </div>
           {currency === "LBP" && amount > 0 && (
-            <p className="-mt-1 px-1 text-xs text-label-secondary">
+            <p className="-mt-1 px-1 text-xs text-white/45">
               ≈ {formatUsdCents(usdCents)}
             </p>
           )}
 
           {/* Note (optional). */}
-          <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3">
-            <StickyNote className="h-5 w-5 shrink-0 text-label-secondary" strokeWidth={2} />
+          <div className="flex items-center gap-3 rounded-card border border-white/15 bg-black/15 px-4 py-3">
+            <StickyNote className="h-5 w-5 shrink-0 text-white/45" strokeWidth={2} />
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Add a note (optional)"
               aria-label="Note"
               maxLength={140}
-              className="min-w-0 flex-1 bg-transparent text-base text-label outline-none placeholder:text-label-secondary"
+              className="min-w-0 flex-1 bg-transparent text-base text-white outline-none placeholder:text-white/35"
             />
           </div>
 
@@ -214,28 +229,31 @@ export function Safe() {
             type="button"
             onClick={save}
             disabled={!canSave}
-            className={`press mt-1 w-full rounded-pill py-3.5 text-lg font-semibold text-white transition ${
+            className="press mt-1 w-full rounded-pill py-3.5 text-lg font-semibold transition disabled:cursor-not-allowed"
+            style={
               canSave
-                ? isDeposit
-                  ? "bg-income"
-                  : "bg-carrot"
-                : "bg-separator text-label-secondary"
-            }`}
+                ? { backgroundColor: isDeposit ? "#1FB85A" : "#E0631A", color: "#FFFFFF" }
+                : { backgroundColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }
+            }
           >
             {cta}
           </button>
 
           {error && (
-            <p className="text-center text-sm font-medium text-expense">{error}</p>
+            <p className="text-center text-sm font-medium" style={{ color: "#FF8A8A" }}>
+              {error}
+            </p>
           )}
         </div>
       </section>
 
       {/* HISTORY — safe movements only. */}
       <section className="flex flex-col gap-2">
-        <SectionHeader>Safe history</SectionHeader>
+        <h2 className="px-2 font-display text-sm font-semibold uppercase tracking-wide text-white/55">
+          Safe history
+        </h2>
         {safeEntries.length === 0 ? (
-          <p className="py-10 text-center text-label-secondary">
+          <p className="py-10 text-center text-white/45">
             Nothin' in the safe yet, Doc. Add some above.
           </p>
         ) : (
@@ -243,14 +261,11 @@ export function Safe() {
             {safeEntries.map((e) => (
               <li
                 key={e.id}
-                className="flex items-center gap-3 rounded-card bg-surface px-4 py-3.5 shadow-card"
+                className="flex items-center gap-3 rounded-card bg-white/[0.06] px-4 py-3.5 ring-1 ring-white/10"
               >
                 <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-pill ${
-                    e.is_deposit
-                      ? "bg-income/10 text-income"
-                      : "bg-carrot-soft text-carrot"
-                  }`}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-white/10"
+                  style={{ color: e.is_deposit ? MINT : TAKE }}
                 >
                   {e.is_deposit ? (
                     <ArrowDownToLine className="h-5 w-5" strokeWidth={2} />
@@ -259,21 +274,20 @@ export function Safe() {
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-label">
+                  <p className="font-medium text-white">
                     {e.is_deposit ? "Added" : "Took out"}
                   </p>
                   {e.note && (
-                    <p className="truncate text-xs text-label-secondary">{e.note}</p>
+                    <p className="truncate text-xs text-white/50">{e.note}</p>
                   )}
-                  <p className="text-xs text-label-secondary">
+                  <p className="text-xs text-white/50">
                     {dateLabel(e.occurred_at)}
                     {e.original_currency === "LBP" && " · LBP"}
                   </p>
                 </div>
                 <span
-                  className={`font-numeric font-medium tabular-nums ${
-                    e.is_deposit ? "text-income" : "text-carrot"
-                  }`}
+                  className="font-numeric font-medium tabular-nums"
+                  style={{ color: e.is_deposit ? MINT : TAKE }}
                 >
                   {e.is_deposit ? "+" : "-"}
                   {formatUsdCents(e.amount_usd_cents)}
@@ -282,7 +296,7 @@ export function Safe() {
                   type="button"
                   onClick={() => remove(e)}
                   aria-label="Delete"
-                  className="press -m-1 ml-1 p-1 text-label-secondary"
+                  className="press -m-1 ml-1 p-1 text-white/45"
                 >
                   <Trash2 className="h-4 w-4" strokeWidth={2} />
                 </button>

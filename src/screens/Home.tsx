@@ -63,7 +63,7 @@ export function Home() {
             Buddy
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-4">
           {safeEnabled && (
             <button
               type="button"
