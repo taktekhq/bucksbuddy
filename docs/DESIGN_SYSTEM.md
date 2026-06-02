@@ -48,6 +48,7 @@ Defined as Tailwind colors. Light-first; dark mode is future work.
 | `surface` | `#FFFFFF` | Cards, sheets, rows, inputs-on-cards |
 | `grouped` | `#E9E9EF` | Numpad keys, inactive tiles, toggle tracks |
 | `label` | `#1C1C1E` | Primary text, icons |
+| `label-muted` | `#48484A` | Softened dark grey — the BucksBuddy wordmark |
 | `label-secondary` | `#8E8E93` | Captions, dates, placeholders, sub-labels |
 | `separator` | `rgba(60,60,67,0.12)` | Disabled fills / faint hairlines |
 | `carrot` | `#F56300` | **THE** accent — primary button, selected tile, swipe-edit, links |
@@ -82,7 +83,10 @@ Three roles, two custom decisions:
 - **`font-numeric` → SF Pro Rounded.** Every digit of money — totals, the live
   amount, numpad, history. Stays Apple: friendly and rounded, but with **real
   tabular figures**, so columns line up, typing doesn't jitter, and the heavy
-  cartoon ink can't leave ghost trails on iOS. Falls back to the system stack.
+  cartoon ink can't leave ghost trails on iOS. Run it **heavy** (`font-extrabold`
+  on big numbers, `font-bold` elsewhere) so the money holds its own next to the
+  chunky Grobold headers — SF Pro Rounded ships weights up to Black. Falls back to
+  the system stack.
 - **default → SF system stack.** All body/UI chrome, labels, captions.
 
 > **Why numbers aren't Grobold.** Grobold has no true tabular figures and its
@@ -92,15 +96,15 @@ Three roles, two custom decisions:
 
 | Role | Classes | Notes |
 |---|---|---|
-| Wordmark | `font-display text-lg font-bold` | "BucksBuddy" in the nav, beside the 🥕 — kept small |
+| Wordmark | `font-display text-lg font-bold text-label-muted` | "BucksBuddy" in the nav, beside the 🥕 — kept small, dark grey |
 | Section header | `font-display text-sm font-semibold uppercase tracking-wide` | "History", month label |
 | Title / nav | `font-display text-base font-bold` | Screen headers (e.g. Settings) |
 | Button label | `font-display text-lg font-semibold` | Primary carrot pill |
-| Net total (hero) | `font-numeric text-5xl font-bold tabular-nums` + green/red | Home hero card |
-| Net total (compact) | `font-numeric text-4xl font-bold tabular-nums` + green/red | Smaller contexts |
-| Amount entry | `font-numeric text-4xl font-bold tabular-nums` + green/red | Composer live amount |
-| History amount | `font-numeric font-semibold tabular-nums` + green/red | Entry rows |
-| Numpad keys | `font-numeric text-xl font-semibold tabular-nums` | Keypad |
+| Net total (hero) | `font-numeric text-5xl font-extrabold tabular-nums` + green/red | Home hero card |
+| Net total (compact) | `font-numeric text-4xl font-extrabold tabular-nums` + green/red | Smaller contexts |
+| Amount entry | `font-numeric text-4xl font-extrabold tabular-nums` + green/red | Composer live amount |
+| History amount | `font-numeric font-bold tabular-nums` + green/red | Entry rows |
+| Numpad keys | `font-numeric text-xl font-bold tabular-nums` | Keypad |
 | Body | base (16px), SF | **Min 16px on any `<input>`** or iOS auto-zooms |
 | Caption | `text-xs`/`text-sm` + `text-label-secondary` | Dates, hints |
 

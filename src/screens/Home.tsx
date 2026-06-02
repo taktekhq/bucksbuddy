@@ -30,7 +30,7 @@ export function Home() {
       <header className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <Carrot className="text-2xl" />
-          <span className="font-display text-lg font-bold text-label">
+          <span className="font-display text-lg font-bold text-label-muted">
             BucksBuddy
           </span>
         </div>
