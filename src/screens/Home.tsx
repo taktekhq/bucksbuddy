@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Coins, Eye, EyeOff, Settings, Vault } from "lucide-react";
+import { Banknote, Coins, Eye, EyeOff, Settings, Vault } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
@@ -112,15 +112,16 @@ export function Home() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-income">
                     In the safe
                   </div>
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                    <span className="font-numeric text-xl font-bold tabular-nums text-income">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                    <span className="flex items-center gap-1 font-numeric text-xl font-bold tabular-nums text-income">
+                      <Banknote className="h-4 w-4 shrink-0" strokeWidth={2} />
                       {safeShown ? formatUsdCents(safeTotalCents) : "••••"}
                     </span>
                     <span
                       className="flex items-center gap-1 font-numeric text-sm font-bold tabular-nums"
                       style={{ color: GOLD_INK }}
                     >
-                      <Coins className="h-3.5 w-3.5" strokeWidth={2} />
+                      <Coins className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                       {safeShown ? formatGrams(safeGoldGrams) : "•••"}
                     </span>
                   </div>
