@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
+import { useThemeColor } from "@/lib/useThemeColor";
 import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
@@ -104,6 +105,9 @@ export function Safe() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Tint the status bar to match the vault's top color.
+  useThemeColor("#0E4A37");
 
   // Best-effort live gold price (USD per gram); null while loading or if the
   // API is unreachable. Grams work fine without it.
