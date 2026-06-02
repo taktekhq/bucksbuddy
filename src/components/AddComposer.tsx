@@ -121,7 +121,7 @@ export function AddComposer({
         className="press flex w-full flex-col items-center gap-0.5 px-4 pt-6 pb-3"
       >
         <span
-          className={`font-display text-5xl font-bold tracking-tight tabular-nums ${
+          className={`num-display font-display text-4xl font-bold tabular-nums ${
             display === "" ? "text-label-secondary" : amountColorClass(isIncome)
           }`}
         >

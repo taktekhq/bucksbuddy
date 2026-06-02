@@ -21,7 +21,7 @@ export function NetTotal({ cents, monthLabel, compact = false }: Props) {
           {monthLabel}
         </p>
         <p
-          className={`font-display text-4xl font-bold tracking-tight tabular-nums ${netColorClass(
+          className={`num-display font-display text-4xl font-bold tabular-nums ${netColorClass(
             cents,
           )}`}
         >
@@ -38,7 +38,7 @@ export function NetTotal({ cents, monthLabel, compact = false }: Props) {
         {monthLabel}
       </p>
       <p
-        className={`mt-2 font-display text-6xl font-bold tracking-tight tabular-nums ${netColorClass(
+        className={`num-display mt-2 font-display text-5xl font-bold tabular-nums ${netColorClass(
           cents,
         )}`}
       >
