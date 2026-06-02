@@ -46,12 +46,9 @@ export function Home() {
     setEditing(null);
   }
 
-  async function handleDelete(tx: Transaction, partner?: Transaction) {
+  async function handleDelete(tx: Transaction) {
     if (window.confirm("Delete this entry?")) {
       await deleteTransaction(tx.id);
-      // Existing-savings rows come in pairs — remove the income partner too so
-      // the balance and safe stay in sync.
-      if (partner) await deleteTransaction(partner.id);
     }
   }
 
