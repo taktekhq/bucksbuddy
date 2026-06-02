@@ -16,7 +16,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/apple-touch-icon.png", "icons/icon-192.png"],
+      includeAssets: [
+        "icons/apple-touch-icon.png",
+        "icons/icon-192.png",
+        "fonts/grobold.woff2",
+        "fonts/grobold.ttf",
+      ],
       // Never cache Supabase auth/data — always go to the network.
       workbox: {
         navigateFallbackDenylist: [/^\/sw\.js$/],

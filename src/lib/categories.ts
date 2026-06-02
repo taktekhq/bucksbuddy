@@ -24,28 +24,31 @@ export type Category = {
   id: string;
   label: string;
   icon: LucideIcon;
+  // A friendly, distinct color per category so the icons aren't bland gray.
+  // Drawn from the Apple system palette to sit nicely on the iOS base.
+  color: string;
 };
 
 export const INCOME_CATEGORIES: Category[] = [
-  { id: "salary", label: "Salary", icon: Briefcase },
-  { id: "freelance", label: "Freelance", icon: Laptop },
-  { id: "rent_income", label: "Rent", icon: KeyRound },
-  { id: "refund", label: "Refund", icon: Undo2 },
-  { id: "other", label: "Other", icon: MoreHorizontal },
+  { id: "salary", label: "Salary", icon: Briefcase, color: "#34C759" },
+  { id: "freelance", label: "Freelance", icon: Laptop, color: "#007AFF" },
+  { id: "rent_income", label: "Rent", icon: KeyRound, color: "#30B0C7" },
+  { id: "refund", label: "Refund", icon: Undo2, color: "#AF52DE" },
+  { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
 
 export const EXPENSE_CATEGORIES: Category[] = [
-  { id: "groceries", label: "Groceries", icon: ShoppingCart },
-  { id: "food", label: "Food", icon: UtensilsCrossed },
-  { id: "gas", label: "Gas", icon: Fuel },
-  { id: "gifts", label: "Gifts", icon: Gift },
-  { id: "rent", label: "Rent", icon: Home },
-  { id: "health", label: "Health", icon: HeartPulse },
-  { id: "fun", label: "Fun", icon: PartyPopper },
-  { id: "gym", label: "Gym", icon: Dumbbell },
-  { id: "work", label: "Work", icon: Briefcase },
-  { id: "parking", label: "Parking", icon: CircleParking },
-  { id: "other", label: "Other", icon: MoreHorizontal },
+  { id: "groceries", label: "Groceries", icon: ShoppingCart, color: "#34C759" },
+  { id: "food", label: "Food", icon: UtensilsCrossed, color: "#FF9500" },
+  { id: "gas", label: "Gas", icon: Fuel, color: "#FF3B30" },
+  { id: "gifts", label: "Gifts", icon: Gift, color: "#FF2D55" },
+  { id: "rent", label: "Rent", icon: Home, color: "#5856D6" },
+  { id: "health", label: "Health", icon: HeartPulse, color: "#FF375F" },
+  { id: "fun", label: "Fun", icon: PartyPopper, color: "#F56300" },
+  { id: "gym", label: "Gym", icon: Dumbbell, color: "#007AFF" },
+  { id: "work", label: "Work", icon: Briefcase, color: "#5856D6" },
+  { id: "parking", label: "Parking", icon: CircleParking, color: "#30B0C7" },
+  { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
 
 export function categoriesFor(isIncome: boolean): Category[] {
@@ -63,4 +66,8 @@ export function categoryLabel(id: string): string {
 
 export function categoryIcon(id: string): LucideIcon {
   return byId.get(id)?.icon ?? MoreHorizontal;
+}
+
+export function categoryColor(id: string): string {
+  return byId.get(id)?.color ?? "#8E8E93";
 }

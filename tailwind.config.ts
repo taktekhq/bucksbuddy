@@ -46,9 +46,10 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
-        // Display = the cartoon hijack (rounded, bouncy). Falls back to system.
+        // Display = the cartoon hijack (Looney Tunes "Grobold"). Falls back to
+        // a rounded system face while the self-hosted font loads.
         display: [
-          "Fredoka",
+          "Grobold",
           "-apple-system",
           "BlinkMacSystemFont",
           "SF Pro Rounded",

@@ -6,6 +6,7 @@ import { Numpad, applyKey } from "@/components/ui/Numpad";
 import { useStore } from "@/lib/store";
 import {
   categoriesFor,
+  categoryColor,
   categoryIcon,
   categoryLabel,
 } from "@/lib/categories";
@@ -151,7 +152,13 @@ export function AddComposer({
       >
         <span className="text-base font-medium">Category</span>
         <span className="flex items-center gap-1.5 text-base text-label-secondary">
-          {SelectedIcon && <SelectedIcon className="h-4 w-4" strokeWidth={1.75} />}
+          {SelectedIcon && category && (
+            <SelectedIcon
+              className="h-4 w-4"
+              strokeWidth={1.75}
+              style={{ color: categoryColor(category) }}
+            />
+          )}
           {category ? categoryLabel(category) : "Choose"}
         </span>
       </button>
