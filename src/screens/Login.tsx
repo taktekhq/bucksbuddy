@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Carrot } from "@/components/ui/Carrot";
 import { supabase, OWNER_EMAIL } from "@/lib/supabase";
 
 export function Login() {
@@ -26,13 +27,26 @@ export function Login() {
 
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6">
-      <div className="text-center">
-        <div className="text-6xl">🥕</div>
-        <h1 className="mt-4 text-3xl font-bold tracking-tight">BucksBuddy</h1>
-        <p className="mt-1 text-label-secondary">What&apos;s up, Doc?</p>
+      {/* Mascot on the Looney Tunes bullseye. */}
+      <div className="relative flex flex-col items-center">
+        <div
+          aria-hidden
+          className="lt-rings absolute -top-10 h-64 w-64 rounded-full opacity-80"
+          style={{
+            maskImage: "radial-gradient(circle, black 55%, transparent 75%)",
+            WebkitMaskImage: "radial-gradient(circle, black 55%, transparent 75%)",
+          }}
+        />
+        <Carrot className="relative text-7xl drop-shadow-sm" animation="wiggle" />
+        <h1 className="relative mt-5 font-display text-4xl font-bold tracking-tight text-label">
+          BucksBuddy
+        </h1>
+        <p className="relative mt-1 font-display text-lg font-medium text-carrot">
+          What&apos;s up, Doc?
+        </p>
       </div>
 
-      <form onSubmit={signIn} className="mt-10 flex flex-col gap-3">
+      <form onSubmit={signIn} className="mt-12 flex flex-col gap-3">
         {!OWNER_EMAIL && (
           <input
             type="email"
@@ -42,7 +56,7 @@ export function Login() {
             placeholder="you@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded-card bg-grouped px-4 py-4 outline-none placeholder:text-label-secondary"
+            className="rounded-card bg-surface px-4 py-4 shadow-card outline-none ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary"
           />
         )}
         <input
@@ -53,15 +67,15 @@ export function Login() {
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-card bg-grouped px-4 py-4 outline-none placeholder:text-label-secondary"
+          className="rounded-card bg-surface px-4 py-4 shadow-card outline-none ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary"
         />
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p className="px-1 text-sm font-medium text-danger">{error}</p>}
         <button
           type="submit"
           disabled={loading || password.length === 0}
-          className="press rounded-card bg-label py-4 text-lg font-semibold text-white disabled:bg-separator"
+          className="press mt-2 rounded-pill bg-carrot py-4 text-lg font-semibold text-white shadow-carrot transition disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
         >
-          {loading ? "Signing in…" : "Sign in"}
+          {loading ? "Hold on, Doc…" : "Let's go"}
         </button>
       </form>
     </main>

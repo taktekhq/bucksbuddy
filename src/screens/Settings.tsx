@@ -37,20 +37,24 @@ export function Settings() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col gap-4 px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-4 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
       <header className="flex items-center justify-between py-2">
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="press -m-2 p-2 text-base text-carrot"
+          className="press -m-2 p-2 text-base font-semibold text-carrot"
         >
           Done
         </button>
-        <h1 className="text-base font-semibold">Settings</h1>
+        <h1 className="font-display text-base font-bold">Settings</h1>
         <span className="w-12" />
       </header>
 
-      {email && <p className="px-1 text-sm text-label-secondary">{email}</p>}
+      {email && (
+        <p className="px-2 text-sm text-label-secondary">
+          Signed in as {email}
+        </p>
+      )}
 
       <RateEditor />
 
@@ -58,12 +62,16 @@ export function Settings() {
         type="button"
         onClick={exportCsv}
         disabled={exporting}
-        className="press rounded-card bg-grouped py-4 text-center text-lg font-medium text-label disabled:opacity-50"
+        className="press rounded-card bg-surface py-4 text-center text-lg font-medium text-label shadow-card disabled:opacity-50"
       >
         {exporting ? "Exporting…" : "Export CSV"}
       </button>
 
       <SignOutButton />
+
+      <p className="mt-2 text-center text-xs text-label-secondary">
+        That&apos;s all, folks. 🥕
+      </p>
     </main>
   );
 }

@@ -17,11 +17,13 @@ export function CategoryGrid({ categories, selected, onSelect }: Props) {
             key={c.id}
             type="button"
             onClick={() => onSelect(c.id)}
-            className={`press flex flex-col items-center justify-center gap-1.5 rounded-card py-5 ${
-              active ? "bg-carrot text-white" : "bg-grouped text-label"
+            className={`press flex flex-col items-center justify-center gap-1.5 rounded-card py-5 transition ${
+              active
+                ? "bg-carrot text-white shadow-carrot"
+                : "bg-grouped text-label"
             }`}
           >
-            <Icon className="h-7 w-7" strokeWidth={1.75} />
+            <Icon className="h-7 w-7" strokeWidth={2} />
             <span className="text-xs font-medium">{c.label}</span>
           </button>
         );
