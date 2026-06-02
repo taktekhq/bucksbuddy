@@ -61,7 +61,13 @@ In **[console.cloud.google.com](https://console.cloud.google.com)**:
 
 ---
 
-## Part C — Apple sign-in (needs paid Apple Developer Program, $99/yr)
+## Part C — Apple sign-in (OPTIONAL — not currently in the app)
+
+> The Apple button was removed from the app to keep things simple (Google only).
+> Keep these steps for if/when you want to add it back — you'd also re-add the
+> Apple button in `src/screens/Login.tsx`.
+>
+> Needs a paid Apple Developer Program membership ($99/yr).
 
 In **[developer.apple.com](https://developer.apple.com)** → Certificates, Identifiers & Profiles:
 
