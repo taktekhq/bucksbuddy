@@ -6,30 +6,21 @@ type Props = {
   compact?: boolean;
 };
 
-// Cheeky status line that changes with how the month is going.
-function quip(cents: number): string {
-  if (cents > 0) return "Eh, lookin' rich, Doc.";
-  if (cents < 0) return "Spendin' like a wabbit.";
-  return "Dead even. Spooky.";
-}
-
+// The month-net card body: the number in the heaviest weight (tight spacing),
+// with the month directly underneath. The Bugs-ism lives outside, as the
+// section title above the card.
 export function NetTotal({ cents, monthLabel, compact = false }: Props) {
-  // Left-aligned, Apple-style stat: a plain SF month caption, the hero number in
-  // the heaviest weight, and a small Grobold (grey) Bugs-ism underneath.
   const size = compact ? "text-4xl" : "text-5xl";
   return (
     <div>
-      <p className="text-sm font-medium text-label-secondary">{monthLabel}</p>
       <p
-        className={`mt-1 font-numeric ${size} font-black tabular-nums ${netColorClass(
+        className={`font-numeric ${size} font-black leading-none tracking-tight tabular-nums ${netColorClass(
           cents,
         )}`}
       >
         {formatSignedUsdCents(cents)}
       </p>
-      <p className="mt-1 font-display text-xs uppercase tracking-wide text-label-secondary">
-        {quip(cents)}
-      </p>
+      <p className="mt-2 text-sm font-medium text-label-secondary">{monthLabel}</p>
     </div>
   );
 }

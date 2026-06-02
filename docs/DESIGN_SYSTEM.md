@@ -102,9 +102,8 @@ Three roles, two custom decisions:
 | Role | Classes | Notes |
 |---|---|---|
 | Wordmark | `font-display text-sm font-bold uppercase leading-none text-label-muted` | Stacked `Bucks`/`Buddy` lockup beside the 🥕 — small, two lines, dark grey |
-| Section header | `font-display text-sm font-semibold uppercase tracking-wide text-label-secondary` | "History", Settings title |
-| Hero quip | `font-display text-xs uppercase tracking-wide text-label-secondary` | Bugs-ism under the hero number |
-| Month caption | `text-sm font-medium text-label-secondary` (SF, **not** Grobold) | "June 2026" above the hero |
+| Section header | `font-display text-sm font-semibold uppercase tracking-wide text-label-secondary` | "History", Settings title, **the hero's Bugs-ism** |
+| Month caption | `text-sm font-medium text-label-secondary` (SF, **not** Grobold) | "June 2026" **under** the hero number |
 | Button label | `text-lg font-semibold text-white` (SF, **not** Grobold) | Primary carrot pill — "Add"/"Save" |
 | Net total (hero) | `font-numeric text-5xl font-black tabular-nums` + green/red, **left-aligned** | Home hero card — heaviest weight |
 | Net total (compact) | `font-numeric text-4xl font-black tabular-nums` + green/red | Smaller contexts |
@@ -124,6 +123,14 @@ never numbers and never long body copy.
 - **Shell:** content capped at `max-w-md`, centered, `px-4` gutter, safe-area
   padding top and bottom. Screens are a vertical stack of **cards** on the
   `canvas`.
+- **Navigation:** a bottom `TabBar` with two tabs — **Add** (the dial, the
+  default landing tab — open and record) and **Home** (the Bugs-ism title +
+  month-net card + History). Settings is a separate hash route reached from the
+  Home gear. Editing is lifted to the shell so a History row loads into the dial
+  and switches to the Add tab.
+- **Hero (month-net card):** the Bugs-ism is the **section title above** the
+  card; inside, the number leads (heaviest weight, tight leading/tracking) with
+  the **month directly under it**. Left-aligned.
 - **Cards:** `rounded-card bg-surface shadow-card`. This is the core unit — hero,
   composer, settings rows, history rows are all cards. Separate sections with
   whitespace and rounding, not hairline dividers.
@@ -160,10 +167,10 @@ Each lives in `components/ui/` (or `components/`). States:
   string (`applyKey` enforces single dot / max 2 decimals). `⌫` is carrot-tinted;
   **hold it (~400ms) to clear the whole amount** (emits the `clear` key + a
   stronger haptic). A short tap deletes one character.
-- **NetTotal** — **left-aligned** Apple-style stat: a plain SF month caption
-  ("June 2026"), the hero number in `font-numeric font-black` **green/red** (via
-  `netColorClass`, heaviest weight), and a small grey Grobold Bugs-ism under it
-  ("Eh, lookin' rich, Doc.").
+- **NetTotal** — **left-aligned** Apple-style stat inside the Home money card:
+  the number in `font-numeric font-black` **green/red** (via `netColorClass`,
+  heaviest weight, tight leading/tracking) with the SF month caption directly
+  under it. The Bugs-ism is the `SectionHeader` above the card, not inside it.
 - **AddComposer** — **collapsed by default**: the live amount shows as a tappable
   header; the numpad only opens when it's tapped. The amount is `font-numeric`,
   tinted by direction (green In, red Out, gray when empty). Primary action is a
