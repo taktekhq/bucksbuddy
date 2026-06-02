@@ -92,6 +92,34 @@ Production build / preview:
 npm run build && npm run preview
 ```
 
+## Testing
+
+Two complementary suites:
+
+**Unit / component (Vitest + Testing Library, jsdom)** — fast, runs everywhere,
+covers all the money math, the data layer, and component behaviour. Enforced at
+**100% coverage**.
+
+```bash
+npm test           # run once
+npm run test:watch # watch mode
+npm run coverage   # with the coverage report (fails under 100%)
+```
+
+**End-to-end / visual (Playwright, real Chromium)** — renders the built app in a
+real browser and includes a visual snapshot of the login screen. This catches
+layout/CSS/font issues that jsdom can't.
+
+```bash
+npm run test:e2e:install   # one-time: download the Chromium browser
+npm run test:e2e           # build, serve, and run the browser tests
+npm run test:e2e:update    # regenerate screenshot baselines after a UI change
+```
+
+Screenshot baselines (`e2e/__screenshots__/`) are committed and are
+platform-dependent (fonts/anti-aliasing), so generate/update them on Linux —
+the same environment CI uses — to avoid spurious diffs.
+
 ## Install on iPhone
 
 Open the deployed URL in **Safari → Share → Add to Home Screen**. It launches standalone.
