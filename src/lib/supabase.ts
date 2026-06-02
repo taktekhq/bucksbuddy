@@ -5,9 +5,6 @@ const env = import.meta.env as Record<string, string | undefined>;
 const url = env.VITE_SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const OWNER_EMAIL =
-  env.VITE_OWNER_EMAIL ?? env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
-
 if (!url || !anonKey) {
   // Surfaced clearly in the console if env vars are missing.
   console.error(
@@ -22,6 +19,11 @@ export const supabase = createClient(url ?? "", anonKey ?? "", {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    // OAuth (Google/Apple) redirects back with a PKCE `?code=` in the query
+    // string; detectSessionInUrl exchanges it for a session on load. PKCE keeps
+    // the code in the query string (not the hash), so it never collides with
+    // our hash-based router (see src/lib/router.ts).
+    detectSessionInUrl: true,
+    flowType: "pkce",
   },
 });
