@@ -25,6 +25,7 @@ const SYMBOL: Record<Currency, string> = { USD: "$", LBP: "LL" };
 // mentality from the bright daily tracker. The whole viewport goes deep green
 // while you're in here, restored on the way out.
 const VAULT_BG = "linear-gradient(180deg, #0A3A2A 0%, #06281E 55%, #03150F 100%)";
+const VAULT_DEEP = "#03150F"; // solid base for the status bar + overscroll area
 const GOLD = "#FFD479";
 const MINT = "#7CE6AA";
 const TAKE = "#FFA866";
@@ -117,10 +118,18 @@ export function Safe() {
 
   // Paint the entire page the vault color while this screen is mounted.
   useEffect(() => {
-    const prev = document.body.style.background;
-    document.body.style.background = VAULT_BG;
+    // Paint the document root + body the dark vault color so the whole canvas —
+    // including the status-bar safe area and any overscroll bounce — stays dark.
+    // The gradient itself is a fixed layer in the JSX (so it never "breaks" when
+    // the content scrolls past the viewport).
+    const html = document.documentElement;
+    const prevHtml = html.style.backgroundColor;
+    const prevBody = document.body.style.backgroundColor;
+    html.style.backgroundColor = VAULT_DEEP;
+    document.body.style.backgroundColor = VAULT_DEEP;
     return () => {
-      document.body.style.background = prev;
+      html.style.backgroundColor = prevHtml;
+      document.body.style.backgroundColor = prevBody;
     };
   }, []);
 
@@ -222,6 +231,10 @@ export function Safe() {
 
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))] text-white">
+      {/* Fixed full-viewport vault gradient — stays put while content scrolls,
+          and covers the status-bar area at the top. */}
+      <div aria-hidden className="fixed inset-0" style={{ background: VAULT_BG, zIndex: -10 }} />
+
       {/* Dark nav: back chevron + centered title. */}
       <header className="relative flex items-center justify-center py-1">
         <button
