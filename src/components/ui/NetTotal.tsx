@@ -1,26 +1,26 @@
 import { formatSignedUsdCents, netColorClass } from "@/lib/money";
 
-type Props = {
+// Clean Apple stat: a small month caption on top, the net number below it,
+// green/red by direction. Left-aligned.
+export function NetTotal({
+  cents,
+  monthLabel,
+}: {
   cents: number;
   monthLabel: string;
-  compact?: boolean;
-};
-
-// The month-net card body: the number in the heaviest weight (tight spacing),
-// with the month directly underneath. The Bugs-ism lives outside, as the
-// section title above the card.
-export function NetTotal({ cents, monthLabel, compact = false }: Props) {
-  const size = compact ? "text-4xl" : "text-5xl";
+}) {
   return (
     <div>
+      <p className="text-[13px] font-medium uppercase tracking-wide text-label-secondary">
+        {monthLabel}
+      </p>
       <p
-        className={`font-numeric ${size} font-black leading-none tracking-tight tabular-nums ${netColorClass(
+        className={`mt-1 font-numeric text-4xl font-bold tabular-nums ${netColorClass(
           cents,
         )}`}
       >
         {formatSignedUsdCents(cents)}
       </p>
-      <p className="mt-2 text-sm font-medium text-label-secondary">{monthLabel}</p>
     </div>
   );
 }
