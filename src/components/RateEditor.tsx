@@ -16,7 +16,7 @@ export function RateEditor() {
   }
 
   return (
-    <div className="rounded-card bg-grouped p-4">
+    <div className="rounded-card bg-surface p-4 shadow-card">
       <label className="text-sm font-medium text-label-secondary">
         Exchange rate (LBP per $1)
       </label>
@@ -26,13 +26,13 @@ export function RateEditor() {
           inputMode="numeric"
           value={value}
           onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
-          className="flex-1 rounded-card bg-white px-4 py-3 tabular-nums outline-none"
+          className="flex-1 rounded-card bg-grouped px-4 py-3 tabular-nums outline-none ring-carrot/40 transition focus:ring-2"
         />
         <button
           type="button"
           onClick={save}
           disabled={status === "saving"}
-          className="press rounded-card bg-label px-5 font-semibold text-white disabled:bg-separator"
+          className="press rounded-card bg-carrot px-5 font-semibold text-white shadow-carrot disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
         >
           {status === "saved" ? "Saved" : "Save"}
         </button>

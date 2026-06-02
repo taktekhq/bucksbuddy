@@ -19,9 +19,20 @@ export function formatSignedUsdCents(cents: number): string {
   return `${sign}${formatUsdCents(cents)}`;
 }
 
-/** Tailwind text-color class for a net value (monochrome — sign carries direction). */
-export function netColorClass(_cents: number): string {
+/**
+ * Tailwind text-color class for a net value. Money is green when you're up,
+ * red when you're down, neutral at exactly zero. The carrot hijack lets money
+ * be colorful again.
+ */
+export function netColorClass(cents: number): string {
+  if (cents > 0) return "text-income";
+  if (cents < 0) return "text-expense";
   return "text-label";
+}
+
+/** Tailwind text-color class for a single entry by direction (in = green, out = red). */
+export function amountColorClass(isIncome: boolean): string {
+  return isIncome ? "text-income" : "text-expense";
 }
 
 /** Sum transactions into a signed net in USD cents. */

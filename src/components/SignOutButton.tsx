@@ -10,7 +10,7 @@ export function SignOutButton() {
     <button
       type="button"
       onClick={signOut}
-      className="press w-full rounded-card bg-grouped py-4 text-lg font-medium text-expense"
+      className="press w-full rounded-card bg-surface py-4 text-lg font-medium text-expense shadow-card"
     >
       Sign out
     </button>

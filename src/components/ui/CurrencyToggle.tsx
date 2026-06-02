@@ -13,8 +13,8 @@ export function CurrencyToggle({ currency, onChange }: Props) {
           key={c}
           type="button"
           onClick={() => onChange(c)}
-          className={`press rounded-pill px-4 py-1.5 ${
-            currency === c ? "bg-white text-label shadow-card" : "text-label-secondary"
+          className={`press rounded-pill px-4 py-1.5 transition ${
+            currency === c ? "bg-white text-carrot shadow-segment" : "text-label-secondary"
           }`}
         >
           {c}

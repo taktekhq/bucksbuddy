@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Settings } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
+import { Carrot } from "@/components/ui/Carrot";
 import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
 import { useStore } from "@/lib/store";
@@ -24,24 +25,40 @@ export function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1.5rem+var(--safe-top))]">
-      <div className="flex items-start justify-between">
-        <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} compact />
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-4 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
+      {/* Wordmark + settings — the plain Apple nav bar, with a carrot on it. */}
+      <header className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-1.5">
+          <Carrot className="text-2xl" />
+          <span className="font-display text-xl font-bold tracking-tight text-label">
+            BucksBuddy
+          </span>
+        </div>
         <button
           type="button"
           onClick={() => navigate("/settings")}
-          className="press p-1 text-label-secondary"
+          className="press -m-2 p-2 text-label-secondary"
           aria-label="Settings"
         >
           <Settings className="h-6 w-6" strokeWidth={1.75} />
         </button>
-      </div>
+      </header>
 
-      <AddComposer editing={editing} onClearEdit={() => setEditing(null)} />
+      {/* Hero: net this month, green/red. */}
+      <section className="rounded-card bg-surface px-5 py-6 shadow-card">
+        <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} />
+      </section>
+
+      {/* Composer card. */}
+      <section className="rounded-card bg-surface shadow-card">
+        <AddComposer editing={editing} onClearEdit={() => setEditing(null)} />
+      </section>
 
       <div>
-        <div className="mb-2 flex items-center justify-between px-1">
-          <h2 className="text-sm font-semibold text-label-secondary">History</h2>
+        <div className="mb-2 flex items-center justify-between px-2">
+          <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-label-secondary">
+            History
+          </h2>
           <span className="text-xs text-label-secondary">swipe to edit / delete</span>
         </div>
         {loading && transactions.length === 0 ? (

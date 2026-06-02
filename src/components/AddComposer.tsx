@@ -10,7 +10,7 @@ import {
   categoryLabel,
 } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
-import { formatUsdCents } from "@/lib/money";
+import { amountColorClass, formatUsdCents } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
 type Section = "amount" | "category" | null;
@@ -116,9 +116,13 @@ export function AddComposer({
       <button
         type="button"
         onClick={() => setExpanded(expanded === "amount" ? null : "amount")}
-        className="press flex w-full flex-col items-center gap-0.5 px-4 pt-5 pb-3"
+        className="press flex w-full flex-col items-center gap-0.5 px-4 pt-6 pb-3"
       >
-        <span className="text-4xl font-semibold tracking-tight tabular-nums">
+        <span
+          className={`font-display text-5xl font-bold tracking-tight tabular-nums ${
+            display === "" ? "text-label-secondary" : amountColorClass(isIncome)
+          }`}
+        >
           {bigAmount}
         </span>
         <span className="h-4 text-sm text-label-secondary">{sub}</span>
@@ -161,17 +165,19 @@ export function AddComposer({
         </div>
       )}
 
-      <div className="flex flex-col items-center px-4 pb-5 pt-1">
-        {error && <p className="mb-2 text-center text-sm text-danger">{error}</p>}
+      <div className="flex flex-col items-center px-4 pb-6 pt-1">
+        {error && <p className="mb-2 text-center text-sm font-medium text-danger">{error}</p>}
         <button
           type="button"
           onClick={save}
           disabled={!canSave}
-          className={`press rounded-pill px-10 py-3 text-base font-semibold text-white ${
-            canSave ? "bg-carrot" : "bg-separator"
+          className={`press rounded-pill px-12 py-3.5 font-display text-lg font-semibold text-white transition ${
+            canSave
+              ? "bg-carrot shadow-carrot"
+              : "bg-separator text-label-secondary shadow-none"
           }`}
         >
-          {saving ? "Saving…" : editing ? "Update" : "Save"}
+          {saving ? "Hang on…" : editing ? "Update" : "That's it!"}
         </button>
         {editing && (
           <button

@@ -23,7 +23,9 @@ export function Numpad({ onPress }: Props) {
           key={k}
           type="button"
           onClick={() => handle(k)}
-          className="press rounded-card bg-grouped py-4 text-2xl font-medium tabular-nums active:bg-separator"
+          className={`press rounded-card py-4 font-display text-2xl font-semibold tabular-nums transition active:bg-carrot-soft ${
+            k === "⌫" ? "bg-grouped text-carrot-dark" : "bg-grouped text-label"
+          }`}
         >
           {k}
         </button>
