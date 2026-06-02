@@ -179,7 +179,7 @@ export function AddComposer({
           type="button"
           onClick={save}
           disabled={!canSave}
-          className={`press rounded-pill px-12 py-3.5 font-display text-lg font-semibold text-white transition ${
+          className={`press rounded-pill px-12 py-3.5 font-display text-lg font-semibold uppercase text-white transition ${
             canSave
               ? "bg-carrot shadow-carrot"
               : "bg-separator text-label-secondary shadow-none"

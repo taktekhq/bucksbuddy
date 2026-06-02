@@ -77,9 +77,12 @@ Three roles, two custom decisions:
 
 - **`font-display` → Grobold.** The chunky Looney Tunes cartoon face, self-hosted
   via `@font-face` from `/public/fonts/`. **Headers, the wordmark, and button
-  labels only** — never numbers, never body. Falls back to SF Pro Rounded /
-  system so nothing breaks offline. It ships a single weight, and
-  `font-synthesis: none` keeps the browser from faking a heavier one.
+  labels only** — never numbers, never body. Two hard rules: **always `uppercase`**
+  (the font is built for it), and **never pure black** — Grobold reads heavy, so
+  use `label-muted` (dark grey), `label-secondary`, or white-on-carrot, never
+  `label` (#1C1C1E). Falls back to SF Pro Rounded / system so nothing breaks
+  offline. It ships a single weight, and `font-synthesis: none` keeps the browser
+  from faking a heavier one.
 - **`font-numeric` → SF Pro Rounded.** Every digit of money — totals, the live
   amount, numpad, history. Stays Apple: friendly and rounded, but with **real
   tabular figures**, so columns line up, typing doesn't jitter, and the heavy
@@ -96,10 +99,10 @@ Three roles, two custom decisions:
 
 | Role | Classes | Notes |
 |---|---|---|
-| Wordmark | `font-display text-lg font-bold text-label-muted` | "BucksBuddy" in the nav, beside the 🥕 — kept small, dark grey |
-| Section header | `font-display text-sm font-semibold uppercase tracking-wide` | "History", month label |
-| Title / nav | `font-display text-base font-bold` | Screen headers (e.g. Settings) |
-| Button label | `font-display text-lg font-semibold` | Primary carrot pill |
+| Wordmark | `font-display text-lg font-bold uppercase text-label-muted` | "BucksBuddy" in the nav, beside the 🥕 — kept small, dark grey |
+| Section header | `font-display text-sm font-semibold uppercase tracking-wide text-label-secondary` | "History", month label |
+| Title / nav | `font-display text-base font-bold uppercase text-label-muted` | Screen headers (e.g. Settings) |
+| Button label | `font-display text-lg font-semibold uppercase text-white` | Primary carrot pill |
 | Net total (hero) | `font-numeric text-5xl font-extrabold tabular-nums` + green/red | Home hero card |
 | Net total (compact) | `font-numeric text-4xl font-extrabold tabular-nums` + green/red | Smaller contexts |
 | Amount entry | `font-numeric text-4xl font-extrabold tabular-nums` + green/red | Composer live amount |
