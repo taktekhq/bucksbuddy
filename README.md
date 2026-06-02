@@ -25,15 +25,22 @@ In the **Supabase Dashboard → SQL Editor**, paste and run
 [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). Creates the
 `profiles` + `transactions` tables, RLS policies, and the auto-create-profile trigger.
 
-Then run [`supabase/migrations/0002_safe.sql`](supabase/migrations/0002_safe.sql) to add
-the `safe_entries` table (powers the savings **Safe** — see below). The app degrades
-gracefully if it isn't applied yet, but the Safe won't persist until you do.
+Then run the Safe migrations (powers the savings **Safe** — see below), in order:
+[`0003_safe_gold.sql`](supabase/migrations/0003_safe_gold.sql) adds the `safe_gold_entries`
+table (gold, in grams), and [`0004_drop_safe_entries.sql`](supabase/migrations/0004_drop_safe_entries.sql)
+removes the old `safe_entries` table (cash now lives in `transactions`). The app degrades
+gracefully if they aren't applied yet. _(`0002_safe.sql` created the now-retired
+`safe_entries` table; if you already ran it, `0004` cleans it up.)_
 
-> **Savings Safe (proof of concept):** a separate, all-time pot you add money to and
-> take money out of, shown via a vault icon next to Settings. It's currently limited to
-> a short email allowlist in [`src/lib/features.ts`](src/lib/features.ts). The safe is
-> kept separate from your monthly net; when it holds money the home screen tints and
-> shows an "In the safe" balance.
+> **Savings Safe (proof of concept):** a vault icon next to Settings opens a dark "Safe"
+> screen. It's limited to a short email allowlist in
+> [`src/lib/features.ts`](src/lib/features.ts).
+> - **Cash** moved to the safe is recorded as a normal transaction with the `safe`
+>   category — so it leaves your spendable balance (Out) and shows in history; taking it
+>   back is an In. The safe's cash total is the all-time net of those transactions.
+> - **Gold** is tracked separately in **grams** (`safe_gold_entries`); it isn't converted,
+>   though the screen shows an approximate USD value from a free live price API when
+>   reachable.
 >
 > **Subcategories:** categories with a small dot (Health → Pharmacy, Fees → Mobile,
 > Food/Groceries/Coffee, …) open a second step to pick a finer label. Stored inline as

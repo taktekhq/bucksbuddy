@@ -24,6 +24,7 @@ import {
   Undo2,
   Users,
   UtensilsCrossed,
+  Vault,
   type LucideIcon,
 } from "lucide-react";
 
@@ -166,8 +167,20 @@ export function categoriesFor(isIncome: boolean): Category[] {
   return isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 }
 
+// Moving cash to/from the savings Safe is recorded as a normal transaction with
+// this category, so it lands in your history and moves your balance. It's not
+// offered in the picker — the Safe screen sets it. SAFE_CATEGORY_ID is the
+// stored value; keep it stable.
+export const SAFE_CATEGORY_ID = "safe";
+export const SAFE_CATEGORY: Category = {
+  id: SAFE_CATEGORY_ID,
+  label: "Safe",
+  icon: Vault,
+  color: "#1FB85A",
+};
+
 const byId = new Map<string, Category>();
-for (const c of [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES]) {
+for (const c of [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES, SAFE_CATEGORY]) {
   if (!byId.has(c.id)) byId.set(c.id, c);
 }
 

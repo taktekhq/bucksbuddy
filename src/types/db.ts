@@ -33,26 +33,24 @@ export type NewTransaction = {
   note?: string | null;
 };
 
-// A single movement in the savings Safe. is_deposit true = money added to the
-// safe, false = money taken out. The safe total is the all-time signed sum.
-export type SafeEntry = {
+// Cash in the Safe is not its own table: it's recorded as normal transactions
+// with the "safe" category (see lib/categories), so moving money to/from the
+// safe shows in history and moves your balance.
+
+// Gold in the Safe, tracked purely in grams (no stored conversion). The safe's
+// gold total is the all-time signed sum of grams.
+export type SafeGoldEntry = {
   id: string;
   user_id: string;
   is_deposit: boolean;
-  amount_usd_cents: number;
-  original_currency: Currency;
-  original_amount: number;
-  rate_used: number;
+  grams: number;
   note: string | null;
   occurred_at: string;
   created_at: string;
 };
 
-export type NewSafeEntry = {
+export type NewSafeGoldEntry = {
   is_deposit: boolean;
-  amount_usd_cents: number;
-  original_currency: Currency;
-  original_amount: number;
-  rate_used: number;
+  grams: number;
   note?: string | null;
 };

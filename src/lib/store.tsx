@@ -12,10 +12,11 @@ import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { canUseSafe } from "@/lib/features";
+import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import type {
-  NewSafeEntry,
+  NewSafeGoldEntry,
   NewTransaction,
-  SafeEntry,
+  SafeGoldEntry,
   Transaction,
 } from "@/types/db";
 
@@ -33,10 +34,16 @@ type Store = {
   setRate: (rate: number) => Promise<{ error: string | null }>;
   // Savings Safe (gated to allowlisted users — see lib/features).
   safeEnabled: boolean;
-  safeEntries: SafeEntry[];
+  // Cash in the safe = all-time net of "safe"-category transactions: money sent
+  // to the safe (Out) adds, money taken back (In) subtracts.
   safeTotalCents: number;
-  addSafeEntry: (entry: NewSafeEntry) => Promise<{ error: string | null }>;
-  deleteSafeEntry: (id: string) => Promise<{ error: string | null }>;
+  // Gold in the Safe, tracked in grams.
+  safeGoldEntries: SafeGoldEntry[];
+  safeGoldGrams: number;
+  addSafeGoldEntry: (
+    entry: NewSafeGoldEntry,
+  ) => Promise<{ error: string | null }>;
+  deleteSafeGoldEntry: (id: string) => Promise<{ error: string | null }>;
   refresh: () => Promise<void>;
 };
 
@@ -54,7 +61,7 @@ export function StoreProvider({
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [lbpPerUsd, setLbpPerUsd] = useState(DEFAULT_LBP_PER_USD);
-  const [safeEntries, setSafeEntries] = useState<SafeEntry[]>([]);
+  const [safeGoldEntries, setSafeGoldEntries] = useState<SafeGoldEntry[]>([]);
   const safeEnabled = canUseSafe(userEmail);
 
   const refresh = useCallback(async () => {
@@ -69,15 +76,16 @@ export function StoreProvider({
     if (profile?.lbp_per_usd) setLbpPerUsd(profile.lbp_per_usd);
     setTransactions((txs ?? []) as Transaction[]);
 
-    // Only allowlisted users touch the safe. Tolerate a missing table (the
-    // 0002 migration not applied yet) by ignoring the error and showing empty.
+    // Cash in the safe rides along in `transactions` (category "safe"). Only the
+    // gold ledger is separate. Tolerate a missing table (the 0003 migration not
+    // applied yet) by ignoring the error and showing empty.
     if (safeEnabled) {
-      const { data: safe } = await supabase
-        .from("safe_entries")
+      const { data: gold } = await supabase
+        .from("safe_gold_entries")
         .select("*")
         .order("occurred_at", { ascending: false })
         .limit(500);
-      setSafeEntries((safe ?? []) as SafeEntry[]);
+      setSafeGoldEntries((gold ?? []) as SafeGoldEntry[]);
     }
     setLoading(false);
   }, [userId, safeEnabled]);
@@ -140,36 +148,35 @@ export function StoreProvider({
     [userId],
   );
 
-  const addSafeEntry = useCallback(
-    async (entry: NewSafeEntry) => {
+  const addSafeGoldEntry = useCallback(
+    async (entry: NewSafeGoldEntry) => {
       const { data, error } = await supabase
-        .from("safe_entries")
+        .from("safe_gold_entries")
         .insert({ ...entry, user_id: userId })
         .select()
         .single();
       if (error) return { error: error.message };
-      setSafeEntries((prev) => [data as SafeEntry, ...prev]);
+      setSafeGoldEntries((prev) => [data as SafeGoldEntry, ...prev]);
       return { error: null };
     },
     [userId],
   );
 
-  const deleteSafeEntry = useCallback(
+  const deleteSafeGoldEntry = useCallback(
     async (id: string) => {
-      // Optimistic remove; restore on failure.
-      const prev = safeEntries;
-      setSafeEntries((cur) => cur.filter((e) => e.id !== id));
+      const prev = safeGoldEntries;
+      setSafeGoldEntries((cur) => cur.filter((e) => e.id !== id));
       const { error } = await supabase
-        .from("safe_entries")
+        .from("safe_gold_entries")
         .delete()
         .eq("id", id);
       if (error) {
-        setSafeEntries(prev);
+        setSafeGoldEntries(prev);
         return { error: error.message };
       }
       return { error: null };
     },
-    [safeEntries],
+    [safeGoldEntries],
   );
 
   const monthlyNetCents = useMemo(() => {
@@ -181,15 +188,27 @@ export function StoreProvider({
     return netCents(inMonth);
   }, [transactions]);
 
-  // The safe is an all-time running total: deposits add, withdrawals subtract.
+  // Cash in the safe = all-time net of "safe" transactions. Money sent to the
+  // safe is an expense (Out) and adds to it; taking it back is income (In).
   const safeTotalCents = useMemo(
     () =>
-      safeEntries.reduce(
-        (sum, e) =>
-          sum + (e.is_deposit ? e.amount_usd_cents : -e.amount_usd_cents),
+      transactions.reduce(
+        (sum, t) =>
+          t.category === SAFE_CATEGORY_ID
+            ? sum + (t.is_income ? -t.amount_usd_cents : t.amount_usd_cents)
+            : sum,
         0,
       ),
-    [safeEntries],
+    [transactions],
+  );
+
+  const safeGoldGrams = useMemo(
+    () =>
+      safeGoldEntries.reduce(
+        (sum, e) => sum + (e.is_deposit ? e.grams : -e.grams),
+        0,
+      ),
+    [safeGoldEntries],
   );
 
   const value: Store = {
@@ -202,10 +221,11 @@ export function StoreProvider({
     deleteTransaction,
     setRate,
     safeEnabled,
-    safeEntries,
     safeTotalCents,
-    addSafeEntry,
-    deleteSafeEntry,
+    safeGoldEntries,
+    safeGoldGrams,
+    addSafeGoldEntry,
+    deleteSafeGoldEntry,
     refresh,
   };
 
