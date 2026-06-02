@@ -6,11 +6,11 @@ import {
   ChevronLeft,
   Coins,
   StickyNote,
-  Trash2,
   Vault,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
+import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
 import { formatSignedUsdCents, formatUsdCents } from "@/lib/money";
@@ -444,43 +444,38 @@ export function Safe() {
                     ? ArrowDownToLine
                     : ArrowUpFromLine;
               return (
-                <li
-                  key={m.key}
-                  className="flex items-center gap-3 rounded-card bg-white/[0.06] px-4 py-3.5 ring-1 ring-white/10"
-                >
-                  <span
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-white/10"
-                    style={{ color: tone }}
+                <li key={m.key}>
+                  <SwipeToDelete
+                    onDelete={() => void m.onDelete()}
+                    deleteColor="#E0463C"
+                    className="flex items-center gap-3 bg-[#163E2F] px-4 py-3.5 ring-1 ring-inset ring-white/10"
                   >
-                    <Icon className="h-5 w-5" strokeWidth={2} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-white">
-                      {m.isDeposit ? "Added" : "Took out"}
-                      {m.kind === "gold" ? " gold" : " cash"}
-                    </p>
-                    {m.note && (
-                      <p className="truncate text-xs text-white/50">{m.note}</p>
-                    )}
-                    <p className="text-xs text-white/50">
-                      {dateLabel(m.occurredAt)}
-                      {m.kind === "cash" && m.isLbp && " · LBP"}
-                    </p>
-                  </div>
-                  <span
-                    className="font-numeric font-medium tabular-nums"
-                    style={{ color: tone }}
-                  >
-                    {right}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void m.onDelete()}
-                    aria-label="Delete"
-                    className="press -m-1 ml-1 p-1 text-white/45"
-                  >
-                    <Trash2 className="h-4 w-4" strokeWidth={2} />
-                  </button>
+                    <span
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-white/10"
+                      style={{ color: tone }}
+                    >
+                      <Icon className="h-5 w-5" strokeWidth={2} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-white">
+                        {m.isDeposit ? "Added" : "Took out"}
+                        {m.kind === "gold" ? " gold" : " cash"}
+                      </p>
+                      {m.note && (
+                        <p className="truncate text-xs text-white/50">{m.note}</p>
+                      )}
+                      <p className="text-xs text-white/50">
+                        {dateLabel(m.occurredAt)}
+                        {m.kind === "cash" && m.isLbp && " · LBP"}
+                      </p>
+                    </div>
+                    <span
+                      className="font-numeric font-medium tabular-nums"
+                      style={{ color: tone }}
+                    >
+                      {right}
+                    </span>
+                  </SwipeToDelete>
                 </li>
               );
             })}
