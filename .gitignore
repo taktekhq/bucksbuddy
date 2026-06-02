@@ -7,6 +7,12 @@
 # test coverage
 /coverage
 
+# playwright artifacts (baselines under e2e/__screenshots__ ARE committed)
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+
 # vite pwa generated (built into /dist, but ignore stray copies)
 /public/sw.js
 /public/sw.js.map
