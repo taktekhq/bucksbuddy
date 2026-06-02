@@ -8,15 +8,12 @@ import { HistoryList } from "@/components/HistoryList";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { monthLabel } from "@/lib/dates";
-import { randomBugsLine } from "@/lib/voice";
 import type { Transaction } from "@/types/db";
 
 export function Home() {
   const { transactions, monthlyNetCents, loading, deleteTransaction } = useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [dialOpen, setDialOpen] = useState(false);
-  // One Bugs-ism per visit, used as the title above the money card.
-  const [bugs] = useState(randomBugsLine);
 
   function handleEdit(tx: Transaction) {
     setEditing(tx);
@@ -57,10 +54,9 @@ export function Home() {
         </button>
       </header>
 
-      {/* Bugs-ism title → money-for-the-month card (month sits under the number). */}
-      <section className="flex flex-col gap-2">
-        <SectionHeader>{bugs}</SectionHeader>
-        <div className="rounded-card bg-surface px-5 py-6 shadow-card">
+      {/* Money for the month — month caption above the net number. */}
+      <section>
+        <div className="rounded-card bg-surface px-5 py-5 shadow-card">
           <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} />
         </div>
       </section>

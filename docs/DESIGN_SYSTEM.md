@@ -77,7 +77,7 @@ Three roles, two custom decisions:
 
 - **`font-display` → Grobold.** The chunky Looney Tunes cartoon face, self-hosted
   via `@font-face` from `/public/fonts/`. **Grey only: the logo (wordmark) and
-  section headers (History, Settings, the hero's Bugs-ism quip).** Never on
+  section headers (History, Settings, the "What's up, Doc?" label).** Never on
   numbers, body, buttons, or anything colored (no white-on-carrot, no green/red).
   Two hard rules: **always `uppercase`** (the font is built for it), and **never
   pure black** — Grobold reads heavy, so it lives in `label-muted` (dark grey) or
@@ -102,13 +102,13 @@ Three roles, two custom decisions:
 | Role | Classes | Notes |
 |---|---|---|
 | Wordmark | `font-display text-sm font-bold uppercase leading-none text-label-muted` | Stacked `Bucks`/`Buddy` lockup beside the 🥕 — small, two lines, dark grey |
-| Section header | `font-display text-sm font-semibold uppercase tracking-wide text-label-secondary` | "History", Settings title, **the hero's Bugs-ism** |
-| Month caption | `text-sm font-medium text-label-secondary` (SF, **not** Grobold) | "June 2026" **under** the hero number |
+| Section header | `font-display text-sm font-semibold uppercase tracking-wide text-label-secondary` | "History", Settings title, "What's up, Doc?" |
+| Month caption | `text-[13px] font-medium uppercase tracking-wide text-label-secondary` (SF, **not** Grobold) | "JUNE 2026" **above** the hero number |
 | Button label | `text-lg font-semibold text-white` (SF, **not** Grobold) | Primary carrot pill — "Add"/"Save" |
-| Net total (hero) | `font-numeric text-5xl font-black tabular-nums` + green/red, **left-aligned** | Home hero card — heaviest weight |
-| Net total (compact) | `font-numeric text-4xl font-black tabular-nums` + green/red | Smaller contexts |
+| Net total (hero) | `font-numeric text-4xl font-bold tabular-nums` + green/red, left-aligned, month caption above | Home hero card |
+| Amount (entry) | `font-numeric text-5xl font-bold tabular-nums` + green/red | The dial's live amount |
 | Amount entry | `font-numeric text-4xl font-extrabold tabular-nums` + green/red | Composer live amount |
-| History amount | `font-numeric font-bold tabular-nums` + green/red | Entry rows |
+| History amount | `font-numeric font-medium tabular-nums` + green/red | Entry rows — kept light |
 | Numpad keys | `font-numeric text-xl font-bold tabular-nums` | Keypad |
 | Body | base (16px), SF | **Min 16px on any `<input>`** or iOS auto-zooms |
 | Caption | `text-xs`/`text-sm` + `text-label-secondary` | Dates, hints |
@@ -124,13 +124,13 @@ never numbers and never long body copy.
   padding top and bottom. Screens are a vertical stack of **cards** on the
   `canvas`.
 - **Navigation:** a **single page** (no tab bar). Top to bottom: the wordmark +
-  settings nav, the Bugs-ism title + month-net card, a tappable **"What's up,
-  Doc?"** section that reveals the dial, then History. Settings is a separate
-  hash route reached from the gear. Editing a History row opens the dial with the
-  entry loaded and scrolls to the top.
-- **Hero (month-net card):** the Bugs-ism is the **section title above** the
-  card; inside, the number leads (heaviest weight, tight leading/tracking) with
-  the **month directly under it**. Left-aligned.
+  settings nav, the month-net card, a tappable **"What's up, Doc?"** section that
+  reveals the add dial, then History. Settings is a separate hash route reached
+  from the gear. Editing a History row opens the dial with the entry loaded and
+  scrolls to the top.
+- **Hero (month-net card):** clean Apple stat — an uppercase SF **month caption
+  on top**, the net number below it (`font-bold`, green/red). Left-aligned, no
+  decorative line above it.
 - **Cards:** `rounded-card bg-surface shadow-card`. This is the core unit — hero,
   composer, settings rows, history rows are all cards. Separate sections with
   whitespace and rounding, not hairline dividers.
@@ -167,14 +167,14 @@ Each lives in `components/ui/` (or `components/`). States:
   string (`applyKey` enforces single dot / max 2 decimals). `⌫` is carrot-tinted;
   **hold it (~400ms) to clear the whole amount** (emits the `clear` key + a
   stronger haptic). A short tap deletes one character.
-- **NetTotal** — **left-aligned** Apple-style stat inside the Home money card:
-  the number in `font-numeric font-black` **green/red** (via `netColorClass`,
-  heaviest weight, tight leading/tracking) with the SF month caption directly
-  under it. The Bugs-ism is the `SectionHeader` above the card, not inside it.
-- **AddComposer** — **collapsed by default**: the live amount shows as a tappable
-  header; the numpad only opens when it's tapped. The amount is `font-numeric`,
-  tinted by direction (green In, red Out, gray when empty). Primary action is a
-  carrot pill with a plain Apple label ("Add" / "Save").
+- **NetTotal** — **left-aligned** Apple stat inside the Home money card: an
+  uppercase SF month caption on top, the number in `font-numeric font-bold`
+  **green/red** (via `netColorClass`) directly below.
+- **AddComposer** — **money-first** dial, revealed by "What's up, Doc?": a quiet
+  `$/LBP` toggle, then the **big live amount** (`font-numeric text-5xl`, tinted by
+  direction), a quiet keypad (`1-9 . 0 ⌫`; backspace deletes on `click`, holds to
+  clear), a **Category** form-row that opens the `CategorySheet` (In/Out + grid),
+  and a flat carrot **Add/Save** pill.
 - **HistoryList row** — lucide icon in a round chip tinted with the **category's
   own color** (`categoryColor()`, ~10% alpha bg + full-strength icon) + label +
   date + **green/red** signed amount. Rows are cards (`shadow-card`), spaced with
