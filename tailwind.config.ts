@@ -61,12 +61,12 @@ const config: Config = {
         pill: "9999px",
       },
       boxShadow: {
-        // Soft Apple elevation for white cards on the gray canvas.
-        card: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)",
+        // Light Apple elevation for white cards on the gray canvas.
+        card: "0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04)",
         // Lifted active segment in pill toggles.
         segment: "0 1px 3px rgba(0,0,0,0.12)",
-        // Carrot "pop" under the primary action.
-        carrot: "0 6px 18px rgba(245,99,0,0.35)",
+        // Subtle carrot tint under the primary action.
+        carrot: "0 2px 10px rgba(245,99,0,0.22)",
       },
       spacing: {
         "safe-top": "env(safe-area-inset-top)",
@@ -75,27 +75,14 @@ const config: Config = {
         "safe-right": "env(safe-area-inset-right)",
       },
       keyframes: {
-        // Cartoon entrance — overshoot then settle.
+        // Gentle entrance — small scale-in, no overshoot.
         "pop-in": {
-          "0%": { transform: "scale(0.6)", opacity: "0" },
-          "60%": { transform: "scale(1.08)", opacity: "1" },
+          "0%": { transform: "scale(0.92)", opacity: "0" },
           "100%": { transform: "scale(1)", opacity: "1" },
-        },
-        // The carrot can't sit still.
-        wiggle: {
-          "0%, 100%": { transform: "rotate(-7deg)" },
-          "50%": { transform: "rotate(7deg)" },
-        },
-        // Splash hop.
-        hop: {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-14%)" },
         },
       },
       animation: {
-        pop: "pop-in 0.32s cubic-bezier(0.2, 0.9, 0.2, 1.2)",
-        wiggle: "wiggle 0.5s ease-in-out",
-        hop: "hop 0.9s ease-in-out infinite",
+        pop: "pop-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)",
       },
     },
   },

@@ -5,11 +5,12 @@ import {
   useMotionValue,
   type PanInfo,
 } from "framer-motion";
+import { Pencil, Trash2 } from "lucide-react";
 import { categoryIcon, categoryLabel } from "@/lib/categories";
 import { amountColorClass, formatUsdCents } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
-const ACTION_W = 88; // px revealed per side
+const ACTION_W = 76; // px revealed per side
 
 function dateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -32,11 +33,11 @@ function SwipeRow({
   const Icon = categoryIcon(tx.category);
 
   function snapTo(target: number) {
+    // Light, crisp snap — quick tween, no springy overshoot.
     animate(x, target, {
-      type: "spring",
-      stiffness: 500,
-      damping: 40,
-      mass: 0.6,
+      type: "tween",
+      duration: 0.16,
+      ease: [0.2, 0, 0, 1],
     });
   }
 
@@ -63,32 +64,34 @@ function SwipeRow({
       {/* Edit revealed by swiping right. */}
       <button
         type="button"
+        aria-label="Edit"
         onClick={() => {
           snapTo(0);
           onEdit(tx);
         }}
-        className="absolute inset-y-0 left-0 flex items-center justify-center bg-carrot font-medium text-white"
+        className="absolute inset-y-0 left-0 flex items-center justify-center bg-carrot text-white"
         style={{ width: ACTION_W }}
       >
-        Edit
+        <Pencil className="h-5 w-5" strokeWidth={2} />
       </button>
       {/* Delete revealed by swiping left. */}
       <button
         type="button"
+        aria-label="Delete"
         onClick={() => {
           snapTo(0);
           onDelete(tx);
         }}
-        className="absolute inset-y-0 right-0 flex items-center justify-center bg-expense font-medium text-white"
+        className="absolute inset-y-0 right-0 flex items-center justify-center bg-expense text-white"
         style={{ width: ACTION_W }}
       >
-        Delete
+        <Trash2 className="h-5 w-5" strokeWidth={2} />
       </button>
 
       <motion.div
         drag="x"
         dragConstraints={{ left: -ACTION_W, right: ACTION_W }}
-        dragElastic={0.18}
+        dragElastic={0.06}
         dragMomentum={false}
         onDrag={(_, info) => {
           if (Math.abs(info.offset.x) > 6) moved.current = true;

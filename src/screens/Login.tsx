@@ -27,26 +27,19 @@ export function Login() {
 
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6">
-      {/* Mascot on the Looney Tunes bullseye. */}
-      <div className="relative flex flex-col items-center">
-        <div
-          aria-hidden
-          className="lt-rings absolute -top-10 h-64 w-64 rounded-full opacity-80"
-          style={{
-            maskImage: "radial-gradient(circle, black 55%, transparent 75%)",
-            WebkitMaskImage: "radial-gradient(circle, black 55%, transparent 75%)",
-          }}
-        />
-        <Carrot className="relative text-7xl drop-shadow-sm" animation="wiggle" />
-        <h1 className="relative mt-5 font-display text-4xl font-bold tracking-tight text-label">
+      <div className="flex flex-col items-center">
+        <Carrot className="text-6xl" />
+        <h1 className="mt-4 font-display text-3xl font-bold tracking-tight text-label">
           BucksBuddy
         </h1>
-        <p className="relative mt-1 font-display text-lg font-medium text-carrot">
-          What&apos;s up, Doc?
-        </p>
+        <p className="mt-1 text-base text-label-secondary">What&apos;s up, Doc?</p>
       </div>
 
-      <form onSubmit={signIn} className="mt-12 flex flex-col gap-3">
+      {/* Inputs grouped in a single white card on the canvas. */}
+      <form
+        onSubmit={signIn}
+        className="mt-8 flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card"
+      >
         {!OWNER_EMAIL && (
           <input
             type="email"
@@ -56,7 +49,7 @@ export function Login() {
             placeholder="you@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded-card bg-surface px-4 py-4 shadow-card outline-none ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary"
+            className="rounded-card bg-grouped px-4 py-3.5 outline-none ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary"
           />
         )}
         <input
@@ -67,13 +60,13 @@ export function Login() {
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-card bg-surface px-4 py-4 shadow-card outline-none ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary"
+          className="rounded-card bg-grouped px-4 py-3.5 outline-none ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary"
         />
         {error && <p className="px-1 text-sm font-medium text-danger">{error}</p>}
         <button
           type="submit"
           disabled={loading || password.length === 0}
-          className="press mt-2 rounded-pill bg-carrot py-4 text-lg font-semibold text-white shadow-carrot transition disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
+          className="press mt-1 rounded-pill bg-carrot py-3.5 text-lg font-semibold text-white transition disabled:bg-separator disabled:text-label-secondary"
         >
           {loading ? "Hold on, Doc…" : "Let's go"}
         </button>

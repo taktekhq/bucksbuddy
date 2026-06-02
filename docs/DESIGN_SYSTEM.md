@@ -3,11 +3,11 @@
 **An Apple app, hijacked by Bugs Bunny.**
 
 The base is a plain, grouped-iOS experience: a soft gray canvas, white cards with
-soft elevation, SF system type, generous touch targets, big numbers. Then the
-Looney Tunes energy crashes in through a few deliberate channels — one loud
-**carrot-orange** accent (the 🥕 emoji's orange), a bouncy rounded **display
-font**, springy cartoon motion, the iconic "bullseye" rings, a cheeky
-"What's up, Doc?" voice, and **money that's finally allowed to be green & red**.
+light elevation, SF system type, generous touch targets, big numbers. The Looney
+Tunes energy is a light seasoning — one loud **carrot-orange** accent (the 🥕
+emoji's orange), a rounded **display font** for the numbers, a cheeky "What's up,
+Doc?" voice, the static carrot mascot, and **money that's finally allowed to be
+green & red**. Motion stays calm; the carrot doesn't move.
 
 Tokens live in [`tailwind.config.ts`](../tailwind.config.ts) and
 [`src/index.css`](../src/index.css); this doc explains the *what* and *when* so the
@@ -24,8 +24,9 @@ look can be reused on new screens.
   "That's all, folks. 🥕", "Spendin' like a wabbit."). Keep it short and human.
 - **Mascot:** the **🥕 emoji** — rendered as the real system emoji on purpose, so
   on Apple devices it's the exact carrot the brief asked for. Use the
-  [`Carrot`](../src/components/ui/Carrot.tsx) component; it can `hop` (splash),
-  `wiggle` (one-shot greeting), or sit still (inline in chrome).
+  [`Carrot`](../src/components/ui/Carrot.tsx) component. **It sits still** — the
+  carrot never animates (no hop, no wiggle). It appears as a quiet corner mark on
+  Home, centered above the login card, and on the splash.
 - **Personality:** plain Apple **everywhere**, with the hijack showing up only at
   the points of emphasis — primary action, selected state, the mascot, the hero
   number, money color. If a surface doesn't need personality, leave it plain.
@@ -106,18 +107,17 @@ Always use `tabular-nums` for money so digits don't jitter. Display font is for
 
 - `rounded-card` = **22px** for cards, tiles, numpad keys, swipe-row containers.
 - `rounded-pill` for segmented controls, currency toggles, and the primary action.
-- `shadow-card` — soft Apple elevation for white cards on the gray canvas.
+- `shadow-card` — light Apple elevation for white cards on the gray canvas. Keep
+  it subtle; heavy drop shadows read as visually "heavy" on this layout.
 - `shadow-segment` — small lift for the active segment in pill toggles.
-- `shadow-carrot` — warm glow under the carrot primary action / selected tile.
+- `shadow-carrot` — subtle warm tint under the carrot primary action / selected tile.
 
 ## Core components
 
 Each lives in `components/ui/` (or `components/`). States:
 **default → active/selected → pressed → disabled**.
 
-- **Carrot** — the 🥕 mascot. `animation="hop" | "wiggle" | "none"`. Decorative.
-- **LT rings** — the `.lt-rings` utility (concentric carrot-tinted target rings)
-  behind the mascot on Splash / Login. Always `aria-hidden`.
+- **Carrot** — the static 🥕 mascot. Decorative; pass a font-size class.
 - **InOutToggle** — pill segmented control on a `grouped` track. Active fills with
   **money color**: Out = `bg-expense text-white`, In = `bg-income text-white`;
   inactive = `text-label-secondary`. Direction reads at a glance.
@@ -125,32 +125,38 @@ Each lives in `components/ui/` (or `components/`). States:
   `bg-carrot text-white shadow-carrot`; unselected = `bg-grouped text-label`.
 - **CurrencyToggle** — small USD/LBP pill; active = `bg-white text-carrot shadow-segment`.
 - **Numpad** — digits + `.` + `⌫`. **No `<input>`** — emits keys; parent holds a
-  string (`applyKey` enforces single dot / max 2 decimals). `⌫` is carrot-tinted.
+  string (`applyKey` enforces single dot / max 2 decimals). `⌫` is carrot-tinted;
+  **hold it (~400ms) to clear the whole amount** (emits the `clear` key + a
+  stronger haptic). A short tap deletes one character.
 - **NetTotal** — hero number in `font-display`, **green/red** via `netColorClass`,
   with a cheeky changing quip under it ("net this month · Eh, lookin' rich, Doc.").
-- **AddComposer** — the live amount is `font-display` and tinted by current
-  direction (green for In, red for Out, gray when empty). Primary action is a
-  carrot pill ("That's it!" / "Update") with `shadow-carrot`.
+- **AddComposer** — **collapsed by default**: the live amount shows as a tappable
+  header; the numpad only opens when it's tapped. The amount is `font-display`,
+  tinted by direction (green In, red Out, gray when empty). Primary action is a
+  carrot pill ("That's it!" / "Update").
 - **HistoryList row** — lucide icon in a `bg-carrot-soft` round chip + label +
   date + **green/red** signed amount. Rows are cards (`shadow-card`), spaced with
-  `gap-1.5`, no divide-y hairlines. Swipe reveals: **Edit = carrot panel**;
-  **Delete = red (`bg-expense`) panel**. Drag uses `framer-motion` spring snap
-  (`stiffness: 500, damping: 40`) with rubber-band overscroll.
+  `gap-1.5`, no divide-y hairlines. Swipe reveals **icon** actions: **Edit =
+  carrot panel** (Pencil); **Delete = red (`bg-expense`) panel** (Trash2). Drag
+  uses `framer-motion` with a light crisp tween snap (160ms), low elasticity.
 - **Primary button** — `rounded-pill bg-carrot text-white font-display shadow-carrot`.
   Disabled → `bg-separator text-label-secondary`, no shadow. Compact pill, centered.
 - **Action link** — inline `text-carrot font-semibold` ("Cancel edit", "Done").
 
 ## Motion
 
-- **Press feedback:** the `.press` utility — bouncier than stock Apple
-  (`scale(0.93)` on `:active` with an overshoot cubic-bezier). On every tappable.
-- **Entrance:** `animate-pop` (overshoot scale-in) for confirmations / freshly
-  shown elements.
-- **Mascot:** `animate-hop` (looping splash bounce), `animate-wiggle` (one-shot).
-- **Drag (history rows):** `framer-motion` `drag="x"`, `dragElastic: 0.18`, spring
-  snap (`stiffness: 500, damping: 40`), velocity-aware commit. Don't hand-roll.
+Keep it light. The personality is in the color and voice, not heavy animation.
+
+- **Press feedback:** the `.press` utility — a quick, calm `scale(0.97)` on
+  `:active`. On every tappable.
+- **Entrance:** `animate-pop` (small, no-overshoot scale-in) for confirmations /
+  freshly shown elements.
+- **Mascot:** static. The carrot never moves.
+- **Drag (history rows):** `framer-motion` `drag="x"`, low `dragElastic` (0.06),
+  light crisp **tween** snap (160ms) — no springy overshoot. Velocity-aware commit.
 - **Haptics:** progressive enhancement only — `navigator.vibrate(8)` on numpad
-  keys (Android). iOS ignores it; never block the flow on haptics.
+  keys, a stronger `vibrate(20)` on hold-to-clear (Android). iOS ignores it;
+  never block the flow on haptics.
 
 ## Reuse guide
 

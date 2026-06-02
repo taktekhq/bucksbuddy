@@ -26,14 +26,9 @@ export function Home() {
 
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col gap-4 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
-      {/* Wordmark + settings — the plain Apple nav bar, with a carrot on it. */}
+      {/* Quiet carrot mark + settings — the plain Apple nav bar. */}
       <header className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-1.5">
-          <Carrot className="text-2xl" />
-          <span className="font-display text-xl font-bold tracking-tight text-label">
-            BucksBuddy
-          </span>
-        </div>
+        <Carrot className="text-2xl" />
         <button
           type="button"
           onClick={() => navigate("/settings")}

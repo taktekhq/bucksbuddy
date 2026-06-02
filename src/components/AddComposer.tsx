@@ -33,7 +33,8 @@ export function AddComposer({
   const [category, setCategory] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>("USD");
   const [display, setDisplay] = useState("");
-  const [expanded, setExpanded] = useState<Section>("amount");
+  // Collapsed by default — the numpad only opens when the amount is tapped.
+  const [expanded, setExpanded] = useState<Section>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +52,7 @@ export function AddComposer({
       setCategory(null);
       setCurrency("USD");
       setDisplay("");
-      setExpanded("amount");
+      setExpanded(null);
       setError(null);
     }
   }, [editing]);
@@ -95,10 +96,10 @@ export function AddComposer({
     }
     if (editing) onClearEdit();
     else {
-      // Reset for the next quick entry.
+      // Reset for the next quick entry — collapsed again.
       setDisplay("");
       setCategory(null);
-      setExpanded("amount");
+      setExpanded(null);
     }
   }
 
