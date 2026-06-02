@@ -6,17 +6,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Warm, carrot-accented surfaces
+        // Minimal monochrome (mibu-style)
         surface: "#FFFFFF",
-        grouped: "#FAF6F0", // warm cream page background
-        label: "#1A1714", // warm near-black
-        "label-secondary": "#7A7269", // warm gray
-        separator: "rgba(122,114,105,0.18)", // warm, low-contrast
-        // semantic money colors
-        income: "#34C759",
-        expense: "#E5484D",
-        // BucksBuddy primary accent (carrot)
+        grouped: "#F2F2F2", // numpad keys, inactive tiles
+        label: "#000000",
+        "label-secondary": "#8E8E93",
+        separator: "rgba(0,0,0,0.08)",
+        // money values are monochrome — sign carries direction
+        income: "#000000",
+        expense: "#000000",
+        // brand kept defined for future use; not applied anywhere now
         carrot: "#FF7A00",
+        // surfaced separately so real errors stay visible
+        danger: "#FF3B30",
       },
       fontFamily: {
         sans: [

@@ -111,7 +111,7 @@ export function AddComposer({
   const SelectedIcon = category ? categoryIcon(category) : null;
 
   return (
-    <div className="overflow-hidden rounded-card bg-surface shadow-card">
+    <div>
       {/* AMOUNT — tap to expand currency + numpad; collapsed shows just the number. */}
       <button
         type="button"
@@ -162,7 +162,7 @@ export function AddComposer({
       )}
 
       <div className="flex flex-col items-center px-4 pb-5 pt-1">
-        {error && <p className="mb-2 text-center text-sm text-expense">{error}</p>}
+        {error && <p className="mb-2 text-center text-sm text-danger">{error}</p>}
         <button
           type="button"
           onClick={save}
