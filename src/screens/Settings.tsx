@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Download, Lock, ShieldCheck } from "lucide-react";
+import { ChevronLeft, Download, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
 import { RateEditor } from "@/components/RateEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
@@ -118,6 +118,8 @@ function EncryptionCard() {
   const [pass, setPass] = useState(passphrase ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Once a passphrase is saved we mask it, with an eye to reveal on demand.
+  const [reveal, setReveal] = useState(false);
 
   // Keep the field in sync when the stored passphrase changes (unlock / save /
   // turn off), so it always shows the current one.
@@ -144,6 +146,9 @@ function EncryptionCard() {
     if (error) setErr(error);
   }
 
+  // A saved-and-unlocked passphrase is the only state we mask (with the eye);
+  // while entering or unlocking, the text stays visible so it's easy to type.
+  const saved = on && !locked;
   const buttonLabel = busy
     ? "Saving…"
     : locked
@@ -203,15 +208,31 @@ function EncryptionCard() {
         )}
 
         <form onSubmit={submit} className="flex flex-col gap-2">
-          <input
-            type="text"
-            autoComplete="off"
-            required
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            placeholder="Passphrase"
-            className={inputClass}
-          />
+          <div className="relative">
+            <input
+              type={saved && !reveal ? "password" : "text"}
+              autoComplete="off"
+              required
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              placeholder="Passphrase"
+              className={`${inputClass} ${saved ? "pr-12" : ""}`}
+            />
+            {saved && (
+              <button
+                type="button"
+                onClick={() => setReveal((v) => !v)}
+                aria-label={reveal ? "Hide passphrase" : "Show passphrase"}
+                className="press absolute inset-y-0 right-0 flex items-center px-3.5 text-label-secondary"
+              >
+                {reveal ? (
+                  <EyeOff className="h-5 w-5" strokeWidth={2} />
+                ) : (
+                  <Eye className="h-5 w-5" strokeWidth={2} />
+                )}
+              </button>
+            )}
+          </div>
           <button
             type="submit"
             disabled={busy}

@@ -105,6 +105,11 @@ describe("Settings — encryption", () => {
     expect(
       screen.queryByRole("button", { name: "Turn off" }),
     ).not.toBeInTheDocument();
+    // No eye toggle while entering — the field is plainly visible.
+    expect(
+      screen.queryByRole("button", { name: /passphrase/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Passphrase")).toHaveAttribute("type", "text");
 
     await userEvent.type(screen.getByPlaceholderText("Passphrase"), "easy");
     await userEvent.click(
@@ -125,12 +130,18 @@ describe("Settings — encryption", () => {
     expect(await screen.findByText("server said no")).toBeInTheDocument();
   });
 
-  it("on + unlocked: shows the passphrase, and turns off", async () => {
+  it("on + unlocked: masks the saved passphrase with an eye toggle, and turns off", async () => {
     storeValue = makeStoreValue({ e2eMode: "passphrase", passphrase: "secret" });
     render(<Settings />);
     expect(screen.getByText("On")).toBeInTheDocument();
-    // The passphrase is visible (pre-filled in the field).
-    expect(screen.getByDisplayValue("secret")).toBeInTheDocument();
+    // Saved passphrase is present but masked by default; the eye reveals it.
+    const field = screen.getByDisplayValue("secret");
+    expect(field).toHaveAttribute("type", "password");
+    await userEvent.click(screen.getByRole("button", { name: "Show passphrase" }));
+    expect(field).toHaveAttribute("type", "text");
+    await userEvent.click(screen.getByRole("button", { name: "Hide passphrase" }));
+    expect(field).toHaveAttribute("type", "password");
+
     await userEvent.click(screen.getByRole("button", { name: "Turn off" }));
     expect(storeValue.disableEncryption).toHaveBeenCalled();
   });
@@ -168,6 +179,10 @@ describe("Settings — encryption", () => {
     expect(screen.getByText("On · locked on this device")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Turn off" }),
+    ).not.toBeInTheDocument();
+    // No eye toggle while unlocking — the field is plainly visible.
+    expect(
+      screen.queryByRole("button", { name: /passphrase/i }),
     ).not.toBeInTheDocument();
     await userEvent.type(screen.getByPlaceholderText("Passphrase"), "guess");
     await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
