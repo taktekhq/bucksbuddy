@@ -251,4 +251,28 @@ describe("Safe", () => {
     expect(storeValue.deleteSafeGoldEntry).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
+
+  it("obscures totals and movements, and blocks saving, while locked", async () => {
+    storeValue = makeStoreValue({
+      locked: true,
+      transactions: [cashTx({ amountMask: "ab12" })],
+      safeGoldEntries: [goldEntry({ gramsMask: "cd34" })],
+      safeTotalCents: 0,
+      safeGoldGrams: 0,
+    });
+    render(<Safe />);
+    // Totals obscured.
+    expect(screen.getByText("$•••••")).toBeInTheDocument();
+    expect(screen.getByText("••••")).toBeInTheDocument();
+    expect(
+      screen.getByText("Locked — unlock in Settings to see the safe."),
+    ).toBeInTheDocument();
+    // Movements obscured (mask shown instead of the real amount).
+    expect(screen.getByText("+$ab12")).toBeInTheDocument();
+    expect(screen.getByText("+cd34")).toBeInTheDocument();
+    // The composer can't save while locked.
+    expect(
+      screen.getByRole("button", { name: "Unlock in Settings to move money" }),
+    ).toBeDisabled();
+  });
 });

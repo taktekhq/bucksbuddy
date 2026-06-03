@@ -139,7 +139,9 @@ function SwipeRow({
         </div>
         <span className={`font-numeric font-medium tabular-nums ${amountColorClass(tx.is_income)}`}>
           {tx.is_income ? "+" : "-"}
-          {formatUsdCents(tx.amount_usd_cents)}
+          {tx.amountMask != null
+            ? `$${tx.amountMask}`
+            : formatUsdCents(tx.amount_usd_cents)}
         </span>
       </motion.div>
     </div>

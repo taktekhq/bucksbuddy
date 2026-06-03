@@ -15,6 +15,7 @@ export function makeStoreValue(overrides: Record<string, unknown> = {}) {
     setRate: vi.fn(async () => ({ error: null })),
     e2eMode: "default",
     locked: false,
+    passphrase: null,
     unlock: vi.fn(async () => ({ error: null })),
     enableEncryption: vi.fn(async () => ({ error: null })),
     disableEncryption: vi.fn(async () => ({ error: null })),

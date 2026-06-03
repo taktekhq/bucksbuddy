@@ -16,13 +16,17 @@ import {
   wrapMasterKey,
 } from "@/lib/crypto";
 import {
+  cipherMask,
+  clearStoredPassphrase,
   decryptGoldValues,
   decryptTxValues,
   disablePassphrase,
   enablePassphrase,
   encryptGoldValues,
   encryptTxValues,
+  loadStoredPassphrase,
   loadVault,
+  storeStoredPassphrase,
   unlockVault,
 } from "@/lib/e2e";
 
@@ -151,5 +155,19 @@ describe("e2e vault", () => {
     const noNote = await encryptGoldValues(mk, { grams: 1 });
     expect(noNote.note_enc).toBeNull();
     expect((await decryptGoldValues(mk, noNote)).note).toBeNull();
+  });
+
+  it("derives a short, garbled mask from a ciphertext (dots when absent)", () => {
+    expect(cipherMask("aB12.cd34.ef56")).toBe("aB12"); // first alnum chars
+    expect(cipherMask(null)).toBe("••••");
+    expect(cipherMask("...")).toBe("••••"); // no alnum
+  });
+
+  it("stores, reads and clears the device passphrase", () => {
+    expect(loadStoredPassphrase("u9")).toBeNull();
+    storeStoredPassphrase("u9", "hunter2");
+    expect(loadStoredPassphrase("u9")).toBe("hunter2");
+    clearStoredPassphrase("u9");
+    expect(loadStoredPassphrase("u9")).toBeNull();
   });
 });

@@ -102,14 +102,17 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
 - **Default tier:** the master key is wrapped with a public constant baked into the bundle.
   Values are still encrypted on disk, but since the constant isn't secret, they're
   operator-readable — i.e. no worse and no better than plain storage.
-- **Turning it on:** Settings → Encryption → set a passphrase. The key is re-wrapped under a
-  PBKDF2 key derived from it; from then on the server only ever sees ciphertext for that
-  user. Each sign-in starts **locked** — you enter the passphrase in Settings to decrypt for
-  the session (the key lives in memory only, never on disk or in the database).
+- **Turning it on:** Settings → Encryption → type a passphrase and turn it on. The key is
+  re-wrapped under a PBKDF2 key derived from it; from then on the server only ever sees
+  ciphertext for that user. Any passphrase is allowed (no strength gate).
+- **Stored on the device, shown in Settings.** The passphrase is cached in this browser, so
+  the app stays unlocked across restarts and you can see/change it in the Encryption card. It
+  **never leaves the device** — the server still can't read it. A brand-new device (or one
+  where the passphrase was changed elsewhere) starts **locked**: amounts render *obscured*
+  (a garbled stand-in) until you enter the passphrase once, then it's cached there too.
 - **No recovery, by design.** There is deliberately no reset: if a user forgets their
-  passphrase, the data is unrecoverable — that's the proof it's truly end-to-end. The UI
-  warns about this, and warns (without blocking) when a passphrase is weak enough for the
-  operator to brute-force.
+  passphrase and has no device that still has it cached, the data is unrecoverable — that's
+  the proof it's truly end-to-end.
 - **Scope — only the money *values*.** We encrypt what actually matters: `amount_usd_cents`,
   `original_amount` and `note` on transactions, and `grams` + `note` on gold. Each goes into
   its own `_enc` column. The **labels** (category, direction, currency, rate, date) stay as

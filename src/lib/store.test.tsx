@@ -51,6 +51,7 @@ function tx(overrides: Partial<Transaction> = {}): Transaction {
 describe("StoreProvider / useStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear(); // the passphrase is cached here per device
   });
 
   it("throws when used outside the provider", () => {
@@ -389,8 +390,10 @@ describe("StoreProvider / useStore", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.locked).toBe(true);
     expect(result.current.e2eMode).toBe("passphrase");
-    expect(result.current.transactions).toEqual([]); // can't decrypt yet
-    expect(result.current.safeGoldEntries).toEqual([]);
+    // Locked: rows are shown obscured (masked), not blank.
+    expect(result.current.transactions).toHaveLength(1);
+    expect(result.current.transactions[0].amountMask).toEqual(expect.any(String));
+    expect(result.current.safeGoldEntries[0].gramsMask).toEqual(expect.any(String));
 
     let res: Res = { error: null };
     await act(async () => {
@@ -404,10 +407,41 @@ describe("StoreProvider / useStore", () => {
     });
     expect(res.error).toBeNull();
     expect(result.current.locked).toBe(false);
+    expect(result.current.passphrase).toBe("pw"); // cached for display
+    expect(localStorage.getItem("bb-e2e-pass:u1")).toBe("pw"); // persisted
     expect(result.current.transactions).toHaveLength(1);
     expect(result.current.transactions[0].amount_usd_cents).toBe(7777);
     expect(result.current.transactions[0].note).toBe("k");
+    expect(result.current.transactions[0].amountMask).toBeUndefined();
     expect(result.current.safeGoldGrams).toBe(9); // decrypted gold
+  });
+
+  it("auto-unlocks on load from the device-stored passphrase", async () => {
+    const mk = await generateMasterKey();
+    const row = {
+      wrapped_key: await wrapMasterKey(mk, "pw"),
+      wrap_type: "passphrase",
+      verifier: await makeVerifier(mk),
+    };
+    localStorage.setItem("bb-e2e-pass:u1", "pw");
+    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.locked).toBe(false);
+    expect(result.current.passphrase).toBe("pw");
+  });
+
+  it("drops a stale stored passphrase and stays locked", async () => {
+    const mk = await generateMasterKey();
+    const row = {
+      wrapped_key: await wrapMasterKey(mk, "pw"),
+      wrap_type: "passphrase",
+      verifier: await makeVerifier(mk),
+    };
+    localStorage.setItem("bb-e2e-pass:u1", "old-passphrase"); // changed elsewhere
+    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.locked).toBe(true);
+    expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull(); // cleared
   });
 
   it("turns encryption on then off on the default tier", async () => {
@@ -421,11 +455,15 @@ describe("StoreProvider / useStore", () => {
       await result.current.enableEncryption("a strong passphrase!");
     });
     expect(result.current.e2eMode).toBe("passphrase");
+    expect(result.current.passphrase).toBe("a strong passphrase!");
+    expect(localStorage.getItem("bb-e2e-pass:u1")).toBe("a strong passphrase!");
 
     await act(async () => {
       await result.current.disableEncryption();
     });
     expect(result.current.e2eMode).toBe("default");
+    expect(result.current.passphrase).toBeNull();
+    expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull();
   });
 
   it("blocks writes and key changes while locked", async () => {
