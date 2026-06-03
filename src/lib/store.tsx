@@ -58,6 +58,9 @@ type Store = {
   unlock: (passphrase: string) => Promise<Result>;
   enableEncryption: (passphrase: string) => Promise<Result>;
   disableEncryption: () => Promise<Result>;
+  // Sign out: clears the passphrase cached on this device before ending the
+  // session, so the next person to sign in here can't reuse it.
+  signOut: () => Promise<void>;
   // Savings Safe. Cash in the safe = all-time net of "safe"-category
   // transactions: money sent to the safe (Out) adds, money taken back (In)
   // subtracts.
@@ -315,6 +318,16 @@ export function StoreProvider({
     return { error: null };
   }, [userId]);
 
+  const signOut = useCallback(async () => {
+    // Drop the cached passphrase first so it doesn't linger on this device for
+    // whoever signs in next. The in-memory key goes too. The auth listener in
+    // App flips back to the login screen once the session ends.
+    clearStoredPassphrase(userId);
+    masterKey.current = null;
+    setPassphrase(null);
+    await supabase.auth.signOut();
+  }, [userId]);
+
   const addTransaction = useCallback(
     async (tx: NewTransaction) => {
       const key = masterKey.current;
@@ -471,6 +484,7 @@ export function StoreProvider({
     unlock,
     enableEncryption,
     disableEncryption,
+    signOut,
     safeTotalCents,
     safeGoldEntries,
     safeGoldGrams,

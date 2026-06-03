@@ -9,7 +9,7 @@ import { useStore } from "@/lib/store";
 
 export function Settings() {
   const [email, setEmail] = useState("");
-  const { transactions, locked } = useStore();
+  const { transactions, locked, signOut } = useStore();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -30,11 +30,6 @@ export function Settings() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  }
-
-  async function signOut() {
-    // The auth listener in App flips back to the login screen automatically.
-    await supabase.auth.signOut();
   }
 
   return (
