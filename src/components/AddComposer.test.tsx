@@ -57,6 +57,13 @@ describe("AddComposer (add mode)", () => {
     expect(amount.value).toBe("12.34");
   });
 
+  it("shows thousands separators in the amount input as you type", async () => {
+    render(<AddComposer editing={null} onClearEdit={() => {}} />);
+    const amount = screen.getByLabelText("Amount") as HTMLInputElement;
+    await userEvent.type(amount, "1234567.89");
+    expect(amount.value).toBe("1,234,567.89");
+  });
+
   it("switches to LBP and shows the USD estimate plus grouped label", async () => {
     render(<AddComposer editing={null} onClearEdit={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: "Switch currency" }));

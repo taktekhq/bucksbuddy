@@ -136,7 +136,7 @@ export function AddComposer({
         </span>
         <input
           inputMode="decimal"
-          value={display}
+          value={groupInt(display)}
           onChange={(e) => setDisplay(sanitizeAmount(e.target.value))}
           placeholder="0.00"
           aria-label="Amount"
