@@ -14,11 +14,12 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   for auditable export.
 - **Auth:** Supabase **Google sign-in** (plus a hidden email + password for friends
   without Google). No emails sent. Data is isolated per-account via Row Level Security.
-- **Privacy:** every row is stored encrypted (AES-GCM). By default the key is wrapped with
-  a public constant — so it's operator-readable, the same as plain storage — but any user
-  can turn on **end-to-end encryption** in Settings with a passphrase, after which *no one
-  but them* (not even whoever runs the server) can read their amounts, categories or notes.
-  See **Encryption** below.
+- **Privacy:** the money **values** (amounts, gold grams, notes) are stored encrypted
+  (AES-GCM), each in its own `_enc` column; labels like category and date stay plaintext.
+  By default the key is wrapped with a public constant — so it's operator-readable, the same
+  as plain storage — but any user can turn on **end-to-end encryption** in Settings with a
+  passphrase, after which *no one but them* (not even whoever runs the server) can read their
+  amounts or notes. See **Encryption** below.
 - **Export:** CSV download (client-side) for accounting.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
@@ -40,11 +41,12 @@ needs no migration — it rides along in `transactions`.
 > `drop table if exists public.safe_entries;` in the SQL Editor — optional, it's empty and
 > ignored either way._
 
-Finally run [`0003_e2e.sql`](supabase/migrations/0003_e2e.sql) to add the `e2e_keys` vault
-and the encrypted-blob column on `transactions`, then
-[`0004_e2e_gold.sql`](supabase/migrations/0004_e2e_gold.sql) to do the same for the gold
-ledger. On each user's next load the app encrypts their existing rows in place (it has the
-key; the server never does), so this is a one-time, no-downtime change.
+Then run [`0003_e2e.sql`](supabase/migrations/0003_e2e.sql) (the `e2e_keys` vault + the
+encrypted `_enc` value columns on `transactions`) and
+[`0004_e2e_gold.sql`](supabase/migrations/0004_e2e_gold.sql) (the same for the gold ledger).
+These are the *expand* phase — they add the encrypted columns and keep the originals.
+To encrypt your existing rows and finish the switch, see **Encryption** below (it's a quick
+backfill script + one more migration).
 
 > **Savings Safe:** a vault icon next to Settings opens a dark "Safe" screen (available
 > to everyone).
@@ -98,8 +100,8 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
   entries. The master key is stored *wrapped* (encrypted) — never in the clear. We re-wrap
   the key when the passphrase changes, so the data itself is never re-encrypted.
 - **Default tier:** the master key is wrapped with a public constant baked into the bundle.
-  Rows are ciphertext, but since the constant isn't secret, the data is still
-  operator-readable — i.e. no worse and no better than plain storage, just a uniform format.
+  Values are still encrypted on disk, but since the constant isn't secret, they're
+  operator-readable — i.e. no worse and no better than plain storage.
 - **Turning it on:** Settings → Encryption → set a passphrase. The key is re-wrapped under a
   PBKDF2 key derived from it; from then on the server only ever sees ciphertext for that
   user. Each sign-in starts **locked** — you enter the passphrase in Settings to decrypt for
@@ -108,9 +110,28 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
   passphrase, the data is unrecoverable — that's the proof it's truly end-to-end. The UI
   warns about this, and warns (without blocking) when a passphrase is weak enough for the
   operator to brute-force.
-- **Scope:** both ledgers are encrypted — the `transactions` ledger (amounts, categories,
-  notes, direction, currency, rate) and the gold ledger (`safe_gold_entries`: deposit/
-  withdrawal, grams, note). Only ids, `user_id` and `occurred_at` stay plaintext.
+- **Scope — only the money *values*.** We encrypt what actually matters: `amount_usd_cents`,
+  `original_amount` and `note` on transactions, and `grams` + `note` on gold. Each goes into
+  its own `_enc` column. The **labels** (category, direction, currency, rate, date) stay as
+  plaintext columns — useful, and not the secret. So the operator can see *"an Out in
+  groceries on June 1"* but not the amount.
+
+### Finishing the rollout (encrypt existing rows)
+
+A plain SQL migration **can't** do this: the key never lives on the server, so Postgres has
+nothing to encrypt with. It's a small script that holds the key, run once:
+
+```bash
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/encrypt-backfill.ts
+```
+
+It fills the `_enc` columns from the originals and **leaves the originals in place** so you
+can verify. It's idempotent (re-runnable) and skips users who've already set a passphrase
+(only their browser can encrypt those). Then verify the counts are zero (queries are in
+[`0005_drop_plaintext_values.sql`](supabase/migrations/0005_drop_plaintext_values.sql)) and
+run that migration to **drop** the plaintext columns — it's guarded and refuses to run if
+anything is still unencrypted, so a premature run can't lose data. End state: the same
+column count as before, just with the values encrypted.
 
 ## Local development
 
@@ -154,7 +175,8 @@ src/lib/                supabase client, store (in-memory cache), router, useSes
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
-supabase/migrations/    0001_init.sql, 0002_safe_gold.sql, 0003_e2e.sql, 0004_e2e_gold.sql
+supabase/migrations/    0001_init.sql … 0003_e2e.sql, 0004_e2e_gold.sql, 0005_drop_plaintext_values.sql
+scripts/                icons-from-source.mjs, encrypt-backfill.ts (one-off E2E backfill)
 docs/DESIGN_SYSTEM.md   reusable design system
 scripts/icons-from-source.mjs
 ```

@@ -33,23 +33,27 @@ export type NewTransaction = {
   note?: string | null;
 };
 
-// A transaction row as it comes back from the database. With E2E encryption the
-// sensitive columns are null and the values live in `ciphertext` instead;
-// legacy (pre-encryption) rows still carry the plaintext columns and no
-// ciphertext. The store turns one of these into a decrypted `Transaction`.
+// A transaction row as it comes back from the database. The money *values* are
+// encrypted per-column (`*_enc`); the labels stay plaintext. Legacy rows (not
+// yet backfilled) still carry the plaintext `amount_usd_cents` / `original_amount`
+// / `note`, which the drop migration removes later — hence optional. The store
+// turns one of these into a decrypted `Transaction`.
 export type TransactionRow = {
   id: string;
   user_id: string;
   occurred_at: string;
   created_at: string;
-  ciphertext: string | null;
-  is_income: boolean | null;
-  category: string | null;
-  amount_usd_cents: number | null;
-  original_currency: Currency | null;
-  original_amount: number | null;
-  rate_used: number | null;
-  note: string | null;
+  is_income: boolean;
+  category: string;
+  original_currency: Currency;
+  rate_used: number;
+  amount_usd_cents_enc: string | null;
+  original_amount_enc: string | null;
+  note_enc: string | null;
+  // Legacy plaintext, present until the drop migration runs.
+  amount_usd_cents?: number | null;
+  original_amount?: number | null;
+  note?: string | null;
 };
 
 // Cash in the Safe is not its own table: it's recorded as normal transactions
@@ -74,16 +78,17 @@ export type NewSafeGoldEntry = {
   note?: string | null;
 };
 
-// A gold row as stored: like SafeGoldEntry but, once encrypted, the sensitive
-// columns are null and the values live in `ciphertext`. Legacy rows still carry
-// the plaintext columns and no ciphertext.
+// A gold row as stored: `grams` and `note` are encrypted per-column; is_deposit
+// stays plaintext. Legacy plaintext columns remain until the drop migration.
 export type SafeGoldEntryRow = {
   id: string;
   user_id: string;
   occurred_at: string;
   created_at: string;
-  ciphertext: string | null;
-  is_deposit: boolean | null;
-  grams: number | null;
-  note: string | null;
+  is_deposit: boolean;
+  grams_enc: string | null;
+  note_enc: string | null;
+  // Legacy plaintext, present until the drop migration runs.
+  grams?: number | null;
+  note?: string | null;
 };

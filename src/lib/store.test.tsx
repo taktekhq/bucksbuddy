@@ -7,7 +7,7 @@ import {
   makeVerifier,
   wrapMasterKey,
 } from "@/lib/crypto";
-import { encryptGold, encryptTransaction } from "@/lib/e2e";
+import { encryptGoldValues, encryptTxValues } from "@/lib/e2e";
 import type { Transaction } from "@/types/db";
 
 type Res = { error: string | null };
@@ -356,38 +356,30 @@ describe("StoreProvider / useStore", () => {
       wrap_type: "passphrase",
       verifier: await makeVerifier(mk),
     };
-    const ciphertext = await encryptTransaction(
-      mk,
-      tx({ id: "enc", amount_usd_cents: 7777, note: "k" }),
-    );
+    const txEnc = await encryptTxValues(mk, {
+      amount_usd_cents: 7777,
+      original_amount: 77.77,
+      note: "k",
+    });
     const encRow = {
       id: "enc",
       user_id: "u1",
       occurred_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
-      ciphertext,
-      is_income: null,
-      category: null,
-      amount_usd_cents: null,
-      original_currency: null,
-      original_amount: null,
-      rate_used: null,
-      note: null,
+      is_income: false,
+      category: "groceries",
+      original_currency: "USD",
+      rate_used: 89500,
+      ...txEnc,
     };
-    const goldCipher = await encryptGold(mk, {
-      is_deposit: true,
-      grams: 9,
-      note: null,
-    });
+    const goldEnc = await encryptGoldValues(mk, { grams: 9, note: null });
     const encGoldRow = {
       id: "eg",
       user_id: "u1",
       occurred_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
-      ciphertext: goldCipher,
-      is_deposit: null,
-      grams: null,
-      note: null,
+      is_deposit: true,
+      ...goldEnc,
     };
     const { result } = setup({
       "e2e_keys:select": () => ({ data: row }),

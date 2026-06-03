@@ -14,12 +14,12 @@ import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import {
-  decryptGold,
-  decryptTransaction,
+  decryptGoldValues,
+  decryptTxValues,
   disablePassphrase,
   enablePassphrase,
-  encryptGold,
-  encryptTransaction,
+  encryptGoldValues,
+  encryptTxValues,
   loadVault,
   unlockVault,
   type E2EMode,
@@ -68,29 +68,75 @@ const StoreContext = createContext<Store | null>(null);
 
 const LOCKED_MSG = "Locked — unlock with your passphrase first.";
 
-// The plaintext transaction columns, blanked when a row is encrypted: the
-// values live in `ciphertext` instead.
-const CLEAR_PLAINTEXT = {
-  is_income: null,
-  category: null,
-  amount_usd_cents: null,
-  original_currency: null,
-  original_amount: null,
-  rate_used: null,
-  note: null,
-};
-
-// The same, for the gold ledger.
-const CLEAR_GOLD_PLAINTEXT = {
-  is_deposit: null,
-  grams: null,
-  note: null,
-};
-
-// The encrypted-into-ciphertext fields of a NewTransaction, as an in-memory
-// Transaction carries them (note normalised to null).
-function secretFields(tx: NewTransaction) {
+// Turn a stored row into a decrypted Transaction. The labels are plaintext; the
+// money values come from the `_enc` columns, or — for rows not yet backfilled —
+// from the legacy plaintext columns.
+async function rowToTransaction(
+  row: TransactionRow,
+  masterKey: CryptoKey,
+): Promise<Transaction> {
+  const values = row.amount_usd_cents_enc
+    ? await decryptTxValues(masterKey, {
+        amount_usd_cents_enc: row.amount_usd_cents_enc,
+        original_amount_enc: row.original_amount_enc!,
+        note_enc: row.note_enc,
+      })
+    : {
+        amount_usd_cents: row.amount_usd_cents!,
+        original_amount: row.original_amount!,
+        note: row.note ?? null,
+      };
   return {
+    id: row.id,
+    user_id: row.user_id,
+    is_income: row.is_income,
+    category: row.category,
+    original_currency: row.original_currency,
+    rate_used: row.rate_used,
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
+    ...values,
+  };
+}
+
+async function rowToGold(
+  row: SafeGoldEntryRow,
+  masterKey: CryptoKey,
+): Promise<SafeGoldEntry> {
+  const values = row.grams_enc
+    ? await decryptGoldValues(masterKey, {
+        grams_enc: row.grams_enc,
+        note_enc: row.note_enc,
+      })
+    : { grams: row.grams!, note: row.note ?? null };
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    is_deposit: row.is_deposit,
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
+    ...values,
+  };
+}
+
+// The plaintext-label columns written on every (encrypted) transaction row.
+function txLabels(tx: NewTransaction) {
+  return {
+    is_income: tx.is_income,
+    category: tx.category,
+    original_currency: tx.original_currency,
+    rate_used: tx.rate_used,
+  };
+}
+
+// The in-memory Transaction for an optimistic add/update: values straight from
+// the input, ids/timestamps from the row the database returned.
+function txInMemory(row: TransactionRow, tx: NewTransaction): Transaction {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
     is_income: tx.is_income,
     category: tx.category,
     amount_usd_cents: tx.amount_usd_cents,
@@ -98,55 +144,6 @@ function secretFields(tx: NewTransaction) {
     original_amount: tx.original_amount,
     rate_used: tx.rate_used,
     note: tx.note ?? null,
-  };
-}
-
-// A legacy (pre-encryption) row still has its plaintext columns populated.
-function legacyFields(row: TransactionRow) {
-  return {
-    is_income: row.is_income!,
-    category: row.category!,
-    amount_usd_cents: row.amount_usd_cents!,
-    original_currency: row.original_currency!,
-    original_amount: row.original_amount!,
-    rate_used: row.rate_used!,
-    note: row.note,
-  };
-}
-
-async function rowToTransaction(
-  row: TransactionRow,
-  masterKey: CryptoKey,
-): Promise<Transaction> {
-  const fields = row.ciphertext
-    ? await decryptTransaction(masterKey, row.ciphertext)
-    : legacyFields(row);
-  return {
-    id: row.id,
-    user_id: row.user_id,
-    occurred_at: row.occurred_at,
-    created_at: row.created_at,
-    ...fields,
-  };
-}
-
-function legacyGoldFields(row: SafeGoldEntryRow) {
-  return { is_deposit: row.is_deposit!, grams: row.grams!, note: row.note };
-}
-
-async function rowToGold(
-  row: SafeGoldEntryRow,
-  masterKey: CryptoKey,
-): Promise<SafeGoldEntry> {
-  const fields = row.ciphertext
-    ? await decryptGold(masterKey, row.ciphertext)
-    : legacyGoldFields(row);
-  return {
-    id: row.id,
-    user_id: row.user_id,
-    occurred_at: row.occurred_at,
-    created_at: row.created_at,
-    ...fields,
   };
 }
 
@@ -167,8 +164,9 @@ export function StoreProvider({
   // lands in React state / devtools and changing it doesn't trigger renders.
   const masterKey = useRef<CryptoKey | null>(null);
 
-  // Load profile, gold and (if unlocked) the decrypted transactions. Encrypts
-  // any legacy plaintext rows in place on the way — the one-time rollout.
+  // Load the exchange rate plus, when unlocked, the decrypted transactions and
+  // gold. Backfilling old plaintext rows into the `_enc` columns is a separate
+  // manual step (the encrypt-backfill script), not done here.
   const loadData = useCallback(async () => {
     setLoading(true);
     // The exchange rate isn't encrypted, so it loads regardless of lock state.
@@ -202,36 +200,6 @@ export function StoreProvider({
     ]);
     const txRows = (txData ?? []) as TransactionRow[];
     const goldRows = (goldData ?? []) as SafeGoldEntryRow[];
-
-    // Encrypt any legacy plaintext rows in place (the one-time rollout).
-    const legacyTx = txRows.filter((r) => !r.ciphertext);
-    if (legacyTx.length > 0) {
-      await Promise.all(
-        legacyTx.map(async (r) =>
-          supabase
-            .from("transactions")
-            .update({
-              ...CLEAR_PLAINTEXT,
-              ciphertext: await encryptTransaction(key, legacyFields(r)),
-            })
-            .eq("id", r.id),
-        ),
-      );
-    }
-    const legacyGold = goldRows.filter((r) => !r.ciphertext);
-    if (legacyGold.length > 0) {
-      await Promise.all(
-        legacyGold.map(async (r) =>
-          supabase
-            .from("safe_gold_entries")
-            .update({
-              ...CLEAR_GOLD_PLAINTEXT,
-              ciphertext: await encryptGold(key, legacyGoldFields(r)),
-            })
-            .eq("id", r.id),
-        ),
-      );
-    }
 
     setTransactions(
       await Promise.all(txRows.map((r) => rowToTransaction(r, key))),
@@ -291,24 +259,14 @@ export function StoreProvider({
     async (tx: NewTransaction) => {
       const key = masterKey.current;
       if (!key) return { error: LOCKED_MSG };
-      const ciphertext = await encryptTransaction(key, tx);
+      const enc = await encryptTxValues(key, tx);
       const { data, error } = await supabase
         .from("transactions")
-        .insert({ user_id: userId, ciphertext })
+        .insert({ user_id: userId, ...txLabels(tx), ...enc })
         .select()
         .single();
       if (error) return { error: error.message };
-      const row = data as TransactionRow;
-      setTransactions((prev) => [
-        {
-          id: row.id,
-          user_id: row.user_id,
-          occurred_at: row.occurred_at,
-          created_at: row.created_at,
-          ...secretFields(tx),
-        },
-        ...prev,
-      ]);
+      setTransactions((prev) => [txInMemory(data as TransactionRow, tx), ...prev]);
       return { error: null };
     },
     [userId],
@@ -317,27 +275,17 @@ export function StoreProvider({
   const updateTransaction = useCallback(async (id: string, tx: NewTransaction) => {
     const key = masterKey.current;
     if (!key) return { error: LOCKED_MSG };
-    const ciphertext = await encryptTransaction(key, tx);
+    const enc = await encryptTxValues(key, tx);
     const { data, error } = await supabase
       .from("transactions")
-      .update({ ...CLEAR_PLAINTEXT, ciphertext })
+      .update({ ...txLabels(tx), ...enc })
       .eq("id", id)
       .select()
       .single();
     if (error) return { error: error.message };
     const row = data as TransactionRow;
     setTransactions((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? {
-              id: row.id,
-              user_id: row.user_id,
-              occurred_at: row.occurred_at,
-              created_at: row.created_at,
-              ...secretFields(tx),
-            }
-          : t,
-      ),
+      prev.map((t) => (t.id === id ? txInMemory(row, tx) : t)),
     );
     return { error: null };
   }, []);
@@ -374,10 +322,10 @@ export function StoreProvider({
     async (entry: NewSafeGoldEntry) => {
       const key = masterKey.current;
       if (!key) return { error: LOCKED_MSG };
-      const ciphertext = await encryptGold(key, entry);
+      const enc = await encryptGoldValues(key, entry);
       const { data, error } = await supabase
         .from("safe_gold_entries")
-        .insert({ user_id: userId, ciphertext })
+        .insert({ user_id: userId, is_deposit: entry.is_deposit, ...enc })
         .select()
         .single();
       if (error) return { error: error.message };

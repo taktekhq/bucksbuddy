@@ -15,12 +15,12 @@ import {
   wrapMasterKey,
 } from "@/lib/crypto";
 import {
-  decryptGold,
-  decryptTransaction,
+  decryptGoldValues,
+  decryptTxValues,
   disablePassphrase,
   enablePassphrase,
-  encryptGold,
-  encryptTransaction,
+  encryptGoldValues,
+  encryptTxValues,
   loadVault,
   unlockVault,
 } from "@/lib/e2e";
@@ -41,14 +41,7 @@ async function keyRow(passphrase: string, wrap_type: "default" | "passphrase") {
   };
 }
 
-const SAMPLE = {
-  is_income: true,
-  category: "pay",
-  amount_usd_cents: 12345,
-  original_currency: "USD" as const,
-  original_amount: 123.45,
-  rate_used: 89500,
-};
+const SAMPLE = { amount_usd_cents: 12345, original_amount: 123.45 };
 
 describe("e2e vault", () => {
   beforeEach(() => {
@@ -116,31 +109,30 @@ describe("e2e vault", () => {
     ).toHaveLength(2);
   });
 
-  it("round-trips a transaction's secret fields, with and without a note", async () => {
+  it("round-trips a transaction's money values, with and without a note", async () => {
     const mk = await generateMasterKey();
-    const withNote = await encryptTransaction(mk, { ...SAMPLE, note: "rent" });
-    expect(await decryptTransaction(mk, withNote)).toMatchObject({
-      category: "pay",
+    const withNote = await encryptTxValues(mk, { ...SAMPLE, note: "rent" });
+    // Each value is independently encrypted (and not stored in the clear).
+    expect(withNote.amount_usd_cents_enc).not.toContain("12345");
+    expect(await decryptTxValues(mk, withNote)).toEqual({
       amount_usd_cents: 12345,
+      original_amount: 123.45,
       note: "rent",
     });
-    const noNote = await encryptTransaction(mk, SAMPLE);
-    expect((await decryptTransaction(mk, noNote)).note).toBeNull();
+    const noNote = await encryptTxValues(mk, SAMPLE);
+    expect(noNote.note_enc).toBeNull();
+    expect((await decryptTxValues(mk, noNote)).note).toBeNull();
   });
 
-  it("round-trips a gold entry's secret fields, with and without a note", async () => {
+  it("round-trips a gold entry's money values, with and without a note", async () => {
     const mk = await generateMasterKey();
-    const withNote = await encryptGold(mk, {
-      is_deposit: true,
+    const withNote = await encryptGoldValues(mk, { grams: 12.5, note: "wedding" });
+    expect(await decryptGoldValues(mk, withNote)).toEqual({
       grams: 12.5,
       note: "wedding",
     });
-    expect(await decryptGold(mk, withNote)).toMatchObject({
-      is_deposit: true,
-      grams: 12.5,
-      note: "wedding",
-    });
-    const noNote = await encryptGold(mk, { is_deposit: false, grams: 1 });
-    expect((await decryptGold(mk, noNote)).note).toBeNull();
+    const noNote = await encryptGoldValues(mk, { grams: 1 });
+    expect(noNote.note_enc).toBeNull();
+    expect((await decryptGoldValues(mk, noNote)).note).toBeNull();
   });
 });

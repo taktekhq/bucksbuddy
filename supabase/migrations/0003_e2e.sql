@@ -37,17 +37,19 @@ create trigger e2e_keys_touch
   before update on public.e2e_keys
   for each row execute function public.touch_updated_at();
 
--- ===== transactions: encrypted blob =====
--- The sensitive fields (amount, category, note, direction, currency, rate) move
--- into `ciphertext`; only id/user_id/occurred_at/created_at stay plaintext.
--- The old columns are kept but made nullable so encrypted rows can leave them
--- empty. (Their >= 0 / currency CHECKs already tolerate NULL.)
+-- ===== transactions: encrypted money values (per column) =====
+-- Only the money *values* are encrypted, each into its own `_enc` column. The
+-- labels (is_income, category, original_currency, rate_used) stay as plaintext
+-- columns. This is phase 1 (expand): add the `_enc` columns and make the
+-- originals nullable so new rows can be written encrypted. The app backfills
+-- nothing on its own — run scripts/encrypt-backfill.ts, verify, then run
+-- 0005_drop_plaintext_values.sql to drop the originals (phase 3 / contract).
 alter table public.transactions
-  add column if not exists ciphertext text;
+  add column if not exists amount_usd_cents_enc text,
+  add column if not exists original_amount_enc  text,
+  add column if not exists note_enc             text;
 
-alter table public.transactions alter column is_income         drop not null;
-alter table public.transactions alter column category          drop not null;
-alter table public.transactions alter column amount_usd_cents  drop not null;
-alter table public.transactions alter column original_currency drop not null;
-alter table public.transactions alter column original_amount   drop not null;
-alter table public.transactions alter column rate_used         drop not null;
+alter table public.transactions alter column amount_usd_cents drop not null;
+alter table public.transactions alter column original_amount  drop not null;
+-- (note is already nullable; is_income/category/original_currency/rate_used stay
+--  NOT NULL — they remain plaintext.)

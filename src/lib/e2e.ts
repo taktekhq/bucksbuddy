@@ -1,5 +1,6 @@
 // The encryption "vault": bridges the crypto primitives (lib/crypto) to the
-// Supabase `e2e_keys` table and to transaction rows. Pure data layer — no React.
+// Supabase `e2e_keys` table and to the per-field encrypted columns. Pure data
+// layer — no React.
 import { supabase } from "@/lib/supabase";
 import {
   DEFAULT_PASSPHRASE,
@@ -11,80 +12,88 @@ import {
   unwrapMasterKey,
   wrapMasterKey,
 } from "@/lib/crypto";
-import type {
-  NewSafeGoldEntry,
-  NewTransaction,
-  SafeGoldEntry,
-  Transaction,
-} from "@/types/db";
 
 export type E2EMode = "default" | "passphrase";
 
 type KeyRow = { wrapped_key: string; wrap_type: E2EMode; verifier: string };
 
-// The sensitive part of a transaction that gets encrypted into `ciphertext`.
-// occurred_at / id / user_id / created_at stay plaintext (needed for ordering,
-// identity and RLS, and they leak nothing about amount or category).
-type TxSecret = Pick<
-  Transaction,
-  | "is_income"
-  | "category"
-  | "amount_usd_cents"
-  | "original_currency"
-  | "original_amount"
-  | "rate_used"
-  | "note"
->;
+// We encrypt only the money *values* (and free-text notes); the labels
+// (category, direction, currency, rate, date) stay as plaintext columns. Each
+// value goes into its own `_enc` column, so the schema keeps a clean 1:1 shape.
+function encNumber(masterKey: CryptoKey, n: number): Promise<string> {
+  return encryptString(masterKey, String(n));
+}
 
-function secretOf(tx: NewTransaction | Transaction): TxSecret {
+async function decNumber(masterKey: CryptoKey, cipher: string): Promise<number> {
+  return Number(await decryptString(masterKey, cipher));
+}
+
+function encNote(
+  masterKey: CryptoKey,
+  note: string | null | undefined,
+): Promise<string | null> {
+  if (note === null || note === undefined) return Promise.resolve(null);
+  return encryptString(masterKey, note);
+}
+
+// --- transactions: amount_usd_cents / original_amount / note ---
+export type TxPlain = {
+  amount_usd_cents: number;
+  original_amount: number;
+  note?: string | null;
+};
+export type TxEnc = {
+  amount_usd_cents_enc: string;
+  original_amount_enc: string;
+  note_enc: string | null;
+};
+
+export async function encryptTxValues(
+  masterKey: CryptoKey,
+  tx: TxPlain,
+): Promise<TxEnc> {
   return {
-    is_income: tx.is_income,
-    category: tx.category,
-    amount_usd_cents: tx.amount_usd_cents,
-    original_currency: tx.original_currency,
-    original_amount: tx.original_amount,
-    rate_used: tx.rate_used,
-    note: tx.note ?? null,
+    amount_usd_cents_enc: await encNumber(masterKey, tx.amount_usd_cents),
+    original_amount_enc: await encNumber(masterKey, tx.original_amount),
+    note_enc: await encNote(masterKey, tx.note),
   };
 }
 
-export function encryptTransaction(
+export async function decryptTxValues(
   masterKey: CryptoKey,
-  tx: NewTransaction | Transaction,
-): Promise<string> {
-  return encryptString(masterKey, JSON.stringify(secretOf(tx)));
+  row: TxEnc,
+): Promise<{ amount_usd_cents: number; original_amount: number; note: string | null }> {
+  return {
+    amount_usd_cents: await decNumber(masterKey, row.amount_usd_cents_enc),
+    original_amount: await decNumber(masterKey, row.original_amount_enc),
+    note:
+      row.note_enc === null ? null : await decryptString(masterKey, row.note_enc),
+  };
 }
 
-export async function decryptTransaction(
+// --- gold: grams / note ---
+export type GoldPlain = { grams: number; note?: string | null };
+export type GoldEnc = { grams_enc: string; note_enc: string | null };
+
+export async function encryptGoldValues(
   masterKey: CryptoKey,
-  ciphertext: string,
-): Promise<TxSecret> {
-  return JSON.parse(await decryptString(masterKey, ciphertext)) as TxSecret;
+  entry: GoldPlain,
+): Promise<GoldEnc> {
+  return {
+    grams_enc: await encNumber(masterKey, entry.grams),
+    note_enc: await encNote(masterKey, entry.note),
+  };
 }
 
-// The same shape for the gold ledger: is_deposit/grams/note are encrypted;
-// occurred_at and the ids stay plaintext.
-type GoldSecret = Pick<SafeGoldEntry, "is_deposit" | "grams" | "note">;
-
-export function encryptGold(
+export async function decryptGoldValues(
   masterKey: CryptoKey,
-  entry: NewSafeGoldEntry | SafeGoldEntry,
-): Promise<string> {
-  return encryptString(
-    masterKey,
-    JSON.stringify({
-      is_deposit: entry.is_deposit,
-      grams: entry.grams,
-      note: entry.note ?? null,
-    }),
-  );
-}
-
-export async function decryptGold(
-  masterKey: CryptoKey,
-  ciphertext: string,
-): Promise<GoldSecret> {
-  return JSON.parse(await decryptString(masterKey, ciphertext)) as GoldSecret;
+  row: GoldEnc,
+): Promise<{ grams: number; note: string | null }> {
+  return {
+    grams: await decNumber(masterKey, row.grams_enc),
+    note:
+      row.note_enc === null ? null : await decryptString(masterKey, row.note_enc),
+  };
 }
 
 async function fetchKeyRow(userId: string): Promise<KeyRow | null> {
