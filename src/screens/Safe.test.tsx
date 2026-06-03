@@ -166,6 +166,13 @@ describe("Safe", () => {
     expect(amount.value).toBe("12.99");
   });
 
+  it("shows thousands separators in the cash amount input as you type", async () => {
+    render(<Safe />);
+    const amount = screen.getByLabelText("Amount") as HTMLInputElement;
+    await userEvent.type(amount, "1234567.89");
+    expect(amount.value).toBe("1,234,567.89");
+  });
+
   it("clamps grams to three decimals", async () => {
     render(<Safe />);
     await userEvent.click(screen.getByRole("button", { name: /Gold/ }));
