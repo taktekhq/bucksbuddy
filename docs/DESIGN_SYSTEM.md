@@ -78,7 +78,9 @@ Three roles, two custom decisions:
 - **`font-display` → Grobold.** The chunky Looney Tunes cartoon face, self-hosted
   via `@font-face` from `/public/fonts/`. **Grey only: the logo (wordmark) and
   section headers (History, Settings, the "What's up, Doc?" label).** Never on
-  numbers, body, buttons, or anything colored (no white-on-carrot, no green/red).
+  numbers, body, buttons, anything colored (no white-on-carrot, no green/red), or
+  **anything inside a card** — in-card titles and copy are plain SF; the cartoon
+  font belongs to the grey section header sitting *above* the card, not within it.
   Two hard rules: **always `uppercase`** (the font is built for it), and **never
   pure black** — Grobold reads heavy, so it lives in `label-muted` (dark grey) or
   `label-secondary`, never `label` (#1C1C1E). The wordmark stacks on two lines
@@ -103,6 +105,7 @@ Three roles, two custom decisions:
 |---|---|---|
 | Wordmark | `font-display text-sm font-bold uppercase leading-none text-label-muted` | Stacked `Bucks`/`Buddy` lockup beside the 🥕 — small, two lines, dark grey |
 | Section header | `font-display text-sm font-semibold uppercase tracking-wide text-label-secondary` | "History", Settings title, "What's up, Doc?" |
+| Card title (in-card) | `text-base font-semibold text-label` (SF, **not** Grobold) | Titles *inside* a card (e.g. "End-to-end encryption"). The cartoon font lives on the grey section header above the card, never within it |
 | Month caption | `text-[13px] font-medium uppercase tracking-wide text-label-secondary` (SF, **not** Grobold) | "JUNE 2026" **above** the hero number |
 | Button label | `text-lg font-semibold text-white` (SF, **not** Grobold) | Primary carrot pill — "Add"/"Save" |
 | Net total (hero) | `font-numeric text-4xl font-bold tabular-nums` + green/red, left-aligned, month caption above | Home hero card |

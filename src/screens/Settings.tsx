@@ -162,13 +162,13 @@ function EncryptionCard() {
       <SectionHeader>Encryption</SectionHeader>
       <div
         className={`flex flex-col gap-3 rounded-card p-4 shadow-card ${
-          on ? "bg-income/10 ring-1 ring-income/20" : "bg-surface"
+          on ? "bg-income/15 ring-1 ring-income/30" : "bg-surface"
         }`}
       >
         <div className="flex items-center gap-3">
           <span
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-              on ? "bg-income/15 text-income" : "bg-grouped text-label-secondary"
+              on ? "bg-income text-surface" : "bg-grouped text-label-secondary"
             }`}
           >
             {on ? (
@@ -178,27 +178,17 @@ function EncryptionCard() {
             )}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-display text-sm font-bold uppercase leading-none text-label-muted">
+            <p className="text-base font-semibold leading-tight text-label">
               End-to-end encryption
             </p>
             <p
-              className={`mt-1 text-sm font-medium ${
+              className={`mt-0.5 text-sm font-medium ${
                 on ? "text-income" : "text-label-secondary"
               }`}
             >
               {on ? (locked ? "On · locked on this device" : "On") : "Off"}
             </p>
           </div>
-          {on && !locked && (
-            <button
-              type="button"
-              onClick={turnOff}
-              disabled={busy}
-              className="press shrink-0 text-sm font-medium text-expense disabled:opacity-50"
-            >
-              Turn off
-            </button>
-          )}
         </div>
 
         {!on && (
@@ -241,6 +231,17 @@ function EncryptionCard() {
             {buttonLabel}
           </button>
         </form>
+
+        {on && !locked && (
+          <button
+            type="button"
+            onClick={turnOff}
+            disabled={busy}
+            className="press rounded-pill bg-expense/10 py-3 text-base font-semibold text-expense transition disabled:opacity-50"
+          >
+            Turn off encryption
+          </button>
+        )}
 
         <p className="px-1 text-xs text-label-secondary">
           If you forget this passphrase, the data cannot be recovered.
