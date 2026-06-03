@@ -5,10 +5,11 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
 import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
+import { HistorySheet } from "@/components/HistorySheet";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
-import { monthLabel } from "@/lib/dates";
+import { isToday, monthLabel } from "@/lib/dates";
 import { formatUsdCents } from "@/lib/money";
 import { formatGrams } from "@/lib/gold";
 import type { Transaction } from "@/types/db";
@@ -27,6 +28,11 @@ export function Home() {
     locked,
   } = useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
+
+  // The full history lives in a "Show all" drawer; the page itself only lists
+  // today's entries so it doesn't grow without bound.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const todays = transactions.filter((t) => isToday(t.occurred_at));
 
   // The safe balance is private by default — tap the eye to reveal it.
   const [safeShown, setSafeShown] = useState(false);
@@ -174,15 +180,40 @@ export function Home() {
         )}
       </section>
 
-      {/* History. */}
+      {/* History — today's entries inline; everything else in the drawer. */}
       <section className="flex flex-col gap-2">
-        <SectionHeader>History</SectionHeader>
+        <div className="flex items-center justify-between">
+          <SectionHeader>History</SectionHeader>
+          {transactions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              className="press px-2 text-sm font-semibold text-carrot"
+            >
+              Show all
+            </button>
+          )}
+        </div>
         {loading && transactions.length === 0 ? (
           <p className="py-10 text-center text-label-secondary">Loading…</p>
+        ) : todays.length > 0 ? (
+          <HistoryList rows={todays} onEdit={handleEdit} onDelete={handleDelete} />
         ) : (
-          <HistoryList rows={transactions} onEdit={handleEdit} onDelete={handleDelete} />
+          <p className="py-10 text-center text-label-secondary">
+            {transactions.length > 0
+              ? "Nothin' today, Doc. Tap “Show all” for the full history."
+              : "Nothin' here yet, Doc. Add your first one above."}
+          </p>
         )}
       </section>
+
+      <HistorySheet
+        open={historyOpen}
+        rows={transactions}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onClose={() => setHistoryOpen(false)}
+      />
     </main>
   );
 }
