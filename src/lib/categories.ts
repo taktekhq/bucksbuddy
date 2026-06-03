@@ -3,10 +3,12 @@
 // stored id (used by the recent list and CSV export).
 
 import {
+  Award,
   Briefcase,
   Car,
   CircleParking,
   Coffee,
+  Coins,
   Dumbbell,
   Fuel,
   Gift,
@@ -18,13 +20,16 @@ import {
   Laptop,
   MoreHorizontal,
   PartyPopper,
+  PiggyBank,
   ShoppingBag,
   ShoppingCart,
   Sparkles,
+  TrendingUp,
   Undo2,
   Users,
   UtensilsCrossed,
   Vault,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -47,10 +52,16 @@ export type Category = {
 
 export const INCOME_CATEGORIES: Category[] = [
   { id: "salary", label: "Salary", icon: Briefcase, color: "#34C759" },
+  { id: "allowance", label: "Allowance", icon: Wallet, color: "#FF9500" },
   { id: "freelance", label: "Freelance", icon: Laptop, color: "#007AFF" },
-  { id: "rent_income", label: "Rent", icon: KeyRound, color: "#30B0C7" },
-  { id: "refund", label: "Refund", icon: Undo2, color: "#AF52DE" },
+  { id: "bonus", label: "Bonus", icon: Award, color: "#FF6482" },
+  { id: "gift", label: "Gift", icon: Gift, color: "#FF2D55" },
   { id: "family", label: "Family", icon: Users, color: "#00C7BE" },
+  { id: "rent_income", label: "Rent", icon: KeyRound, color: "#30B0C7" },
+  { id: "investment", label: "Investment", icon: TrendingUp, color: "#5856D6" },
+  { id: "savings", label: "Savings", icon: PiggyBank, color: "#FFCC00" },
+  { id: "cashback", label: "Cashback", icon: Coins, color: "#32ADE6" },
+  { id: "refund", label: "Refund", icon: Undo2, color: "#AF52DE" },
   { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
 
