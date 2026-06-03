@@ -6,7 +6,6 @@ import {
   encryptString,
   generateMasterKey,
   makeVerifier,
-  passphraseStrength,
   unwrapMasterKey,
   wrapMasterKey,
 } from "@/lib/crypto";
@@ -56,13 +55,5 @@ describe("crypto", () => {
     const verifier = await makeVerifier(mk);
     expect(await checkVerifier(mk, verifier)).toBe(true);
     expect(await checkVerifier(other, verifier)).toBe(false);
-  });
-
-  it("rates passphrase strength across all bands", () => {
-    expect(passphraseStrength("abc")).toBe("weak"); // too short
-    expect(passphraseStrength("abcdefghi")).toBe("weak"); // long enough, one class
-    expect(passphraseStrength("abcdefghijkl")).toBe("weak"); // 12 chars, one class
-    expect(passphraseStrength("abcd1234e")).toBe("fair"); // 9 chars, two classes
-    expect(passphraseStrength("Abcd1234!xyz")).toBe("strong"); // 12 chars, four
   });
 });

@@ -5,7 +5,6 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
 import { navigate } from "@/lib/router";
 import { transactionsToCsv } from "@/lib/csv";
-import { passphraseStrength, type Strength } from "@/lib/crypto";
 import { useStore } from "@/lib/store";
 
 export function Settings() {
@@ -105,21 +104,16 @@ export function Settings() {
   );
 }
 
-const STRENGTH: Record<Strength, { label: string; className: string }> = {
-  weak: { label: "Weak", className: "text-expense" },
-  fair: { label: "Fair", className: "text-carrot-dark" },
-  strong: { label: "Strong", className: "text-income" },
-};
-
 const inputClass =
   "rounded-pill bg-grouped px-4 py-3 text-base text-label outline-none placeholder:text-label-muted";
 
 // The encryption controls: unlock (when a passphrase user hasn't unlocked this
-// session), or turn on / change / turn off end-to-end encryption.
+// session), or turn on / change / turn off end-to-end encryption. The passphrase
+// field is plain text on purpose — easy to read what you typed — and there's no
+// strength gate: any passphrase is allowed.
 function EncryptionCard() {
   const { e2eMode, locked, unlock, enableEncryption, disableEncryption } = useStore();
   const [pass, setPass] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -134,10 +128,6 @@ function EncryptionCard() {
 
   async function submitSet(e: React.FormEvent) {
     e.preventDefault();
-    if (pass !== confirm) {
-      setErr("Passphrases don't match.");
-      return;
-    }
     setBusy(true);
     setErr(null);
     const { error } = await enableEncryption(pass);
@@ -147,7 +137,6 @@ function EncryptionCard() {
       return;
     }
     setPass("");
-    setConfirm("");
   }
 
   async function turnOff() {
@@ -165,11 +154,11 @@ function EncryptionCard() {
         <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
           <p className="flex items-center gap-2 text-sm text-label">
             <Lock className="h-4 w-4 shrink-0 text-label-secondary" strokeWidth={2} />
-            Your data is encrypted. Enter your passphrase to unlock it for this session.
+            Your data is locked. Enter your passphrase to see it.
           </p>
           <form onSubmit={submitUnlock} className="flex flex-col gap-2">
             <input
-              type="password"
+              type="text"
               autoComplete="off"
               required
               value={pass}
@@ -192,7 +181,6 @@ function EncryptionCard() {
   }
 
   const on = e2eMode === "passphrase";
-  const strength = pass ? passphraseStrength(pass) : null;
 
   return (
     <section className="flex flex-col gap-2">
@@ -215,43 +203,21 @@ function EncryptionCard() {
           </div>
         ) : (
           <p className="text-sm text-label">
-            Encrypt your entries so only you can read them — not even whoever runs
-            the server. You&apos;ll enter your passphrase to unlock the app each
-            time you sign in.
+            End-to-end encryption, so no one else can see your data.
           </p>
         )}
 
         <form onSubmit={submitSet} className="flex flex-col gap-2">
           <p className="rounded-card bg-carrot-soft px-3 py-2 text-xs text-label">
-            ⚠️ If you forget this passphrase, your data is gone for good — there is
-            no reset and no one (not even the operator) can recover it.
+            If you forget this passphrase, no one can recover your data.
           </p>
           <input
-            type="password"
+            type="text"
             autoComplete="off"
             required
             value={pass}
             onChange={(e) => setPass(e.target.value)}
             placeholder={on ? "New passphrase" : "Passphrase"}
-            className={inputClass}
-          />
-          {strength && (
-            <p className={`px-1 text-xs font-medium ${STRENGTH[strength].className}`}>
-              Strength: {STRENGTH[strength].label}
-            </p>
-          )}
-          {strength === "weak" && (
-            <p className="px-1 text-xs text-label-secondary">
-              An easy passphrase can be cracked by whoever runs the server.
-            </p>
-          )}
-          <input
-            type="password"
-            autoComplete="off"
-            required
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Confirm passphrase"
             className={inputClass}
           />
           <button

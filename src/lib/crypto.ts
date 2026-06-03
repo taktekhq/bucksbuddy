@@ -159,17 +159,3 @@ export async function checkVerifier(
     return false;
   }
 }
-
-// Crude strength signal for the warn-don't-block meter. Entropy, not policy:
-// the UI shows it and warns, but never blocks (a user may want something easy
-// to remember — at the documented cost that the operator can then crack it).
-export type Strength = "weak" | "fair" | "strong";
-
-export function passphraseStrength(passphrase: string): Strength {
-  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((re) =>
-    re.test(passphrase),
-  ).length;
-  if (passphrase.length >= 12 && classes >= 3) return "strong";
-  if (passphrase.length >= 9 && classes >= 2) return "fair";
-  return "weak";
-}
