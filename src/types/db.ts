@@ -73,3 +73,17 @@ export type NewSafeGoldEntry = {
   grams: number;
   note?: string | null;
 };
+
+// A gold row as stored: like SafeGoldEntry but, once encrypted, the sensitive
+// columns are null and the values live in `ciphertext`. Legacy rows still carry
+// the plaintext columns and no ciphertext.
+export type SafeGoldEntryRow = {
+  id: string;
+  user_id: string;
+  occurred_at: string;
+  created_at: string;
+  ciphertext: string | null;
+  is_deposit: boolean | null;
+  grams: number | null;
+  note: string | null;
+};

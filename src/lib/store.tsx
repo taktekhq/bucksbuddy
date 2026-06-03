@@ -14,9 +14,11 @@ import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import {
+  decryptGold,
   decryptTransaction,
   disablePassphrase,
   enablePassphrase,
+  encryptGold,
   encryptTransaction,
   loadVault,
   unlockVault,
@@ -26,6 +28,7 @@ import type {
   NewSafeGoldEntry,
   NewTransaction,
   SafeGoldEntry,
+  SafeGoldEntryRow,
   Transaction,
   TransactionRow,
 } from "@/types/db";
@@ -77,6 +80,13 @@ const CLEAR_PLAINTEXT = {
   note: null,
 };
 
+// The same, for the gold ledger.
+const CLEAR_GOLD_PLAINTEXT = {
+  is_deposit: null,
+  grams: null,
+  note: null,
+};
+
 // The encrypted-into-ciphertext fields of a NewTransaction, as an in-memory
 // Transaction carries them (note normalised to null).
 function secretFields(tx: NewTransaction) {
@@ -120,6 +130,26 @@ async function rowToTransaction(
   };
 }
 
+function legacyGoldFields(row: SafeGoldEntryRow) {
+  return { is_deposit: row.is_deposit!, grams: row.grams!, note: row.note };
+}
+
+async function rowToGold(
+  row: SafeGoldEntryRow,
+  masterKey: CryptoKey,
+): Promise<SafeGoldEntry> {
+  const fields = row.ciphertext
+    ? await decryptGold(masterKey, row.ciphertext)
+    : legacyGoldFields(row);
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
+    ...fields,
+  };
+}
+
 export function StoreProvider({
   userId,
   children,
@@ -141,35 +171,43 @@ export function StoreProvider({
   // any legacy plaintext rows in place on the way — the one-time rollout.
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [{ data: profile }, { data: gold }] = await Promise.all([
-      supabase.from("profiles").select("lbp_per_usd").eq("id", userId).single(),
+    // The exchange rate isn't encrypted, so it loads regardless of lock state.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("lbp_per_usd")
+      .eq("id", userId)
+      .single();
+    if (profile?.lbp_per_usd) setLbpPerUsd(profile.lbp_per_usd);
+
+    const key = masterKey.current;
+    if (!key) {
+      // Locked: both ledgers are ciphertext we can't read yet.
+      setTransactions([]);
+      setSafeGoldEntries([]);
+      setLoading(false);
+      return;
+    }
+
+    const [{ data: txData }, { data: goldData }] = await Promise.all([
+      supabase
+        .from("transactions")
+        .select("*")
+        .order("occurred_at", { ascending: false })
+        .limit(500),
       supabase
         .from("safe_gold_entries")
         .select("*")
         .order("occurred_at", { ascending: false })
         .limit(500),
     ]);
-    if (profile?.lbp_per_usd) setLbpPerUsd(profile.lbp_per_usd);
-    setSafeGoldEntries((gold ?? []) as SafeGoldEntry[]);
+    const txRows = (txData ?? []) as TransactionRow[];
+    const goldRows = (goldData ?? []) as SafeGoldEntryRow[];
 
-    const key = masterKey.current;
-    if (!key) {
-      setTransactions([]);
-      setLoading(false);
-      return;
-    }
-
-    const { data: rows } = await supabase
-      .from("transactions")
-      .select("*")
-      .order("occurred_at", { ascending: false })
-      .limit(500);
-    const txRows = (rows ?? []) as TransactionRow[];
-
-    const legacy = txRows.filter((r) => !r.ciphertext);
-    if (legacy.length > 0) {
+    // Encrypt any legacy plaintext rows in place (the one-time rollout).
+    const legacyTx = txRows.filter((r) => !r.ciphertext);
+    if (legacyTx.length > 0) {
       await Promise.all(
-        legacy.map(async (r) =>
+        legacyTx.map(async (r) =>
           supabase
             .from("transactions")
             .update({
@@ -180,10 +218,25 @@ export function StoreProvider({
         ),
       );
     }
+    const legacyGold = goldRows.filter((r) => !r.ciphertext);
+    if (legacyGold.length > 0) {
+      await Promise.all(
+        legacyGold.map(async (r) =>
+          supabase
+            .from("safe_gold_entries")
+            .update({
+              ...CLEAR_GOLD_PLAINTEXT,
+              ciphertext: await encryptGold(key, legacyGoldFields(r)),
+            })
+            .eq("id", r.id),
+        ),
+      );
+    }
 
     setTransactions(
       await Promise.all(txRows.map((r) => rowToTransaction(r, key))),
     );
+    setSafeGoldEntries(await Promise.all(goldRows.map((r) => rowToGold(r, key))));
     setLoading(false);
   }, [userId]);
 
@@ -319,13 +372,28 @@ export function StoreProvider({
 
   const addSafeGoldEntry = useCallback(
     async (entry: NewSafeGoldEntry) => {
+      const key = masterKey.current;
+      if (!key) return { error: LOCKED_MSG };
+      const ciphertext = await encryptGold(key, entry);
       const { data, error } = await supabase
         .from("safe_gold_entries")
-        .insert({ ...entry, user_id: userId })
+        .insert({ user_id: userId, ciphertext })
         .select()
         .single();
       if (error) return { error: error.message };
-      setSafeGoldEntries((prev) => [data as SafeGoldEntry, ...prev]);
+      const row = data as SafeGoldEntryRow;
+      setSafeGoldEntries((prev) => [
+        {
+          id: row.id,
+          user_id: row.user_id,
+          occurred_at: row.occurred_at,
+          created_at: row.created_at,
+          is_deposit: entry.is_deposit,
+          grams: entry.grams,
+          note: entry.note ?? null,
+        },
+        ...prev,
+      ]);
       return { error: null };
     },
     [userId],

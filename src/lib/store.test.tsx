@@ -7,7 +7,7 @@ import {
   makeVerifier,
   wrapMasterKey,
 } from "@/lib/crypto";
-import { encryptTransaction } from "@/lib/e2e";
+import { encryptGold, encryptTransaction } from "@/lib/e2e";
 import type { Transaction } from "@/types/db";
 
 type Res = { error: string | null };
@@ -281,6 +281,16 @@ describe("StoreProvider / useStore", () => {
       await result.current.addSafeGoldEntry({ is_deposit: true, grams: 3 });
     });
     expect(result.current.safeGoldGrams).toBe(3);
+    expect(result.current.safeGoldEntries[0].note).toBeNull(); // no-note path
+
+    await act(async () => {
+      await result.current.addSafeGoldEntry({
+        is_deposit: true,
+        grams: 2,
+        note: "ring",
+      });
+    });
+    expect(result.current.safeGoldEntries[0].note).toBe("ring"); // note path
 
     await act(async () => {
       await result.current.deleteSafeGoldEntry("g1");
@@ -364,14 +374,31 @@ describe("StoreProvider / useStore", () => {
       rate_used: null,
       note: null,
     };
+    const goldCipher = await encryptGold(mk, {
+      is_deposit: true,
+      grams: 9,
+      note: null,
+    });
+    const encGoldRow = {
+      id: "eg",
+      user_id: "u1",
+      occurred_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      ciphertext: goldCipher,
+      is_deposit: null,
+      grams: null,
+      note: null,
+    };
     const { result } = setup({
       "e2e_keys:select": () => ({ data: row }),
       "transactions:select": () => ({ data: [encRow] }),
+      "safe_gold_entries:select": () => ({ data: [encGoldRow] }),
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.locked).toBe(true);
     expect(result.current.e2eMode).toBe("passphrase");
     expect(result.current.transactions).toEqual([]); // can't decrypt yet
+    expect(result.current.safeGoldEntries).toEqual([]);
 
     let res: Res = { error: null };
     await act(async () => {
@@ -388,6 +415,7 @@ describe("StoreProvider / useStore", () => {
     expect(result.current.transactions).toHaveLength(1);
     expect(result.current.transactions[0].amount_usd_cents).toBe(7777);
     expect(result.current.transactions[0].note).toBe("k");
+    expect(result.current.safeGoldGrams).toBe(9); // decrypted gold
   });
 
   it("turns encryption on then off on the default tier", async () => {
@@ -433,6 +461,9 @@ describe("StoreProvider / useStore", () => {
       results.push(await result.current.updateTransaction("z", newTx));
       results.push(await result.current.enableEncryption("pw2"));
       results.push(await result.current.disableEncryption());
+      results.push(
+        await result.current.addSafeGoldEntry({ is_deposit: true, grams: 1 }),
+      );
     });
     for (const r of results) expect(r.error).toMatch(/Locked/);
   });

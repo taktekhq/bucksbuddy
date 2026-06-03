@@ -15,9 +15,11 @@ import {
   wrapMasterKey,
 } from "@/lib/crypto";
 import {
+  decryptGold,
   decryptTransaction,
   disablePassphrase,
   enablePassphrase,
+  encryptGold,
   encryptTransaction,
   loadVault,
   unlockVault,
@@ -124,5 +126,21 @@ describe("e2e vault", () => {
     });
     const noNote = await encryptTransaction(mk, SAMPLE);
     expect((await decryptTransaction(mk, noNote)).note).toBeNull();
+  });
+
+  it("round-trips a gold entry's secret fields, with and without a note", async () => {
+    const mk = await generateMasterKey();
+    const withNote = await encryptGold(mk, {
+      is_deposit: true,
+      grams: 12.5,
+      note: "wedding",
+    });
+    expect(await decryptGold(mk, withNote)).toMatchObject({
+      is_deposit: true,
+      grams: 12.5,
+      note: "wedding",
+    });
+    const noNote = await encryptGold(mk, { is_deposit: false, grams: 1 });
+    expect((await decryptGold(mk, noNote)).note).toBeNull();
   });
 });

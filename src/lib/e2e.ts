@@ -11,7 +11,12 @@ import {
   unwrapMasterKey,
   wrapMasterKey,
 } from "@/lib/crypto";
-import type { NewTransaction, Transaction } from "@/types/db";
+import type {
+  NewSafeGoldEntry,
+  NewTransaction,
+  SafeGoldEntry,
+  Transaction,
+} from "@/types/db";
 
 export type E2EMode = "default" | "passphrase";
 
@@ -55,6 +60,31 @@ export async function decryptTransaction(
   ciphertext: string,
 ): Promise<TxSecret> {
   return JSON.parse(await decryptString(masterKey, ciphertext)) as TxSecret;
+}
+
+// The same shape for the gold ledger: is_deposit/grams/note are encrypted;
+// occurred_at and the ids stay plaintext.
+type GoldSecret = Pick<SafeGoldEntry, "is_deposit" | "grams" | "note">;
+
+export function encryptGold(
+  masterKey: CryptoKey,
+  entry: NewSafeGoldEntry | SafeGoldEntry,
+): Promise<string> {
+  return encryptString(
+    masterKey,
+    JSON.stringify({
+      is_deposit: entry.is_deposit,
+      grams: entry.grams,
+      note: entry.note ?? null,
+    }),
+  );
+}
+
+export async function decryptGold(
+  masterKey: CryptoKey,
+  ciphertext: string,
+): Promise<GoldSecret> {
+  return JSON.parse(await decryptString(masterKey, ciphertext)) as GoldSecret;
 }
 
 async function fetchKeyRow(userId: string): Promise<KeyRow | null> {

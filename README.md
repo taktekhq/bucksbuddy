@@ -41,9 +41,10 @@ needs no migration — it rides along in `transactions`.
 > ignored either way._
 
 Finally run [`0003_e2e.sql`](supabase/migrations/0003_e2e.sql) to add the `e2e_keys` vault
-and the encrypted-blob column on `transactions`. On each user's next load the app encrypts
-their existing rows in place (it has the key; the server never does), so this is a one-time,
-no-downtime change.
+and the encrypted-blob column on `transactions`, then
+[`0004_e2e_gold.sql`](supabase/migrations/0004_e2e_gold.sql) to do the same for the gold
+ledger. On each user's next load the app encrypts their existing rows in place (it has the
+key; the server never does), so this is a one-time, no-downtime change.
 
 > **Savings Safe:** a vault icon next to Settings opens a dark "Safe" screen (available
 > to everyone).
@@ -107,9 +108,9 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
   passphrase, the data is unrecoverable — that's the proof it's truly end-to-end. The UI
   warns about this, and warns (without blocking) when a passphrase is weak enough for the
   operator to brute-force.
-- **Scope:** the `transactions` ledger (amounts, categories, notes, direction, currency,
-  rate) is encrypted. The separate gold ledger (`safe_gold_entries`, grams) is not yet —
-  a planned follow-up.
+- **Scope:** both ledgers are encrypted — the `transactions` ledger (amounts, categories,
+  notes, direction, currency, rate) and the gold ledger (`safe_gold_entries`: deposit/
+  withdrawal, grams, note). Only ids, `user_id` and `occurred_at` stay plaintext.
 
 ## Local development
 
@@ -153,7 +154,7 @@ src/lib/                supabase client, store (in-memory cache), router, useSes
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
-supabase/migrations/    0001_init.sql, 0002_safe_gold.sql, 0003_e2e.sql
+supabase/migrations/    0001_init.sql, 0002_safe_gold.sql, 0003_e2e.sql, 0004_e2e_gold.sql
 docs/DESIGN_SYSTEM.md   reusable design system
 scripts/icons-from-source.mjs
 ```
