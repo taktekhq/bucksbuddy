@@ -105,7 +105,7 @@ export function Settings() {
 }
 
 const inputClass =
-  "rounded-pill bg-grouped px-4 py-3 text-base text-label outline-none placeholder:text-label-muted";
+  "w-full rounded-pill border border-separator bg-surface px-4 py-3 text-base text-label outline-none ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary";
 
 // The encryption card — a prominent on/off card (styled like the Safe balance
 // card), with the passphrase shown in plain text so it's easy to read, change,
@@ -162,7 +162,7 @@ function EncryptionCard() {
       <SectionHeader>Encryption</SectionHeader>
       <div
         className={`flex flex-col gap-3 rounded-card p-4 shadow-card ${
-          on ? "bg-income/15 ring-1 ring-income/30" : "bg-surface"
+          on ? "bg-income/20 ring-1 ring-income/40" : "bg-surface"
         }`}
       >
         <div className="flex items-center gap-3">
