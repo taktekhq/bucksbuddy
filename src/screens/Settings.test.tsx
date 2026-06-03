@@ -95,13 +95,21 @@ describe("Settings — account & data", () => {
 });
 
 describe("Settings — encryption", () => {
-  it("turns on encryption with any passphrase (no strength gate, no confirm)", async () => {
+  it("off state: shows Off + a turn-on form, no strength or confirm", async () => {
     render(<Settings />);
-    // No strength meter and no confirm field.
+    expect(screen.getByText("Off")).toBeInTheDocument();
     expect(screen.queryByText(/Strength/)).not.toBeInTheDocument();
     expect(
       screen.queryByPlaceholderText("Confirm passphrase"),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Turn off" }),
+    ).not.toBeInTheDocument();
+    // No eye toggle while entering — the field is plainly visible.
+    expect(
+      screen.queryByRole("button", { name: /passphrase/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Passphrase")).toHaveAttribute("type", "text");
 
     await userEvent.type(screen.getByPlaceholderText("Passphrase"), "easy");
     await userEvent.click(
@@ -122,21 +130,38 @@ describe("Settings — encryption", () => {
     expect(await screen.findByText("server said no")).toBeInTheDocument();
   });
 
-  it("shows the on-state and turns encryption off", async () => {
-    storeValue = makeStoreValue({ e2eMode: "passphrase" });
+  it("on + unlocked: masks the saved passphrase with an eye toggle, and turns off", async () => {
+    storeValue = makeStoreValue({ e2eMode: "passphrase", passphrase: "secret" });
     render(<Settings />);
-    expect(screen.getByText("End-to-end encryption is on")).toBeInTheDocument();
-    // The set-form is reused for changing the passphrase.
-    expect(
-      screen.getByRole("button", { name: "Change passphrase" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("On")).toBeInTheDocument();
+    // Saved passphrase is present but masked by default; the eye reveals it.
+    const field = screen.getByDisplayValue("secret");
+    expect(field).toHaveAttribute("type", "password");
+    await userEvent.click(screen.getByRole("button", { name: "Show passphrase" }));
+    expect(field).toHaveAttribute("type", "text");
+    await userEvent.click(screen.getByRole("button", { name: "Hide passphrase" }));
+    expect(field).toHaveAttribute("type", "password");
+
     await userEvent.click(screen.getByRole("button", { name: "Turn off" }));
     expect(storeValue.disableEncryption).toHaveBeenCalled();
+  });
+
+  it("saves a changed passphrase", async () => {
+    storeValue = makeStoreValue({ e2eMode: "passphrase", passphrase: "secret" });
+    render(<Settings />);
+    const field = screen.getByDisplayValue("secret");
+    await userEvent.clear(field);
+    await userEvent.type(field, "newpass");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save passphrase" }),
+    );
+    expect(storeValue.enableEncryption).toHaveBeenCalledWith("newpass");
   });
 
   it("surfaces a turn-off error", async () => {
     storeValue = makeStoreValue({
       e2eMode: "passphrase",
+      passphrase: "secret",
       disableEncryption: vi.fn(async () => ({ error: "cannot disable" })),
     });
     render(<Settings />);
@@ -144,12 +169,21 @@ describe("Settings — encryption", () => {
     expect(await screen.findByText("cannot disable")).toBeInTheDocument();
   });
 
-  it("unlocks from the locked state, and shows a wrong-passphrase error", async () => {
+  it("on + locked: unlock form, no turn-off, surfaces a wrong-passphrase error", async () => {
     storeValue = makeStoreValue({
+      e2eMode: "passphrase",
       locked: true,
       unlock: vi.fn(async () => ({ error: "Wrong passphrase." })),
     });
     render(<Settings />);
+    expect(screen.getByText("On · locked on this device")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Turn off" }),
+    ).not.toBeInTheDocument();
+    // No eye toggle while unlocking — the field is plainly visible.
+    expect(
+      screen.queryByRole("button", { name: /passphrase/i }),
+    ).not.toBeInTheDocument();
     await userEvent.type(screen.getByPlaceholderText("Passphrase"), "guess");
     await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
     expect(storeValue.unlock).toHaveBeenCalledWith("guess");
@@ -157,7 +191,7 @@ describe("Settings — encryption", () => {
   });
 
   it("unlocks successfully without an error", async () => {
-    storeValue = makeStoreValue({ locked: true });
+    storeValue = makeStoreValue({ e2eMode: "passphrase", locked: true });
     render(<Settings />);
     await userEvent.type(screen.getByPlaceholderText("Passphrase"), "right");
     await userEvent.click(screen.getByRole("button", { name: "Unlock" }));

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Download, Lock, ShieldCheck } from "lucide-react";
+import { ChevronLeft, Download, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
 import { RateEditor } from "@/components/RateEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
@@ -107,36 +107,35 @@ export function Settings() {
 const inputClass =
   "rounded-pill bg-grouped px-4 py-3 text-base text-label outline-none placeholder:text-label-muted";
 
-// The encryption controls: unlock (when a passphrase user hasn't unlocked this
-// session), or turn on / change / turn off end-to-end encryption. The passphrase
-// field is plain text on purpose — easy to read what you typed — and there's no
-// strength gate: any passphrase is allowed.
+// The encryption card — a prominent on/off card (styled like the Safe balance
+// card), with the passphrase shown in plain text so it's easy to read, change,
+// and save right here. The passphrase is kept only on this device, so the server
+// never sees it. When it's "On" but this device hasn't stored the passphrase yet
+// (a new device), the same field doubles as the unlock.
 function EncryptionCard() {
-  const { e2eMode, locked, unlock, enableEncryption, disableEncryption } = useStore();
-  const [pass, setPass] = useState("");
+  const { e2eMode, locked, passphrase, unlock, enableEncryption, disableEncryption } =
+    useStore();
+  const [pass, setPass] = useState(passphrase ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Once a passphrase is saved we mask it, with an eye to reveal on demand.
+  const [reveal, setReveal] = useState(false);
 
-  async function submitUnlock(e: React.FormEvent) {
+  // Keep the field in sync when the stored passphrase changes (unlock / save /
+  // turn off), so it always shows the current one.
+  useEffect(() => {
+    setPass(passphrase ?? "");
+  }, [passphrase]);
+
+  const on = e2eMode === "passphrase";
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
-    const { error } = await unlock(pass);
+    const { error } = locked ? await unlock(pass) : await enableEncryption(pass);
     setBusy(false);
     if (error) setErr(error);
-  }
-
-  async function submitSet(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    const { error } = await enableEncryption(pass);
-    setBusy(false);
-    if (error) {
-      setErr(error);
-      return;
-    }
-    setPass("");
   }
 
   async function turnOff() {
@@ -147,51 +146,50 @@ function EncryptionCard() {
     if (error) setErr(error);
   }
 
-  if (locked) {
-    return (
-      <section className="flex flex-col gap-2">
-        <SectionHeader>Encryption</SectionHeader>
-        <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
-          <p className="flex items-center gap-2 text-sm text-label">
-            <Lock className="h-4 w-4 shrink-0 text-label-secondary" strokeWidth={2} />
-            Your data is locked. Enter your passphrase to see it.
-          </p>
-          <form onSubmit={submitUnlock} className="flex flex-col gap-2">
-            <input
-              type="text"
-              autoComplete="off"
-              required
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              placeholder="Passphrase"
-              className={inputClass}
-            />
-            <button
-              type="submit"
-              disabled={busy}
-              className="press rounded-pill bg-label py-3 text-base font-semibold text-surface transition disabled:opacity-50"
-            >
-              {busy ? "Unlocking…" : "Unlock"}
-            </button>
-          </form>
-          {err && <p className="px-1 text-sm font-medium text-danger">{err}</p>}
-        </div>
-      </section>
-    );
-  }
-
-  const on = e2eMode === "passphrase";
+  // A saved-and-unlocked passphrase is the only state we mask (with the eye);
+  // while entering or unlocking, the text stays visible so it's easy to type.
+  const saved = on && !locked;
+  const buttonLabel = busy
+    ? "Saving…"
+    : locked
+      ? "Unlock"
+      : on
+        ? "Save passphrase"
+        : "Turn on encryption";
 
   return (
     <section className="flex flex-col gap-2">
       <SectionHeader>Encryption</SectionHeader>
-      <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
-        {on ? (
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-sm font-medium text-income">
-              <ShieldCheck className="h-4 w-4 shrink-0" strokeWidth={2} />
-              End-to-end encryption is on
-            </span>
+      <div
+        className={`flex flex-col gap-3 rounded-card p-4 shadow-card ${
+          on ? "bg-income/10 ring-1 ring-income/20" : "bg-surface"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+              on ? "bg-income/15 text-income" : "bg-grouped text-label-secondary"
+            }`}
+          >
+            {on ? (
+              <ShieldCheck className="h-5 w-5" strokeWidth={2} />
+            ) : (
+              <Lock className="h-5 w-5" strokeWidth={2} />
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-sm font-bold uppercase leading-none text-label-muted">
+              End-to-end encryption
+            </p>
+            <p
+              className={`mt-1 text-sm font-medium ${
+                on ? "text-income" : "text-label-secondary"
+              }`}
+            >
+              {on ? (locked ? "On · locked on this device" : "On") : "Off"}
+            </p>
+          </div>
+          {on && !locked && (
             <button
               type="button"
               onClick={turnOff}
@@ -200,34 +198,53 @@ function EncryptionCard() {
             >
               Turn off
             </button>
-          </div>
-        ) : (
+          )}
+        </div>
+
+        {!on && (
           <p className="text-sm text-label">
-            End-to-end encryption, so no one else can see your data.
+            Turn it on so no one else can see your data.
           </p>
         )}
 
-        <form onSubmit={submitSet} className="flex flex-col gap-2">
-          <p className="rounded-card bg-carrot-soft px-3 py-2 text-xs text-label">
-            If you forget this passphrase, no one can recover your data.
-          </p>
-          <input
-            type="text"
-            autoComplete="off"
-            required
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            placeholder={on ? "New passphrase" : "Passphrase"}
-            className={inputClass}
-          />
+        <form onSubmit={submit} className="flex flex-col gap-2">
+          <div className="relative">
+            <input
+              type={saved && !reveal ? "password" : "text"}
+              autoComplete="off"
+              required
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              placeholder="Passphrase"
+              className={`${inputClass} ${saved ? "pr-12" : ""}`}
+            />
+            {saved && (
+              <button
+                type="button"
+                onClick={() => setReveal((v) => !v)}
+                aria-label={reveal ? "Hide passphrase" : "Show passphrase"}
+                className="press absolute inset-y-0 right-0 flex items-center px-3.5 text-label-secondary"
+              >
+                {reveal ? (
+                  <EyeOff className="h-5 w-5" strokeWidth={2} />
+                ) : (
+                  <Eye className="h-5 w-5" strokeWidth={2} />
+                )}
+              </button>
+            )}
+          </div>
           <button
             type="submit"
             disabled={busy}
             className="press rounded-pill bg-label py-3 text-base font-semibold text-surface transition disabled:opacity-50"
           >
-            {busy ? "Saving…" : on ? "Change passphrase" : "Turn on encryption"}
+            {buttonLabel}
           </button>
         </form>
+
+        <p className="px-1 text-xs text-label-secondary">
+          If you forget this passphrase, the data cannot be recovered.
+        </p>
         {err && <p className="px-1 text-sm font-medium text-danger">{err}</p>}
       </div>
     </section>

@@ -85,6 +85,7 @@ type Move = {
   cents?: number;
   grams?: number;
   isLbp?: boolean;
+  mask?: string; // obscured stand-in shown while locked
   onDelete: () => void | Promise<void>;
 };
 
@@ -99,6 +100,7 @@ export function Safe() {
     addSafeGoldEntry,
     deleteSafeGoldEntry,
     lbpPerUsd,
+    locked,
   } = useStore();
 
   const [asset, setAsset] = useState<Asset>("cash");
@@ -130,7 +132,7 @@ export function Safe() {
   const amount = parseAmountString(display);
   const usdCents = toUsdCents(amount, currency, lbpPerUsd);
   const grams = parseGrams(display);
-  const canSave = (isGold ? grams > 0 : amount > 0) && !saving;
+  const canSave = (isGold ? grams > 0 : amount > 0) && !saving && !locked;
 
   function switchAsset(next: Asset) {
     setAsset(next);
@@ -185,6 +187,7 @@ export function Safe() {
       note: t.note,
       cents: t.amount_usd_cents,
       isLbp: t.original_currency === "LBP",
+      mask: t.amountMask,
       onDelete: () => confirmDelete(() => deleteTransaction(t.id)),
     }));
   const goldMoves: Move[] = safeGoldEntries.map((e: SafeGoldEntry) => ({
@@ -194,6 +197,7 @@ export function Safe() {
     occurredAt: e.occurred_at,
     note: e.note,
     grams: e.grams,
+    mask: e.gramsMask,
     onDelete: () => confirmDelete(() => deleteSafeGoldEntry(e.id)),
   }));
   const movements = [...cashMoves, ...goldMoves].sort(
@@ -213,13 +217,15 @@ export function Safe() {
     : currency === "USD"
       ? formatUsdCents(usdCents)
       : `${groupInt(display)} LBP`;
-  const cta = saving
-    ? "Saving…"
-    : (isGold ? grams : amount) <= 0
-      ? `Enter ${isGold ? "an amount of gold" : "an amount"}`
-      : isDeposit
-        ? `Add ${amountLabel} to safe`
-        : `Take ${amountLabel} out`;
+  const cta = locked
+    ? "Unlock in Settings to move money"
+    : saving
+      ? "Saving…"
+      : (isGold ? grams : amount) <= 0
+        ? `Enter ${isGold ? "an amount of gold" : "an amount"}`
+        : isDeposit
+          ? `Add ${amountLabel} to safe`
+          : `Take ${amountLabel} out`;
 
   const actionColor = isGold ? GOLD : isDeposit ? "#1FB85A" : "#E0631A";
   const actionText = isGold ? "#06281E" : "#FFFFFF";
@@ -260,7 +266,7 @@ export function Safe() {
             className="font-numeric text-4xl font-bold tabular-nums"
             style={{ color: safeTotalCents < 0 ? "#FF8A8A" : MINT }}
           >
-            {formatSignedUsdCents(safeTotalCents)}
+            {locked ? "$•••••" : formatSignedUsdCents(safeTotalCents)}
           </p>
 
           <div className="mt-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-white/45">
@@ -270,9 +276,13 @@ export function Safe() {
             className="font-numeric text-4xl font-bold tabular-nums"
             style={{ color: GOLD }}
           >
-            {formatGrams(safeGoldGrams)}
+            {locked ? "••••" : formatGrams(safeGoldGrams)}
           </p>
-          {goldValueCents != null ? (
+          {locked ? (
+            <p className="mt-0.5 text-xs text-white/30">
+              Locked — unlock in Settings to see the safe.
+            </p>
+          ) : goldValueCents != null ? (
             <p className="mt-0.5 text-xs text-white/45">
               ≈ {formatUsdCents(goldValueCents)} ·{" "}
               {/* goldValueCents != null implies goldPerGram != null; the `?? 0`
@@ -445,14 +455,18 @@ export function Safe() {
           <ul className="flex flex-col gap-1.5">
             {movements.map((m) => {
               const tone = m.kind === "gold" ? GOLD : m.isDeposit ? MINT : TAKE;
+              const sign = m.isDeposit ? "+" : "-";
               // grams is always set on gold moves and cents on cash moves (see
               // construction above); the `?? 0` fallbacks are defensive only.
+              // While locked, `mask` holds an obscured stand-in instead.
               const right =
-                m.kind === "gold"
-                  ? /* v8 ignore next */
-                    `${m.isDeposit ? "+" : "-"}${formatGrams(m.grams ?? 0)}`
-                  : /* v8 ignore next */
-                    `${m.isDeposit ? "+" : "-"}${formatUsdCents(m.cents ?? 0)}`;
+                m.mask != null
+                  ? `${sign}${m.kind === "gold" ? m.mask : `$${m.mask}`}`
+                  : m.kind === "gold"
+                    ? /* v8 ignore next */
+                      `${sign}${formatGrams(m.grams ?? 0)}`
+                    : /* v8 ignore next */
+                      `${sign}${formatUsdCents(m.cents ?? 0)}`;
               const Icon =
                 m.kind === "gold"
                   ? Coins

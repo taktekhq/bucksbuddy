@@ -44,12 +44,18 @@ describe("Home", () => {
     expect(screen.getByText("Loading…")).toBeInTheDocument();
   });
 
-  it("shows a locked screen and routes to Settings to unlock", async () => {
-    storeValue = makeStoreValue({ locked: true });
+  it("shows obscured amounts and an unlock nudge when locked", async () => {
+    storeValue = makeStoreValue({
+      locked: true,
+      transactions: [tx({ amountMask: "a8F2", is_income: true })],
+      monthlyNetCents: 0,
+    });
     render(<Home />);
-    expect(screen.getByText("Locked")).toBeInTheDocument();
+    // Hero total obscured, the masked row amount shown, and a nudge to Settings.
+    expect(screen.getByText("$•••••")).toBeInTheDocument();
+    expect(screen.getByText("+$a8F2")).toBeInTheDocument();
     await userEvent.click(
-      screen.getByRole("button", { name: "Unlock in Settings" }),
+      screen.getByText(/enter your passphrase in Settings/i),
     );
     expect(navigate).toHaveBeenCalledWith("/settings");
   });

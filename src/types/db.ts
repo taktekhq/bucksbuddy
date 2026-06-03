@@ -12,6 +12,9 @@ export type Transaction = {
   occurred_at: string;
   note: string | null;
   created_at: string;
+  // Display-only: set when the row is shown obscured (this device is locked).
+  // A garbled stand-in for the amount; the real value isn't available yet.
+  amountMask?: string;
 };
 
 export type Profile = {
@@ -70,6 +73,8 @@ export type SafeGoldEntry = {
   note: string | null;
   occurred_at: string;
   created_at: string;
+  // Display-only: garbled stand-in for grams when the device is locked.
+  gramsMask?: string;
 };
 
 export type NewSafeGoldEntry = {

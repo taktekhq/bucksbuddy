@@ -14,13 +14,17 @@ import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import {
+  cipherMask,
+  clearStoredPassphrase,
   decryptGoldValues,
   decryptTxValues,
   disablePassphrase,
   enablePassphrase,
   encryptGoldValues,
   encryptTxValues,
+  loadStoredPassphrase,
   loadVault,
+  storeStoredPassphrase,
   unlockVault,
   type E2EMode,
 } from "@/lib/e2e";
@@ -45,10 +49,12 @@ type Store = {
   deleteTransaction: (id: string) => Promise<Result>;
   setRate: (rate: number) => Promise<Result>;
   // Encryption. `e2eMode` is "default" (operator-readable, no passphrase) or
-  // "passphrase" (real E2E). `locked` is true when a passphrase user hasn't
-  // entered it yet this session, so transactions can't be decrypted.
+  // "passphrase" (real E2E). `locked` is true when this device doesn't have the
+  // passphrase yet, so amounts show obscured until it's entered. `passphrase` is
+  // the current one, cached on this device (null when off or not yet entered).
   e2eMode: E2EMode;
   locked: boolean;
+  passphrase: string | null;
   unlock: (passphrase: string) => Promise<Result>;
   enableEncryption: (passphrase: string) => Promise<Result>;
   disableEncryption: () => Promise<Result>;
@@ -119,6 +125,38 @@ async function rowToGold(
   };
 }
 
+// Locked-device renderings: keep the plaintext labels, but show the amount as a
+// garbled stand-in (so the screen looks alive, not walled off) until unlocked.
+function maskedTransaction(row: TransactionRow): Transaction {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    is_income: row.is_income,
+    category: row.category,
+    original_currency: row.original_currency,
+    rate_used: row.rate_used,
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
+    amount_usd_cents: 0,
+    original_amount: 0,
+    note: null,
+    amountMask: cipherMask(row.amount_usd_cents_enc),
+  };
+}
+
+function maskedGold(row: SafeGoldEntryRow): SafeGoldEntry {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    is_deposit: row.is_deposit,
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
+    grams: 0,
+    note: null,
+    gramsMask: cipherMask(row.grams_enc),
+  };
+}
+
 // The plaintext-label columns written on every (encrypted) transaction row.
 function txLabels(tx: NewTransaction) {
   return {
@@ -160,6 +198,7 @@ export function StoreProvider({
   const [safeGoldEntries, setSafeGoldEntries] = useState<SafeGoldEntry[]>([]);
   const [e2eMode, setE2eMode] = useState<E2EMode>("default");
   const [locked, setLocked] = useState(false);
+  const [passphrase, setPassphrase] = useState<string | null>(null);
   // The decrypted master key for this session. A ref (not state) so it never
   // lands in React state / devtools and changing it doesn't trigger renders.
   const masterKey = useRef<CryptoKey | null>(null);
@@ -177,15 +216,6 @@ export function StoreProvider({
       .single();
     if (profile?.lbp_per_usd) setLbpPerUsd(profile.lbp_per_usd);
 
-    const key = masterKey.current;
-    if (!key) {
-      // Locked: both ledgers are ciphertext we can't read yet.
-      setTransactions([]);
-      setSafeGoldEntries([]);
-      setLoading(false);
-      return;
-    }
-
     const [{ data: txData }, { data: goldData }] = await Promise.all([
       supabase
         .from("transactions")
@@ -201,6 +231,16 @@ export function StoreProvider({
     const txRows = (txData ?? []) as TransactionRow[];
     const goldRows = (goldData ?? []) as SafeGoldEntryRow[];
 
+    const key = masterKey.current;
+    if (!key) {
+      // Locked: we can't decrypt, so show the rows with obscured amounts rather
+      // than a blank wall.
+      setTransactions(txRows.map(maskedTransaction));
+      setSafeGoldEntries(goldRows.map(maskedGold));
+      setLoading(false);
+      return;
+    }
+
     setTransactions(
       await Promise.all(txRows.map((r) => rowToTransaction(r, key))),
     );
@@ -212,23 +252,39 @@ export function StoreProvider({
     void (async () => {
       const vault = await loadVault(userId);
       if (vault.status === "unlocked") {
+        // Default tier: no user passphrase, always unlocked.
         masterKey.current = vault.masterKey;
         setE2eMode(vault.mode);
         setLocked(false);
+        setPassphrase(null);
       } else {
-        masterKey.current = null;
+        // Passphrase tier: try the one cached on this device so we stay unlocked
+        // across restarts.
         setE2eMode("passphrase");
-        setLocked(true);
+        const stored = loadStoredPassphrase(userId);
+        const key = stored ? await unlockVault(userId, stored) : null;
+        if (key) {
+          masterKey.current = key;
+          setLocked(false);
+          setPassphrase(stored);
+        } else {
+          if (stored) clearStoredPassphrase(userId); // stale (changed elsewhere)
+          masterKey.current = null;
+          setLocked(true);
+          setPassphrase(null);
+        }
       }
       await loadData();
     })();
   }, [userId, loadData]);
 
   const unlock = useCallback(
-    async (passphrase: string) => {
-      const key = await unlockVault(userId, passphrase);
+    async (pass: string) => {
+      const key = await unlockVault(userId, pass);
       if (!key) return { error: "Wrong passphrase." };
       masterKey.current = key;
+      storeStoredPassphrase(userId, pass);
+      setPassphrase(pass);
       setLocked(false);
       await loadData();
       return { error: null };
@@ -237,10 +293,12 @@ export function StoreProvider({
   );
 
   const enableEncryption = useCallback(
-    async (passphrase: string) => {
+    async (pass: string) => {
       const key = masterKey.current;
       if (!key) return { error: LOCKED_MSG };
-      await enablePassphrase(userId, key, passphrase);
+      await enablePassphrase(userId, key, pass);
+      storeStoredPassphrase(userId, pass);
+      setPassphrase(pass);
       setE2eMode("passphrase");
       return { error: null };
     },
@@ -251,6 +309,8 @@ export function StoreProvider({
     const key = masterKey.current;
     if (!key) return { error: LOCKED_MSG };
     await disablePassphrase(userId, key);
+    clearStoredPassphrase(userId);
+    setPassphrase(null);
     setE2eMode("default");
     return { error: null };
   }, [userId]);
@@ -407,6 +467,7 @@ export function StoreProvider({
     setRate,
     e2eMode,
     locked,
+    passphrase,
     unlock,
     enableEncryption,
     disableEncryption,

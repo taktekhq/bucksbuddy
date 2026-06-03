@@ -53,30 +53,9 @@ export function Home() {
     }
   }
 
-  // Passphrase users start each session locked: the entries are ciphertext until
-  // they unlock in Settings, so there's nothing to render here yet.
-  if (locked) {
-    return (
-      <main className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
-        <Lock className="h-10 w-10 text-label-secondary" strokeWidth={1.75} />
-        <div>
-          <h1 className="font-display text-xl font-bold uppercase text-label-muted">
-            Locked
-          </h1>
-          <p className="mt-1 text-sm text-label-secondary">
-            Your data is end-to-end encrypted. Enter your passphrase to unlock it.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate("/settings")}
-          className="press rounded-pill bg-label px-6 py-3 text-base font-semibold text-surface"
-        >
-          Unlock in Settings
-        </button>
-      </main>
-    );
-  }
+  // When locked (this device doesn't have the passphrase yet) amounts show
+  // obscured, so the safe balance can't be revealed either.
+  const reveal = safeShown && !locked;
 
   return (
     <main
@@ -124,7 +103,7 @@ export function Home() {
           balance rides along underneath so saved money shows in the picture. */}
       <section>
         <div className="rounded-card bg-surface px-5 py-5 shadow-card">
-          <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} />
+          <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} masked={locked} />
           <div className="mt-4 flex items-center gap-3 rounded-card bg-income/10 px-4 py-3">
             <button
               type="button"
@@ -141,14 +120,14 @@ export function Home() {
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                   <span className="flex items-center gap-1 font-numeric text-xl font-bold tabular-nums text-income">
                     <Banknote className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    {safeShown ? formatUsdCents(safeTotalCents) : "••••"}
+                    {reveal ? formatUsdCents(safeTotalCents) : "••••"}
                   </span>
                   <span
                     className="flex items-center gap-1 font-numeric text-sm font-bold tabular-nums"
                     style={{ color: GOLD_INK }}
                   >
                     <Coins className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                    {safeShown ? formatGrams(safeGoldGrams) : "•••"}
+                    {reveal ? formatGrams(safeGoldGrams) : "•••"}
                   </span>
                 </div>
               </div>
@@ -156,11 +135,12 @@ export function Home() {
             <button
               type="button"
               onClick={() => setSafeShown((v) => !v)}
-              aria-label={safeShown ? "Hide safe balance" : "Show safe balance"}
-              aria-pressed={safeShown}
-              className="press -m-2 shrink-0 p-2 text-income/70"
+              disabled={locked}
+              aria-label={reveal ? "Hide safe balance" : "Show safe balance"}
+              aria-pressed={reveal}
+              className="press -m-2 shrink-0 p-2 text-income/70 disabled:opacity-40"
             >
-              {safeShown ? (
+              {reveal ? (
                 <EyeOff className="h-5 w-5" strokeWidth={2} />
               ) : (
                 <Eye className="h-5 w-5" strokeWidth={2} />
@@ -170,12 +150,28 @@ export function Home() {
         </div>
       </section>
 
-      {/* "What's up, Doc?" — the add form is always visible and ready. */}
+      {/* "What's up, Doc?" — the add form is always visible and ready. While
+          locked you can't encrypt new entries, so it's a nudge to unlock. */}
       <section className="flex flex-col gap-2">
         <SectionHeader>What&apos;s up, Doc?</SectionHeader>
-        <div className="rounded-card bg-surface shadow-card">
-          <AddComposer editing={editing} onClearEdit={clearEdit} />
-        </div>
+        {locked ? (
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
+            className="press flex w-full items-center gap-3 rounded-card bg-surface px-4 py-3.5 text-left shadow-card"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-grouped text-label-secondary">
+              <Lock className="h-5 w-5" strokeWidth={2} />
+            </span>
+            <span className="text-sm text-label">
+              Locked — enter your passphrase in Settings to view and add.
+            </span>
+          </button>
+        ) : (
+          <div className="rounded-card bg-surface shadow-card">
+            <AddComposer editing={editing} onClearEdit={clearEdit} />
+          </div>
+        )}
       </section>
 
       {/* History. */}

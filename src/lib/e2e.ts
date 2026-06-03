@@ -17,6 +17,31 @@ export type E2EMode = "default" | "passphrase";
 
 type KeyRow = { wrapped_key: string; wrap_type: E2EMode; verifier: string };
 
+// The passphrase is cached per-user in this browser so it survives restarts and
+// can be shown/edited in Settings — but it never leaves the device, so the
+// server still can't read it (encryption stays end-to-end).
+const PASS_KEY = (userId: string) => `bb-e2e-pass:${userId}`;
+
+export function loadStoredPassphrase(userId: string): string | null {
+  return localStorage.getItem(PASS_KEY(userId));
+}
+
+export function storeStoredPassphrase(userId: string, passphrase: string): void {
+  localStorage.setItem(PASS_KEY(userId), passphrase);
+}
+
+export function clearStoredPassphrase(userId: string): void {
+  localStorage.removeItem(PASS_KEY(userId));
+}
+
+// A stable, garbled stand-in for an encrypted value: a few characters of its
+// ciphertext. Each row looks distinct but reveals nothing — used to show
+// "obscured" data before a device is unlocked.
+export function cipherMask(cipher: string | null): string {
+  const frag = (cipher ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 4);
+  return frag || "••••";
+}
+
 // We encrypt only the money *values* (and free-text notes); the labels
 // (category, direction, currency, rate, date) stay as plaintext columns. Each
 // value goes into its own `_enc` column, so the schema keeps a clean 1:1 shape.
