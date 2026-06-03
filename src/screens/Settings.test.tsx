@@ -95,47 +95,19 @@ describe("Settings — account & data", () => {
 });
 
 describe("Settings — encryption", () => {
-  it("turns on encryption with a matching, strong passphrase", async () => {
+  it("turns on encryption with any passphrase (no strength gate, no confirm)", async () => {
     render(<Settings />);
-    expect(screen.queryByText(/Strength:/)).not.toBeInTheDocument();
-
-    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "Abcd1234!xyz");
-    expect(screen.getByText("Strength: Strong")).toBeInTheDocument();
+    // No strength meter and no confirm field.
+    expect(screen.queryByText(/Strength/)).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/can be cracked by whoever runs the server/),
+      screen.queryByPlaceholderText("Confirm passphrase"),
     ).not.toBeInTheDocument();
 
-    await userEvent.type(
-      screen.getByPlaceholderText("Confirm passphrase"),
-      "Abcd1234!xyz",
-    );
+    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "easy");
     await userEvent.click(
       screen.getByRole("button", { name: "Turn on encryption" }),
     );
-    expect(storeValue.enableEncryption).toHaveBeenCalledWith("Abcd1234!xyz");
-  });
-
-  it("warns about a weak passphrase but still allows it", async () => {
-    render(<Settings />);
-    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "abc");
-    expect(screen.getByText("Strength: Weak")).toBeInTheDocument();
-    expect(
-      screen.getByText(/can be cracked by whoever runs the server/),
-    ).toBeInTheDocument();
-  });
-
-  it("refuses to turn on when the passphrases don't match", async () => {
-    render(<Settings />);
-    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "one-two-three");
-    await userEvent.type(
-      screen.getByPlaceholderText("Confirm passphrase"),
-      "different",
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Turn on encryption" }),
-    );
-    expect(screen.getByText("Passphrases don't match.")).toBeInTheDocument();
-    expect(storeValue.enableEncryption).not.toHaveBeenCalled();
+    expect(storeValue.enableEncryption).toHaveBeenCalledWith("easy");
   });
 
   it("surfaces an enable error", async () => {
@@ -143,11 +115,7 @@ describe("Settings — encryption", () => {
       enableEncryption: vi.fn(async () => ({ error: "server said no" })),
     });
     render(<Settings />);
-    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "match-me-now");
-    await userEvent.type(
-      screen.getByPlaceholderText("Confirm passphrase"),
-      "match-me-now",
-    );
+    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "whatever");
     await userEvent.click(
       screen.getByRole("button", { name: "Turn on encryption" }),
     );
