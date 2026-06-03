@@ -47,7 +47,9 @@ describe("Home", () => {
   it("shows obscured amounts and an unlock nudge when locked", async () => {
     storeValue = makeStoreValue({
       locked: true,
-      transactions: [tx({ amountMask: "a8F2", is_income: true })],
+      transactions: [
+        tx({ amountMask: "a8F2", is_income: true, occurred_at: new Date().toISOString() }),
+      ],
       monthlyNetCents: 0,
     });
     render(<Home />);
@@ -83,7 +85,7 @@ describe("Home", () => {
   });
 
   it("enters edit mode and scrolls to the top", async () => {
-    storeValue = makeStoreValue({ transactions: [tx()] });
+    storeValue = makeStoreValue({ transactions: [tx({ occurred_at: new Date().toISOString() })] });
     render(<Home />);
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(window.scrollTo).toHaveBeenCalled();
@@ -96,7 +98,7 @@ describe("Home", () => {
   });
 
   it("deletes a row when confirmed, and not when cancelled", async () => {
-    storeValue = makeStoreValue({ transactions: [tx()] });
+    storeValue = makeStoreValue({ transactions: [tx({ occurred_at: new Date().toISOString() })] });
     const confirmSpy = vi.spyOn(window, "confirm");
     render(<Home />);
 
@@ -108,5 +110,37 @@ describe("Home", () => {
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(storeValue.deleteTransaction).toHaveBeenCalledWith("t1");
     confirmSpy.mockRestore();
+  });
+
+  it("lists only today's entries inline, leaving older ones for the drawer", () => {
+    storeValue = makeStoreValue({
+      transactions: [
+        tx({ id: "today", category: "groceries", occurred_at: new Date().toISOString() }),
+        tx({ id: "old", category: "gas", occurred_at: "2020-01-01T10:00:00.000Z" }),
+      ],
+    });
+    render(<Home />);
+    expect(screen.getByText("Groceries")).toBeInTheDocument();
+    // The old "Gas" entry stays in the (closed) drawer, not inline.
+    expect(screen.queryByText("Gas")).not.toBeInTheDocument();
+  });
+
+  it("opens the full-history drawer from Show all", async () => {
+    storeValue = makeStoreValue({
+      transactions: [tx({ id: "old", category: "gas", occurred_at: "2020-01-01T10:00:00.000Z" })],
+    });
+    render(<Home />);
+    await userEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(screen.getByText("All history")).toBeInTheDocument();
+    expect(screen.getByText("Gas")).toBeInTheDocument();
+  });
+
+  it("nudges to Show all when there's history but nothing today", () => {
+    storeValue = makeStoreValue({
+      transactions: [tx({ occurred_at: "2020-01-01T10:00:00.000Z" })],
+    });
+    render(<Home />);
+    expect(screen.getByText(/Nothin' today/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show all" })).toBeInTheDocument();
   });
 });

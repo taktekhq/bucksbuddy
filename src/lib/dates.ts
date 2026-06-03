@@ -13,3 +13,13 @@ export function currentMonthRange(now = new Date()): {
 export function monthLabel(now = new Date()): string {
   return now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
+
+/** True when an ISO timestamp falls on the same LOCAL calendar day as `now`. */
+export function isToday(iso: string, now = new Date()): boolean {
+  const d = new Date(iso);
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
