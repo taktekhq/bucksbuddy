@@ -362,7 +362,7 @@ export function Safe() {
             </span>
             <input
               inputMode="decimal"
-              value={display}
+              value={groupInt(display)}
               onChange={(e) =>
                 setDisplay(
                   isGold ? sanitizeGrams(e.target.value) : sanitizeAmount(e.target.value),
