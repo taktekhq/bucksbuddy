@@ -1,97 +1,197 @@
-import { ArrowDownLeft, ArrowUpRight, Vault } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowDownUp, ArrowLeft, Lock, Vault } from "lucide-react";
 import { Carrot } from "@/components/ui/Carrot";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
-import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
+import { supabase } from "@/lib/supabase";
 
-// The public marketing landing page. Succinct and on-brand: the static carrot
-// mascot, the Grobold wordmark, a one-line pitch in the "What's up, Doc?" voice,
-// three quick feature cards, and a big primary call-to-action.
+// The public marketing landing page — succinct and on-brand: the static carrot
+// mascot, the Grobold wordmark, a cheeky tagline, three feature cards, and a big
+// "Continue with Google" call-to-action. Lives behind "/home" for now.
 //
-// The CTA doesn't sign in here — it redirects to the Login screen (route "/"),
-// which owns the actual Google OAuth flow. Lives behind "/home" for now.
+// Hidden email sign-in: tapping the carrot mascot this many times swaps the page
+// for a plain email/password form — for friends without a Google account whose
+// accounts we create by hand in Supabase. It's a *separate flow* shown in place,
+// and nothing about it touches the URL, so it stays out of the way.
+const TAPS_TO_REVEAL = 7;
 
-// Three quick selling points, each its own white card. Icons borrow the money
-// palette (green in / red out) and the carrot accent, per the design system.
+// Three selling points, each its own white card. All carrot-tinted: carrot is
+// the one chromatic accent in the chrome (green/red are reserved for real money).
 const FEATURES = [
   {
-    icon: ArrowUpRight,
-    title: "Money in, green",
-    body: "Log income in a tap with the native keypad — no fuss, no friction.",
-    iconClass: "text-income",
-    tintClass: "bg-income/10",
-  },
-  {
-    icon: ArrowDownLeft,
-    title: "Money out, red",
-    body: "See exactly where every buck went, the moment it leaves your pocket.",
-    iconClass: "text-expense",
-    tintClass: "bg-expense/10",
+    icon: ArrowDownUp,
+    title: "Income & expenses",
+    body: "Log every buck in and out with a single tap.",
   },
   {
     icon: Vault,
-    title: "Stash it in the safe",
-    body: "Tuck savings — cash or gold — into your private, encrypted safe.",
-    iconClass: "text-carrot-dark",
-    tintClass: "bg-carrot-soft",
+    title: "Your private safe",
+    body: "Tuck savings away — cash or gold — for a rainy day.",
+  },
+  {
+    icon: Lock,
+    title: "End-to-end encrypted",
+    body: "Your numbers are sealed shut — only you can read them.",
   },
 ];
 
 export function Landing() {
   useThemeColor("#F2F2F7");
 
-  // Hand off to the Login screen, which renders when there's no session.
-  function goToLogin() {
-    navigate("/");
+  // Disables the button and shows "Redirecting…" while the browser leaves for
+  // Google (or "Signing in…" during a password sign-in).
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Hidden password sign-in: count carrot taps, then swap in the form. The count
+  // lives in a ref since it shouldn't re-render on its own — only crossing the
+  // threshold flips showEmail.
+  const taps = useRef(0);
+  const [showEmail, setShowEmail] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  function tapCarrot() {
+    if (showEmail) return;
+    taps.current += 1;
+    if (taps.current >= TAPS_TO_REVEAL) setShowEmail(true);
+  }
+
+  function backToLanding() {
+    taps.current = 0;
+    setShowEmail(false);
+    setError(null);
+  }
+
+  async function signInWithGoogle() {
+    setLoading(true);
+    setError(null);
+
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+
+    // On success the browser navigates away to Google; on return, the
+    // onAuthStateChange listener in useSession swaps App over to the app. We only
+    // land here if the redirect failed to start.
+    if (oauthError) {
+      setError(oauthError.message);
+      setLoading(false);
+    }
+  }
+
+  async function signInWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const { error: pwError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (pwError) {
+      setError(pwError.message);
+      setLoading(false);
+    }
+  }
+
+  // The hidden email/password sign-in — a separate flow shown in place of the
+  // marketing page once the carrot's been tapped enough.
+  if (showEmail) {
+    return (
+      <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6">
+        <div className="flex flex-col items-center">
+          <Carrot className="text-6xl" />
+          <h1 className="mt-4 text-center font-display text-3xl font-bold uppercase leading-none text-label-muted">
+            Bucks
+            <br />
+            Buddy
+          </h1>
+          <p className="mt-1 text-base text-label-secondary">Sign in with email</p>
+        </div>
+
+        <form
+          onSubmit={signInWithPassword}
+          className="mt-8 flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card"
+        >
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="rounded-pill bg-grouped px-4 py-3.5 text-lg text-label outline-none placeholder:text-label-muted"
+          />
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="rounded-pill bg-grouped px-4 py-3.5 text-lg text-label outline-none placeholder:text-label-muted"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="press rounded-pill bg-carrot py-3.5 text-lg font-semibold text-white transition disabled:opacity-50"
+          >
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+          {error && <p className="px-1 text-sm font-medium text-danger">{error}</p>}
+        </form>
+
+        <button
+          type="button"
+          onClick={backToLanding}
+          className="press mt-5 flex items-center justify-center gap-1.5 text-base font-semibold text-carrot"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={2.5} />
+          Back
+        </button>
+      </main>
+    );
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1.25rem+var(--safe-top))]">
-      {/* Slim top bar: wordmark left, a quiet Log in link right. */}
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Carrot className="text-2xl" />
-          <span className="font-display text-base font-bold uppercase leading-none text-label-muted">
-            Bucks Buddy
-          </span>
-        </div>
+    <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(2rem+var(--safe-top))]">
+      {/* Hero — the carrot doubles as the hidden email-flow trigger. */}
+      <section className="flex flex-1 flex-col items-center justify-center text-center">
         <button
           type="button"
-          onClick={goToLogin}
-          className="press text-base font-semibold text-carrot"
+          onClick={tapCarrot}
+          aria-label="carrot"
+          className="leading-none"
         >
-          Log in
+          <Carrot className="text-7xl" />
         </button>
-      </header>
-
-      {/* Hero */}
-      <section className="flex flex-1 flex-col items-center justify-center pt-10 text-center">
-        <Carrot className="text-7xl" />
         <h1 className="mt-5 font-display text-5xl font-bold uppercase leading-[0.95] text-label-muted">
           Bucks
           <br />
           Buddy
         </h1>
-        <p className="mt-5 text-xl font-semibold text-label">
-          The friendly way to watch your money.
+        <p className="mt-5 text-2xl font-bold text-label">
+          Track wabbits and bad habits.
         </p>
         <p className="mt-2 text-base leading-relaxed text-label-secondary">
-          What&apos;s up, Doc? Track every buck — in green, out red — and stash
-          the rest in your safe.
+          A money journal for every buck — coming in, going out, and tucked away
+          safe.
         </p>
       </section>
 
       {/* Feature cards */}
       <section className="mt-10 flex flex-col gap-2.5">
-        {FEATURES.map(({ icon: Icon, title, body, iconClass, tintClass }) => (
+        {FEATURES.map(({ icon: Icon, title, body }) => (
           <div
             key={title}
             className="flex items-center gap-3.5 rounded-card bg-surface p-4 shadow-card"
           >
-            <div
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tintClass}`}
-            >
-              <Icon className={`h-5 w-5 ${iconClass}`} strokeWidth={2} />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-carrot-soft">
+              <Icon className="h-5 w-5 text-carrot-dark" strokeWidth={2} />
             </div>
             <div>
               <p className="text-base font-semibold text-label">{title}</p>
@@ -101,20 +201,22 @@ export function Landing() {
         ))}
       </section>
 
-      {/* Primary call-to-action */}
+      {/* Primary call-to-action — flat carrot pill, matching the in-app buttons. */}
       <section className="mt-10 flex flex-col items-center gap-3">
         <button
           type="button"
-          onClick={goToLogin}
-          className="press flex w-full items-center justify-center gap-3 rounded-pill bg-carrot py-4 text-lg font-semibold text-white shadow-carrot"
+          onClick={signInWithGoogle}
+          disabled={loading}
+          className="press flex w-full items-center justify-center gap-3 rounded-pill bg-carrot py-3.5 text-lg font-semibold text-white transition disabled:opacity-50"
         >
           {/* The colorful Google "G" sits on a white chip so it reads correctly
               against the carrot pill. */}
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
             <GoogleIcon className="h-4 w-4" />
           </span>
-          Continue with Google
+          {loading ? "Redirecting…" : "Continue with Google"}
         </button>
+        {error && <p className="text-sm font-medium text-danger">{error}</p>}
         <p className="text-sm text-label-secondary">
           Free. No ads. That&apos;s all, folks. 🥕
         </p>

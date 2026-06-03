@@ -12,6 +12,7 @@ vi.mock("@/lib/store", () => ({
   ),
 }));
 vi.mock("@/screens/Login", () => ({ Login: () => <div>LoginScreen</div> }));
+vi.mock("@/screens/Landing", () => ({ Landing: () => <div>LandingScreen</div> }));
 vi.mock("@/screens/Home", () => ({ Home: () => <div>HomeScreen</div> }));
 vi.mock("@/screens/Settings", () => ({ Settings: () => <div>SettingsScreen</div> }));
 vi.mock("@/screens/Safe", () => ({ Safe: () => <div>SafeScreen</div> }));
@@ -36,6 +37,18 @@ describe("App", () => {
     useSession.mockReturnValue({ session: null, ready: true });
     render(<App />);
     expect(screen.getByText("LoginScreen")).toBeInTheDocument();
+  });
+
+  it("shows the landing page at /home regardless of session", () => {
+    useRoute.mockReturnValue("/home");
+    useSession.mockReturnValue({ session: null, ready: true });
+    const { rerender } = render(<App />);
+    expect(screen.getByText("LandingScreen")).toBeInTheDocument();
+
+    // Still the landing even while signed in — it's a previewable public page.
+    useSession.mockReturnValue({ session, ready: true });
+    rerender(<App />);
+    expect(screen.getByText("LandingScreen")).toBeInTheDocument();
   });
 
   it("routes to Home, Settings and Safe when signed in", () => {
