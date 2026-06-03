@@ -3,6 +3,7 @@ import { useRoute } from "@/lib/router";
 import { StoreProvider } from "@/lib/store";
 import { Carrot } from "@/components/ui/Carrot";
 import { Login } from "@/screens/Login";
+import { Landing } from "@/screens/Landing";
 import { Home } from "@/screens/Home";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
@@ -38,7 +39,11 @@ export default function App() {
   const route = useRoute();
 
   let content;
-  if (!ready) {
+  if (route === "/home") {
+    // The public landing page lives behind "/home" for now, and is previewable
+    // regardless of auth state — its CTA hands off to the Login screen.
+    content = <Landing />;
+  } else if (!ready) {
     content = <Splash />;
   } else if (!session) {
     content = <Login />;

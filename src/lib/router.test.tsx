@@ -18,6 +18,12 @@ describe("router", () => {
     expect(result.current).toBe("/settings");
   });
 
+  it("recognizes /home (the landing page route)", () => {
+    act(() => navigate("/home"));
+    const { result } = renderHook(() => useRoute());
+    expect(result.current).toBe("/home");
+  });
+
   it("navigate is a no-op when already on the route", () => {
     act(() => navigate("/safe"));
     const before = window.location.hash;
