@@ -71,7 +71,7 @@ describe("Settings — account & data", () => {
   it("signs out", async () => {
     render(<Settings />);
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(signOut).toHaveBeenCalled();
+    expect(storeValue.signOut).toHaveBeenCalled();
   });
 
   it("exports the decrypted in-memory rows to a CSV download", async () => {
