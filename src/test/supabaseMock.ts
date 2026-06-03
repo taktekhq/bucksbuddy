@@ -20,6 +20,10 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
         op = "insert";
         return builder;
       },
+      upsert: () => {
+        op = "upsert";
+        return builder;
+      },
       update: () => {
         op = "update";
         return builder;
@@ -32,6 +36,7 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
       order: () => builder,
       limit: () => builder,
       single: () => builder,
+      maybeSingle: () => builder,
       then: (
         resolve: (v: QueryResult) => unknown,
         reject?: (e: unknown) => unknown,

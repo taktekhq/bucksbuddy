@@ -2,7 +2,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { makeSupabaseMock, type Handler } from "@/test/supabaseMock";
+import {
+  generateMasterKey,
+  makeVerifier,
+  wrapMasterKey,
+} from "@/lib/crypto";
+import { encryptGoldValues, encryptTxValues } from "@/lib/e2e";
 import type { Transaction } from "@/types/db";
+
+type Res = { error: string | null };
 
 // A swappable supabase mock: each test sets `mock` before rendering.
 let mock = makeSupabaseMock();
@@ -273,6 +281,16 @@ describe("StoreProvider / useStore", () => {
       await result.current.addSafeGoldEntry({ is_deposit: true, grams: 3 });
     });
     expect(result.current.safeGoldGrams).toBe(3);
+    expect(result.current.safeGoldEntries[0].note).toBeNull(); // no-note path
+
+    await act(async () => {
+      await result.current.addSafeGoldEntry({
+        is_deposit: true,
+        grams: 2,
+        note: "ring",
+      });
+    });
+    expect(result.current.safeGoldEntries[0].note).toBe("ring"); // note path
 
     await act(async () => {
       await result.current.deleteSafeGoldEntry("g1");
@@ -329,5 +347,116 @@ describe("StoreProvider / useStore", () => {
       await result.current.refresh();
     });
     expect(result.current.transactions[0].id).toBe("r1");
+  });
+
+  it("starts locked for a passphrase user and unlocks with the right one", async () => {
+    const mk = await generateMasterKey();
+    const row = {
+      wrapped_key: await wrapMasterKey(mk, "pw"),
+      wrap_type: "passphrase",
+      verifier: await makeVerifier(mk),
+    };
+    const txEnc = await encryptTxValues(mk, {
+      amount_usd_cents: 7777,
+      original_amount: 77.77,
+      note: "k",
+    });
+    const encRow = {
+      id: "enc",
+      user_id: "u1",
+      occurred_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      is_income: false,
+      category: "groceries",
+      original_currency: "USD",
+      rate_used: 89500,
+      ...txEnc,
+    };
+    const goldEnc = await encryptGoldValues(mk, { grams: 9, note: null });
+    const encGoldRow = {
+      id: "eg",
+      user_id: "u1",
+      occurred_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      is_deposit: true,
+      ...goldEnc,
+    };
+    const { result } = setup({
+      "e2e_keys:select": () => ({ data: row }),
+      "transactions:select": () => ({ data: [encRow] }),
+      "safe_gold_entries:select": () => ({ data: [encGoldRow] }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.locked).toBe(true);
+    expect(result.current.e2eMode).toBe("passphrase");
+    expect(result.current.transactions).toEqual([]); // can't decrypt yet
+    expect(result.current.safeGoldEntries).toEqual([]);
+
+    let res: Res = { error: null };
+    await act(async () => {
+      res = await result.current.unlock("nope");
+    });
+    expect(res.error).toBe("Wrong passphrase.");
+    expect(result.current.locked).toBe(true);
+
+    await act(async () => {
+      res = await result.current.unlock("pw");
+    });
+    expect(res.error).toBeNull();
+    expect(result.current.locked).toBe(false);
+    expect(result.current.transactions).toHaveLength(1);
+    expect(result.current.transactions[0].amount_usd_cents).toBe(7777);
+    expect(result.current.transactions[0].note).toBe("k");
+    expect(result.current.safeGoldGrams).toBe(9); // decrypted gold
+  });
+
+  it("turns encryption on then off on the default tier", async () => {
+    const { result } = setup({
+      "e2e_keys:update": () => ({ data: null, error: null }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.e2eMode).toBe("default");
+
+    await act(async () => {
+      await result.current.enableEncryption("a strong passphrase!");
+    });
+    expect(result.current.e2eMode).toBe("passphrase");
+
+    await act(async () => {
+      await result.current.disableEncryption();
+    });
+    expect(result.current.e2eMode).toBe("default");
+  });
+
+  it("blocks writes and key changes while locked", async () => {
+    const mk = await generateMasterKey();
+    const row = {
+      wrapped_key: await wrapMasterKey(mk, "pw"),
+      wrap_type: "passphrase",
+      verifier: await makeVerifier(mk),
+    };
+    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.locked).toBe(true);
+
+    const newTx = {
+      is_income: false,
+      category: "x",
+      amount_usd_cents: 1,
+      original_currency: "USD" as const,
+      original_amount: 0.01,
+      rate_used: 89500,
+    };
+    const results: Res[] = [];
+    await act(async () => {
+      results.push(await result.current.addTransaction(newTx));
+      results.push(await result.current.updateTransaction("z", newTx));
+      results.push(await result.current.enableEncryption("pw2"));
+      results.push(await result.current.disableEncryption());
+      results.push(
+        await result.current.addSafeGoldEntry({ is_deposit: true, grams: 1 }),
+      );
+    });
+    for (const r of results) expect(r.error).toMatch(/Locked/);
   });
 });

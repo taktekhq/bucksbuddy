@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Banknote, Coins, Eye, EyeOff, Settings, Vault } from "lucide-react";
+import { Banknote, Coins, Eye, EyeOff, Lock, Settings, Vault } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
@@ -24,6 +24,7 @@ export function Home() {
     deleteTransaction,
     safeTotalCents,
     safeGoldGrams,
+    locked,
   } = useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
 
@@ -50,6 +51,31 @@ export function Home() {
     if (window.confirm("Delete this entry?")) {
       await deleteTransaction(tx.id);
     }
+  }
+
+  // Passphrase users start each session locked: the entries are ciphertext until
+  // they unlock in Settings, so there's nothing to render here yet.
+  if (locked) {
+    return (
+      <main className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+        <Lock className="h-10 w-10 text-label-secondary" strokeWidth={1.75} />
+        <div>
+          <h1 className="font-display text-xl font-bold uppercase text-label-muted">
+            Locked
+          </h1>
+          <p className="mt-1 text-sm text-label-secondary">
+            Your data is end-to-end encrypted. Enter your passphrase to unlock it.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/settings")}
+          className="press rounded-pill bg-label px-6 py-3 text-base font-semibold text-surface"
+        >
+          Unlock in Settings
+        </button>
+      </main>
+    );
   }
 
   return (
