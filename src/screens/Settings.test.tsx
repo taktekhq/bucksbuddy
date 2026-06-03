@@ -1,82 +1,85 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { makeSupabaseMock, type Handler } from "@/test/supabaseMock";
 import { makeStoreValue } from "@/test/storeValue";
+import type { Transaction } from "@/types/db";
 
-let sb = makeSupabaseMock();
+const { getSession, signOut } = vi.hoisted(() => ({
+  getSession: vi.fn(),
+  signOut: vi.fn(async () => ({ error: null })),
+}));
 vi.mock("@/lib/supabase", () => ({
-  supabase: {
-    from: (t: string) => sb.supabase.from(t),
-    auth: {
-      getSession: (...a: unknown[]) => sb.supabase.auth.getSession(...a),
-      signOut: (...a: unknown[]) => sb.supabase.auth.signOut(...a),
-    },
-  },
+  supabase: { auth: { getSession, signOut } },
 }));
 
 const navigate = vi.fn();
 vi.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => navigate(...a) }));
 
-vi.mock("@/lib/store", () => ({ useStore: () => makeStoreValue() }));
+let storeValue = makeStoreValue();
+vi.mock("@/lib/store", () => ({ useStore: () => storeValue }));
 
 import { Settings } from "@/screens/Settings";
 
-function setup(handlers: Record<string, Handler> = {}, email: string | null = null) {
-  sb = makeSupabaseMock(handlers);
-  sb.supabase.auth.getSession.mockResolvedValue({
-    data: { session: email === null ? null : { user: { email } } },
-  });
-  return render(<Settings />);
+function tx(overrides: Partial<Transaction> = {}): Transaction {
+  return {
+    id: "t1",
+    user_id: "u1",
+    is_income: false,
+    category: "groceries",
+    amount_usd_cents: 1000,
+    original_currency: "USD",
+    original_amount: 10,
+    rate_used: 89500,
+    occurred_at: "2026-06-01T00:00:00.000Z",
+    note: null,
+    created_at: "2026-06-01T00:00:00.000Z",
+    ...overrides,
+  };
 }
 
-describe("Settings", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubGlobal("URL", {
-      createObjectURL: vi.fn(() => "blob:fake"),
-      revokeObjectURL: vi.fn(),
-    });
+beforeEach(() => {
+  vi.clearAllMocks();
+  storeValue = makeStoreValue();
+  getSession.mockResolvedValue({ data: { session: { user: { email: "" } } } });
+  vi.stubGlobal("URL", {
+    createObjectURL: vi.fn(() => "blob:fake"),
+    revokeObjectURL: vi.fn(),
   });
+});
 
+describe("Settings — account & data", () => {
   it("shows the signed-in email", async () => {
-    setup({}, "user@example.com");
-    expect(await screen.findByText("user@example.com")).toBeInTheDocument();
+    getSession.mockResolvedValue({
+      data: { session: { user: { email: "me@x.com" } } },
+    });
+    render(<Settings />);
+    expect(await screen.findByText("me@x.com")).toBeInTheDocument();
   });
 
   it("falls back to an em dash with no email", async () => {
-    setup({}, null);
+    getSession.mockResolvedValue({ data: { session: null } });
+    render(<Settings />);
     expect(await screen.findByText("—")).toBeInTheDocument();
   });
 
   it("navigates home from the back button", async () => {
-    setup();
+    render(<Settings />);
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(navigate).toHaveBeenCalledWith("/");
   });
 
-  it("exports a CSV blob and triggers a download", async () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    setup({
-      "transactions:select": () => ({
-        data: [
-          {
-            id: "1",
-            user_id: "u1",
-            is_income: false,
-            category: "gas",
-            amount_usd_cents: 1000,
-            original_currency: "USD",
-            original_amount: 10,
-            rate_used: 89500,
-            occurred_at: "2026-06-01",
-            note: null,
-            created_at: "2026-06-01",
-          },
-        ],
-        error: null,
-      }),
-    });
+  it("signs out", async () => {
+    render(<Settings />);
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOut).toHaveBeenCalled();
+  });
+
+  it("exports the decrypted in-memory rows to a CSV download", async () => {
+    storeValue = makeStoreValue({ transactions: [tx()] });
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    render(<Settings />);
     await userEvent.click(screen.getByRole("button", { name: /Export CSV/ }));
     await waitFor(() => expect(clickSpy).toHaveBeenCalled());
     expect(URL.createObjectURL).toHaveBeenCalled();
@@ -84,17 +87,113 @@ describe("Settings", () => {
     clickSpy.mockRestore();
   });
 
-  it("exports an empty CSV when there are no rows", async () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    setup({ "transactions:select": () => ({ data: null, error: null }) });
-    await userEvent.click(screen.getByRole("button", { name: /Export CSV/ }));
-    await waitFor(() => expect(clickSpy).toHaveBeenCalled());
-    clickSpy.mockRestore();
+  it("disables export while locked", () => {
+    storeValue = makeStoreValue({ locked: true });
+    render(<Settings />);
+    expect(screen.getByRole("button", { name: /Export CSV/ })).toBeDisabled();
+  });
+});
+
+describe("Settings — encryption", () => {
+  it("turns on encryption with a matching, strong passphrase", async () => {
+    render(<Settings />);
+    expect(screen.queryByText(/Strength:/)).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "Abcd1234!xyz");
+    expect(screen.getByText("Strength: Strong")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/can be cracked by whoever runs the server/),
+    ).not.toBeInTheDocument();
+
+    await userEvent.type(
+      screen.getByPlaceholderText("Confirm passphrase"),
+      "Abcd1234!xyz",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Turn on encryption" }),
+    );
+    expect(storeValue.enableEncryption).toHaveBeenCalledWith("Abcd1234!xyz");
   });
 
-  it("signs out", async () => {
-    setup();
-    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(sb.supabase.auth.signOut).toHaveBeenCalled();
+  it("warns about a weak passphrase but still allows it", async () => {
+    render(<Settings />);
+    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "abc");
+    expect(screen.getByText("Strength: Weak")).toBeInTheDocument();
+    expect(
+      screen.getByText(/can be cracked by whoever runs the server/),
+    ).toBeInTheDocument();
+  });
+
+  it("refuses to turn on when the passphrases don't match", async () => {
+    render(<Settings />);
+    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "one-two-three");
+    await userEvent.type(
+      screen.getByPlaceholderText("Confirm passphrase"),
+      "different",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Turn on encryption" }),
+    );
+    expect(screen.getByText("Passphrases don't match.")).toBeInTheDocument();
+    expect(storeValue.enableEncryption).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an enable error", async () => {
+    storeValue = makeStoreValue({
+      enableEncryption: vi.fn(async () => ({ error: "server said no" })),
+    });
+    render(<Settings />);
+    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "match-me-now");
+    await userEvent.type(
+      screen.getByPlaceholderText("Confirm passphrase"),
+      "match-me-now",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Turn on encryption" }),
+    );
+    expect(await screen.findByText("server said no")).toBeInTheDocument();
+  });
+
+  it("shows the on-state and turns encryption off", async () => {
+    storeValue = makeStoreValue({ e2eMode: "passphrase" });
+    render(<Settings />);
+    expect(screen.getByText("End-to-end encryption is on")).toBeInTheDocument();
+    // The set-form is reused for changing the passphrase.
+    expect(
+      screen.getByRole("button", { name: "Change passphrase" }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    expect(storeValue.disableEncryption).toHaveBeenCalled();
+  });
+
+  it("surfaces a turn-off error", async () => {
+    storeValue = makeStoreValue({
+      e2eMode: "passphrase",
+      disableEncryption: vi.fn(async () => ({ error: "cannot disable" })),
+    });
+    render(<Settings />);
+    await userEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    expect(await screen.findByText("cannot disable")).toBeInTheDocument();
+  });
+
+  it("unlocks from the locked state, and shows a wrong-passphrase error", async () => {
+    storeValue = makeStoreValue({
+      locked: true,
+      unlock: vi.fn(async () => ({ error: "Wrong passphrase." })),
+    });
+    render(<Settings />);
+    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "guess");
+    await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
+    expect(storeValue.unlock).toHaveBeenCalledWith("guess");
+    expect(await screen.findByText("Wrong passphrase.")).toBeInTheDocument();
+  });
+
+  it("unlocks successfully without an error", async () => {
+    storeValue = makeStoreValue({ locked: true });
+    render(<Settings />);
+    await userEvent.type(screen.getByPlaceholderText("Passphrase"), "right");
+    await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
+    expect(storeValue.unlock).toHaveBeenCalledWith("right");
+    expect(screen.queryByText(/Wrong passphrase/)).not.toBeInTheDocument();
   });
 });

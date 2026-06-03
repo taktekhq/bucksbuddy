@@ -12,8 +12,13 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
 - **Currency:** USD + a per-entry LBP toggle (default 89,500 LBP/$, editable in Settings).
   Stored normalized to **integer USD cents**, with the original currency/amount/rate kept
   for auditable export.
-- **Auth:** Supabase **email + password** (single owner). No emails sent, no rate limits.
-  Data is private via Row Level Security.
+- **Auth:** Supabase **Google sign-in** (plus a hidden email + password for friends
+  without Google). No emails sent. Data is isolated per-account via Row Level Security.
+- **Privacy:** every row is stored encrypted (AES-GCM). By default the key is wrapped with
+  a public constant — so it's operator-readable, the same as plain storage — but any user
+  can turn on **end-to-end encryption** in Settings with a passphrase, after which *no one
+  but them* (not even whoever runs the server) can read their amounts, categories or notes.
+  See **Encryption** below.
 - **Export:** CSV download (client-side) for accounting.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
@@ -34,6 +39,11 @@ needs no migration — it rides along in `transactions`.
 > If you ran that, you can remove the leftover with a one-time
 > `drop table if exists public.safe_entries;` in the SQL Editor — optional, it's empty and
 > ignored either way._
+
+Finally run [`0003_e2e.sql`](supabase/migrations/0003_e2e.sql) to add the `e2e_keys` vault
+and the encrypted-blob column on `transactions`. On each user's next load the app encrypts
+their existing rows in place (it has the key; the server never does), so this is a one-time,
+no-downtime change.
 
 > **Savings Safe:** a vault icon next to Settings opens a dark "Safe" screen (available
 > to everyone).
@@ -78,6 +88,29 @@ fresh import builds correctly. If the project was previously imported as a Next.
 just redeploy — the `vercel.json` overrides the old preset. No rewrites are needed
 (the app uses hash-based routing).
 
+## Encryption (end-to-end)
+
+Encryption is **opt-in, per user**, so people who'd rather not risk losing access keep the
+simple, recoverable experience, while the privacy-conscious can lock the operator out.
+
+- **How it works:** each user has one random AES-GCM **master key** that encrypts their
+  entries. The master key is stored *wrapped* (encrypted) — never in the clear. We re-wrap
+  the key when the passphrase changes, so the data itself is never re-encrypted.
+- **Default tier:** the master key is wrapped with a public constant baked into the bundle.
+  Rows are ciphertext, but since the constant isn't secret, the data is still
+  operator-readable — i.e. no worse and no better than plain storage, just a uniform format.
+- **Turning it on:** Settings → Encryption → set a passphrase. The key is re-wrapped under a
+  PBKDF2 key derived from it; from then on the server only ever sees ciphertext for that
+  user. Each sign-in starts **locked** — you enter the passphrase in Settings to decrypt for
+  the session (the key lives in memory only, never on disk or in the database).
+- **No recovery, by design.** There is deliberately no reset: if a user forgets their
+  passphrase, the data is unrecoverable — that's the proof it's truly end-to-end. The UI
+  warns about this, and warns (without blocking) when a passphrase is weak enough for the
+  operator to brute-force.
+- **Scope:** the `transactions` ledger (amounts, categories, notes, direction, currency,
+  rate) is encrypted. The separate gold ledger (`safe_gold_entries`, grams) is not yet —
+  a planned follow-up.
+
 ## Local development
 
 ```bash
@@ -117,10 +150,10 @@ src/App.tsx             auth gate + hash router
 src/screens/            Login, Home, Add, Settings
 src/components/          AddEntryFlow + ui/* building blocks, RecentList, RateEditor, SignOutButton
 src/lib/                supabase client, store (in-memory cache), router, useSession,
-                        currency/money/dates/csv/categories
+                        crypto + e2e (encryption vault), currency/money/dates/csv/categories
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
-supabase/migrations/    0001_init.sql, 0002_safe_gold.sql
+supabase/migrations/    0001_init.sql, 0002_safe_gold.sql, 0003_e2e.sql
 docs/DESIGN_SYSTEM.md   reusable design system
 scripts/icons-from-source.mjs
 ```

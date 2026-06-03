@@ -33,6 +33,25 @@ export type NewTransaction = {
   note?: string | null;
 };
 
+// A transaction row as it comes back from the database. With E2E encryption the
+// sensitive columns are null and the values live in `ciphertext` instead;
+// legacy (pre-encryption) rows still carry the plaintext columns and no
+// ciphertext. The store turns one of these into a decrypted `Transaction`.
+export type TransactionRow = {
+  id: string;
+  user_id: string;
+  occurred_at: string;
+  created_at: string;
+  ciphertext: string | null;
+  is_income: boolean | null;
+  category: string | null;
+  amount_usd_cents: number | null;
+  original_currency: Currency | null;
+  original_amount: number | null;
+  rate_used: number | null;
+  note: string | null;
+};
+
 // Cash in the Safe is not its own table: it's recorded as normal transactions
 // with the "safe" category (see lib/categories), so moving money to/from the
 // safe shows in history and moves your balance.

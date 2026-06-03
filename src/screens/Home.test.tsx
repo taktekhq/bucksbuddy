@@ -44,6 +44,16 @@ describe("Home", () => {
     expect(screen.getByText("Loading…")).toBeInTheDocument();
   });
 
+  it("shows a locked screen and routes to Settings to unlock", async () => {
+    storeValue = makeStoreValue({ locked: true });
+    render(<Home />);
+    expect(screen.getByText("Locked")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Unlock in Settings" }),
+    );
+    expect(navigate).toHaveBeenCalledWith("/settings");
+  });
+
   it("keeps the safe balance hidden until revealed", async () => {
     storeValue = makeStoreValue({ safeTotalCents: 5000, safeGoldGrams: 2 });
     render(<Home />);
