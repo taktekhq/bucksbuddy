@@ -20,6 +20,10 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
         op = "insert";
         return builder;
       },
+      upsert: () => {
+        op = "upsert";
+        return builder;
+      },
       update: () => {
         op = "update";
         return builder;

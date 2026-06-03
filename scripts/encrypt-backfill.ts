@@ -45,33 +45,48 @@ const encNote = (key: CryptoKey, note: string | null) =>
 // app hasn't created it yet). Cached per user.
 const keyCache = new Map<string, CryptoKey | null>();
 
-async function masterKeyFor(userId: string): Promise<CryptoKey | null> {
-  const cached = keyCache.get(userId);
-  if (cached !== undefined) return cached;
-
+async function fetchKeyRow(userId: string) {
   const { data, error } = await db
     .from("e2e_keys")
     .select("wrapped_key, wrap_type")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
+  return data;
+}
 
-  let key: CryptoKey | null;
-  if (!data) {
+async function masterKeyFor(userId: string): Promise<CryptoKey | null> {
+  const cached = keyCache.get(userId);
+  if (cached !== undefined) return cached;
+
+  let row = await fetchKeyRow(userId);
+  if (!row) {
     const mk = await generateMasterKey();
-    const { error: insErr } = await db.from("e2e_keys").insert({
-      user_id: userId,
-      wrapped_key: await wrapMasterKey(mk, DEFAULT_PASSPHRASE),
-      wrap_type: "default",
-      verifier: await makeVerifier(mk),
-    });
-    if (insErr) throw insErr;
-    key = mk;
-  } else if (data.wrap_type === "default") {
-    key = await unwrapMasterKey(data.wrapped_key, DEFAULT_PASSPHRASE);
-  } else {
-    key = null; // passphrase-tier: not ours to encrypt
+    // Idempotent: ignoreDuplicates so we never clobber a row the app created
+    // (which could be passphrase-wrapped) if we race with it.
+    const { error: upErr } = await db.from("e2e_keys").upsert(
+      {
+        user_id: userId,
+        wrapped_key: await wrapMasterKey(mk, DEFAULT_PASSPHRASE),
+        wrap_type: "default",
+        verifier: await makeVerifier(mk),
+      },
+      { onConflict: "user_id", ignoreDuplicates: true },
+    );
+    if (upErr) throw upErr;
+    row = await fetchKeyRow(userId);
+    if (!row) {
+      keyCache.set(userId, mk);
+      return mk;
+    }
   }
+
+  // Respect the stored row (ours, or whoever won the race). Passphrase-tier
+  // rows aren't ours to encrypt.
+  const key =
+    row.wrap_type === "default"
+      ? await unwrapMasterKey(row.wrapped_key, DEFAULT_PASSPHRASE)
+      : null;
   keyCache.set(userId, key);
   return key;
 }

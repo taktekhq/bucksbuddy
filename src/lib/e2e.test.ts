@@ -9,6 +9,7 @@ vi.mock("@/lib/supabase", () => ({
 
 import {
   DEFAULT_PASSPHRASE,
+  decryptString,
   encryptString,
   generateMasterKey,
   makeVerifier,
@@ -49,7 +50,7 @@ describe("e2e vault", () => {
   });
 
   it("bootstraps a brand-new user as unlocked default-tier", async () => {
-    set(); // no e2e_keys row
+    set(); // no e2e_keys row (and the re-read also finds none)
     const v = await loadVault("u1");
     expect(v.status).toBe("unlocked");
     if (v.status === "unlocked") {
@@ -57,17 +58,33 @@ describe("e2e vault", () => {
       expect(await encryptString(v.masterKey, "x")).toBeTruthy();
     }
     expect(
-      mock.calls.some((c) => c.table === "e2e_keys" && c.op === "insert"),
+      mock.calls.some((c) => c.table === "e2e_keys" && c.op === "upsert"),
     ).toBe(true);
   });
 
-  it("loads an existing default-tier row unlocked, no insert", async () => {
+  it("respects a row a race created during bootstrap (re-read wins)", async () => {
+    const { mk, row } = await keyRow(DEFAULT_PASSPHRASE, "default");
+    // First read (no row) triggers bootstrap; the re-read finds the racer's row.
+    let calls = 0;
+    set({ "e2e_keys:select": () => ({ data: calls++ === 0 ? null : row }) });
+    const v = await loadVault("u1");
+    expect(v.status).toBe("unlocked");
+    if (v.status === "unlocked") {
+      // Prove it adopted the stored key, not its own orphaned one: a blob the
+      // loaded key encrypts must decrypt under the racer's key.
+      const blob = await encryptString(v.masterKey, "x");
+      expect(await decryptString(mk, blob)).toBe("x");
+      expect(v.mode).toBe("default");
+    }
+  });
+
+  it("loads an existing default-tier row unlocked, no upsert", async () => {
     const { row } = await keyRow(DEFAULT_PASSPHRASE, "default");
     set({ "e2e_keys:select": () => ({ data: row }) });
     const v = await loadVault("u1");
     expect(v.status).toBe("unlocked");
     expect(
-      mock.calls.some((c) => c.table === "e2e_keys" && c.op === "insert"),
+      mock.calls.some((c) => c.table === "e2e_keys" && c.op === "upsert"),
     ).toBe(false);
   });
 

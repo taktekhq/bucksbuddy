@@ -113,16 +113,25 @@ export type VaultState =
 // unlocked transparently with the public passphrase; passphrase-tier users come
 // back "locked" until they enter their passphrase.
 export async function loadVault(userId: string): Promise<VaultState> {
-  const row = await fetchKeyRow(userId);
+  let row = await fetchKeyRow(userId);
   if (!row) {
     const masterKey = await generateMasterKey();
-    await supabase.from("e2e_keys").insert({
-      user_id: userId,
-      wrapped_key: await wrapMasterKey(masterKey, DEFAULT_PASSPHRASE),
-      wrap_type: "default",
-      verifier: await makeVerifier(masterKey),
-    });
-    return { status: "unlocked", mode: "default", masterKey };
+    // Idempotent create: `ignoreDuplicates` means we never clobber an existing
+    // row (e.g. a passphrase-wrapped key), so this is safe even if the app and
+    // the backfill script both try to bootstrap the same user at once.
+    await supabase.from("e2e_keys").upsert(
+      {
+        user_id: userId,
+        wrapped_key: await wrapMasterKey(masterKey, DEFAULT_PASSPHRASE),
+        wrap_type: "default",
+        verifier: await makeVerifier(masterKey),
+      },
+      { onConflict: "user_id", ignoreDuplicates: true },
+    );
+    // Re-read: normally returns the row we just wrote; under a race it returns
+    // whoever won — which we must respect instead of our now-orphaned key.
+    row = await fetchKeyRow(userId);
+    if (!row) return { status: "unlocked", mode: "default", masterKey };
   }
   if (row.wrap_type === "default") {
     const masterKey = await unwrapMasterKey(row.wrapped_key, DEFAULT_PASSPHRASE);
