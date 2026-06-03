@@ -24,11 +24,17 @@ const SYMBOL: Record<Currency, string> = { USD: "$", LBP: "LL" };
 
 // The Safe lives in its own dark "vault" world — a deliberately different
 // mentality from the bright daily tracker. The gradient is painted on the
-// scrolling content (main grows to full height), so it never breaks on scroll,
-// and we touch nothing global so Home is unaffected on the way back. It fades
-// over the first ~640px, then holds a deep green for the rest of the page.
+// scrolling content and fades over the first ~640px, then holds a deep green.
+// Behind it sits a fixed, viewport-filling backdrop in that same terminal green
+// (VAULT_FLOOR): on web Safari the dynamic toolbar collapses as you scroll,
+// growing the viewport past <main>, and overscroll rubber-bands past the
+// content — both would otherwise flash the light body canvas through. The
+// backdrop catches those gaps so the green never breaks. (The standalone PWA
+// has no collapsing toolbar, which is why it never showed the seam.) We touch
+// nothing global, so Home is unaffected on the way back.
 const VAULT_BG =
   "linear-gradient(180deg, #0E4A37 0px, #0A3A2A 320px, #06281E 640px)";
+const VAULT_FLOOR = "#06281E";
 const GOLD = "#FFD479";
 const MINT = "#7CE6AA";
 const TAKE = "#FFA866";
@@ -235,6 +241,16 @@ export function Safe() {
       className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))] text-white"
       style={{ background: VAULT_BG }}
     >
+      {/* Fixed vault floor behind the content: fills the viewport at all times
+          (the gradient's terminal green), so a collapsing browser toolbar or an
+          overscroll bounce can never reveal the light body canvas behind the
+          centered column. Fixed positioning is relative to the viewport, not
+          this parent, so nesting it here keeps the floor full-bleed. */}
+      <div
+        aria-hidden
+        className="fixed inset-0"
+        style={{ background: VAULT_FLOOR, zIndex: -1 }}
+      />
       {/* Dark nav: back chevron + centered title. */}
       <header className="relative flex items-center justify-center py-1">
         <button
