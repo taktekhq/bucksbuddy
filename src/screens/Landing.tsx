@@ -179,7 +179,7 @@ export function Landing() {
           Track wabbits and bad habits.
         </p>
         <p className="mt-2 text-base leading-relaxed text-label-secondary">
-          A money journal for your spending.
+          On-the-go money journal for your spending.
         </p>
       </section>
 
