@@ -179,16 +179,6 @@ src/lib/                supabase client, store (in-memory cache), router, useSes
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0003_e2e.sql, 0004_e2e_gold.sql, 0005_drop_plaintext_values.sql
-scripts/                icons-from-source.mjs, encrypt-backfill.ts (one-off E2E backfill)
+scripts/                encrypt-backfill.ts (one-off E2E backfill)
 docs/DESIGN_SYSTEM.md   reusable design system
-scripts/icons-from-source.mjs
-```
-
-## Regenerating icons
-
-App icons are generated from `public/icons/carrot-source.png` (auto-cropped and
-centered on white). Requires `sharp`:
-
-```bash
-npm i sharp && node scripts/icons-from-source.mjs   # writes public/icons/*
 ```
