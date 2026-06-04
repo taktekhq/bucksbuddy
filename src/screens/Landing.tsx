@@ -210,26 +210,27 @@ export function Landing() {
 
       {/* Primary call-to-action. */}
       <section className="mt-9 flex flex-col items-center gap-3">
-        <p className="text-sm text-label-secondary">
-          Free. No ads. That&apos;s all, folks. 🥕
-        </p>
-        {/* Google's sanctioned neutral (white) sign-in button: white surface,
-            grey outline, dark label, the full-colour G. Brand-mandated styling,
-            so the hex border is an intentional exception to the token palette. */}
+        <p className="text-sm text-label-secondary">Free. No ads. 🥕</p>
+        {/* Custom (carrot) Google button. Per Google's custom-button rules this
+            is allowed as long as the official four-colour "G" sits on a
+            contrasting background — hence the white chip — the font is a clean
+            sans-serif, and the label is one of the sanctioned strings. */}
         <button
           type="button"
           onClick={signInWithGoogle}
           disabled={loading}
-          className="press flex w-full items-center justify-center gap-3 rounded-pill border border-[#747775] bg-white py-3.5 text-lg font-semibold text-label transition disabled:opacity-50"
+          className="press flex w-full items-center justify-center gap-3 rounded-pill bg-carrot py-3.5 text-lg font-semibold text-white transition disabled:opacity-50"
         >
-          <GoogleIcon className="h-5 w-5" />
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
+            <GoogleIcon className="h-4 w-4" />
+          </span>
           {loading ? "Redirecting…" : "Continue with Google"}
         </button>
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
         <button
           type="button"
           onClick={() => navigate("/legal")}
-          className="press text-sm font-medium text-label-secondary underline-offset-2 hover:underline"
+          className="press mt-1 rounded-pill bg-grouped px-6 py-3 text-sm font-semibold text-label-secondary"
         >
           Privacy and Terms
         </button>
