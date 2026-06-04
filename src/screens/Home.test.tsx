@@ -133,6 +133,10 @@ describe("Home", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show all" }));
     expect(screen.getByText("All history")).toBeInTheDocument();
     expect(screen.getByText("Gas")).toBeInTheDocument();
+
+    // Closing the drawer takes "All history" back off the screen.
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByText("All history")).not.toBeInTheDocument();
   });
 
   it("nudges to Show all when there's history but nothing today", () => {

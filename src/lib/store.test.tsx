@@ -14,10 +14,13 @@ type Res = { error: string | null };
 
 // A swappable supabase mock: each test sets `mock` before rendering.
 let mock = makeSupabaseMock();
+const authMock = vi.hoisted(() => ({
+  signOut: vi.fn(async () => ({ error: null })),
+}));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: (table: string) => mock.supabase.from(table),
-    auth: {},
+    auth: authMock,
   },
 }));
 
@@ -464,6 +467,26 @@ describe("StoreProvider / useStore", () => {
     expect(result.current.e2eMode).toBe("default");
     expect(result.current.passphrase).toBeNull();
     expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull();
+  });
+
+  it("clears the cached passphrase and signs out", async () => {
+    authMock.signOut.mockClear();
+    const { result } = setup({
+      "e2e_keys:update": () => ({ data: null, error: null }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.enableEncryption("a strong passphrase!");
+    });
+    expect(localStorage.getItem("bb-e2e-pass:u1")).toBe("a strong passphrase!");
+
+    await act(async () => {
+      await result.current.signOut();
+    });
+    expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull();
+    expect(result.current.passphrase).toBeNull();
+    expect(authMock.signOut).toHaveBeenCalledTimes(1);
   });
 
   it("blocks writes and key changes while locked", async () => {

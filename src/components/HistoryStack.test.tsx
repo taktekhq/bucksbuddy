@@ -79,6 +79,20 @@ describe("HistoryStack", () => {
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
 
+  it("keeps the sign when masking an income group", () => {
+    render(
+      <HistoryStack
+        group={group([
+          tx({ id: "a", is_income: true, category: "salary", amountMask: "a8F2" }),
+          tx({ id: "b", is_income: true, category: "salary" }),
+        ])}
+        onEdit={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+    expect(screen.getByText("+••••")).toBeInTheDocument();
+  });
+
   it("fires edit and delete from an expanded row", () => {
     const onEdit = vi.fn();
     const onDelete = vi.fn();

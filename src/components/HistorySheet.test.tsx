@@ -63,6 +63,12 @@ describe("HistorySheet", () => {
     expect(screen.getByRole("button", { name: /Coffee, 2 entries/ })).toBeInTheDocument();
   });
 
+  it("shows an empty state when there are no rows", () => {
+    setup({ rows: [] });
+    expect(screen.getByText("All history")).toBeInTheDocument();
+    expect(screen.getByText("Nothin' here yet, Doc.")).toBeInTheDocument();
+  });
+
   it("closes from the close button and the overlay", () => {
     const { onClose, container } = setup();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
