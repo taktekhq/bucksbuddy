@@ -21,21 +21,42 @@ function dateLabel(iso: string): string {
 }
 
 // A single history entry with swipe-to-reveal edit/delete actions. Shared by
-// the flat HistoryList and the stacked HistoryStack in the "Show all" drawer.
+// the flat HistoryList on Home (light) and the stacked HistoryStack on the
+// full-history page (dark) — `dark` swaps the white card for a charcoal one
+// that reads on the deep-grey "rabbit hole" page.
 export function SwipeRow({
   tx,
   onEdit,
   onDelete,
+  dark = false,
 }: {
   tx: Transaction;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
+  dark?: boolean;
 }) {
   const x = useMotionValue(0);
   const moved = useRef(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const Icon = categoryIcon(tx.category);
   const color = categoryColor(tx.category);
+
+  // Light (white card on the grey canvas) vs dark (charcoal card on the
+  // full-history page). On dark the category tint needs a touch more alpha to
+  // read over charcoal, and a faint inset ring gives the card an edge.
+  const tone = dark
+    ? {
+        card: "bg-[#3A3A3C] ring-1 ring-inset ring-white/5",
+        label: "text-white",
+        meta: "text-white/55",
+        iconAlpha: "33",
+      }
+    : {
+        card: "bg-surface",
+        label: "text-label",
+        meta: "text-label-secondary",
+        iconAlpha: "1A",
+      };
 
   function clearResetTimer() {
     if (resetTimer.current !== null) {
@@ -121,20 +142,20 @@ export function SwipeRow({
         onDragEnd={onDragEnd}
         onClick={onContentClick}
         style={{ x }}
-        className="relative flex items-center gap-3 bg-surface px-4 py-3.5"
+        className={`relative flex items-center gap-3 px-4 py-3.5 ${tone.card}`}
       >
         <span
           className="flex h-10 w-10 items-center justify-center rounded-pill"
-          style={{ backgroundColor: `${color}1A`, color }}
+          style={{ backgroundColor: `${color}${tone.iconAlpha}`, color }}
         >
           <Icon className="h-5 w-5" strokeWidth={2} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-label">{categoryLabel(tx.category)}</p>
+          <p className={`font-medium ${tone.label}`}>{categoryLabel(tx.category)}</p>
           {tx.note && (
-            <p className="truncate text-xs text-label-secondary">{tx.note}</p>
+            <p className={`truncate text-xs ${tone.meta}`}>{tx.note}</p>
           )}
-          <p className="text-xs text-label-secondary">
+          <p className={`text-xs ${tone.meta}`}>
             {dateLabel(tx.occurred_at)}
             {tx.original_currency === "LBP" && " · LBP"}
           </p>
