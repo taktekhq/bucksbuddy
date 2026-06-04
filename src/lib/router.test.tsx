@@ -23,6 +23,11 @@ describe("router", () => {
     expect(renderHook(() => useRoute()).result.current).toBe("/legal");
   });
 
+  it("recognizes the /history route", () => {
+    act(() => navigate("/history"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/history");
+  });
+
   it("navigate is a no-op when already on the route", () => {
     act(() => navigate("/safe"));
     const before = window.location.hash;

@@ -5,6 +5,7 @@ import { Carrot } from "@/components/ui/Carrot";
 import { Landing } from "@/screens/Landing";
 import { Legal } from "@/screens/Legal";
 import { Home } from "@/screens/Home";
+import { History } from "@/screens/History";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
 
@@ -55,6 +56,8 @@ export default function App() {
           <Settings />
         ) : route === "/safe" ? (
           <Safe />
+        ) : route === "/history" ? (
+          <History />
         ) : (
           <Home />
         )}

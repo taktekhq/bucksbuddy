@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Banknote, Coins, Eye, EyeOff, Lock, Settings, Vault } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Carrot } from "@/components/ui/Carrot";
 import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
-import { HistorySheet } from "@/components/HistorySheet";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
+import { takePendingEdit } from "@/lib/editIntent";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { isToday, monthLabel } from "@/lib/dates";
 import { formatUsdCents } from "@/lib/money";
@@ -29,10 +29,22 @@ export function Home() {
   } = useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
 
-  // The full history lives in a "Show all" drawer; the page itself only lists
-  // today's entries so it doesn't grow without bound.
-  const [historyOpen, setHistoryOpen] = useState(false);
+  // The full history lives on its own "/history" page; the page itself only
+  // lists today's entries so it doesn't grow without bound.
   const todays = transactions.filter((t) => isToday(t.occurred_at));
+
+  // Editing a row on the full-history page navigates back here with the target
+  // stashed; pick it up once the matching transaction is in hand.
+  const [pendingEditId, setPendingEditId] = useState<string | null>(takePendingEdit);
+  useEffect(() => {
+    if (!pendingEditId) return;
+    const tx = transactions.find((t) => t.id === pendingEditId);
+    if (tx) {
+      setEditing(tx);
+      setPendingEditId(null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [pendingEditId, transactions]);
 
   // The safe balance is private by default — tap the eye to reveal it.
   const [safeShown, setSafeShown] = useState(false);
@@ -187,7 +199,7 @@ export function Home() {
           {transactions.length > 0 && (
             <button
               type="button"
-              onClick={() => setHistoryOpen(true)}
+              onClick={() => navigate("/history")}
               className="press px-2 text-sm font-semibold text-carrot"
             >
               Show all
@@ -206,14 +218,6 @@ export function Home() {
           </p>
         )}
       </section>
-
-      <HistorySheet
-        open={historyOpen}
-        rows={transactions}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onClose={() => setHistoryOpen(false)}
-      />
     </main>
   );
 }

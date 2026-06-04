@@ -125,18 +125,35 @@ describe("Home", () => {
     expect(screen.queryByText("Gas")).not.toBeInTheDocument();
   });
 
-  it("opens the full-history drawer from Show all", async () => {
+  it("navigates to the full-history page from Show all", async () => {
     storeValue = makeStoreValue({
       transactions: [tx({ id: "old", category: "gas", occurred_at: "2020-01-01T10:00:00.000Z" })],
     });
     render(<Home />);
     await userEvent.click(screen.getByRole("button", { name: "Show all" }));
-    expect(screen.getByText("All history")).toBeInTheDocument();
-    expect(screen.getByText("Gas")).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith("/history");
+  });
 
-    // Closing the drawer takes "All history" back off the screen.
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(screen.queryByText("All history")).not.toBeInTheDocument();
+  it("picks up a pending edit requested from the history page", async () => {
+    const { requestEdit } = await import("@/lib/editIntent");
+    storeValue = makeStoreValue({
+      transactions: [tx({ id: "t1", occurred_at: new Date().toISOString() })],
+    });
+    requestEdit("t1");
+    render(<Home />);
+    // The composer opens in edit mode and the page scrolls up.
+    expect(screen.getByRole("button", { name: "Cancel edit" })).toBeInTheDocument();
+    expect(window.scrollTo).toHaveBeenCalled();
+  });
+
+  it("ignores a pending edit whose transaction is gone", async () => {
+    const { requestEdit } = await import("@/lib/editIntent");
+    storeValue = makeStoreValue({
+      transactions: [tx({ id: "t1", occurred_at: new Date().toISOString() })],
+    });
+    requestEdit("missing");
+    render(<Home />);
+    expect(screen.queryByRole("button", { name: "Cancel edit" })).not.toBeInTheDocument();
   });
 
   it("nudges to Show all when there's history but nothing today", () => {

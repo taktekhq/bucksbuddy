@@ -1,4 +1,4 @@
-// Grouping for the "Show all" history drawer. Entries are stacked by category
+// Grouping for the full-history page. Entries are stacked by category
 // (across any day) so a long history collapses into a handful of tappable
 // stacks. Totals always go through `netCents` so signing stays consistent with
 // the rest of the app (see lib/money.ts).
