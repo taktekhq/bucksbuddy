@@ -30,7 +30,14 @@ body,
 html,
 body {
   margin: 0;
-  /* Plain Apple canvas: grouped light-gray, not stark white. */
+}
+
+body {
+  /* Plain Apple canvas: grouped light-gray, not stark white. Painted on body
+     only (not html) so it propagates to the canvas while body itself stays
+     transparent in the paint flow — that's what lets a `fixed inset-0` floor
+     with `z-index: -1` (Safe, History, Home's savings tint) actually show on
+     the sides on desktop instead of getting buried under body's own fill. */
   background: #f2f2f7;
   color: #1c1c1e;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro",

@@ -76,17 +76,22 @@ export function Home() {
   const reveal = safeShown && !locked;
 
   return (
-    <main
-      className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))] transition-[background] duration-500"
-      style={
-        hasSavings
-          ? {
-              background:
-                "linear-gradient(180deg, #E6F8EE 0%, #F2F2F7 260px)",
-            }
-          : undefined
-      }
-    >
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
+      {/* Savings tint as a fixed, viewport-filling backdrop so the gradient
+          spans the full width on desktop (instead of being clipped to the
+          centered max-w-md column) and never flashes the canvas on overscroll.
+          Same trick as Safe / History; `z-index: -1` keeps it behind the
+          cards. */}
+      <div
+        aria-hidden
+        className="fixed inset-0 transition-[background] duration-500"
+        style={{
+          background: hasSavings
+            ? "linear-gradient(180deg, #E6F8EE 0%, #F2F2F7 260px)"
+            : undefined,
+          zIndex: -1,
+        }}
+      />
       {/* Carrot mark + wordmark + safe + settings — the plain Apple nav bar. */}
       <header className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
