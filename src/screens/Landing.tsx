@@ -227,10 +227,12 @@ export function Landing() {
           {loading ? "Redirecting…" : "Continue with Google"}
         </button>
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
+        {/* Full-width like the sign-in button so it's an easy mobile target;
+            an off-white fill with a hairline keeps it clearly secondary. */}
         <button
           type="button"
           onClick={() => navigate("/legal")}
-          className="press mt-1 rounded-pill bg-grouped px-6 py-3 text-sm font-semibold text-label-secondary"
+          className="press w-full rounded-pill border border-separator bg-surface py-3.5 text-base font-semibold text-label-secondary"
         >
           Privacy and Terms
         </button>
