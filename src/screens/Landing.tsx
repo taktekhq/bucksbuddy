@@ -159,7 +159,11 @@ export function Landing() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(2rem+var(--safe-top))]">
+    <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(2rem+var(--safe-top))]">
+      {/* Top spacer is larger than the bottom one so the whole stack sits a
+          little below centre, rather than dead-centred. */}
+      <div aria-hidden className="flex-[2]" />
+
       {/* Hero — the carrot doubles as the hidden email-flow trigger. */}
       <section className="flex flex-col items-center text-center">
         <button
@@ -222,6 +226,8 @@ export function Landing() {
           Free. No ads. That&apos;s all, folks. 🥕
         </p>
       </section>
+
+      <div aria-hidden className="flex-1" />
     </main>
   );
 }
