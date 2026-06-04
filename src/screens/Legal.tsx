@@ -38,7 +38,7 @@ export function Privacy() {
       <p>BucksBuddy keeps it simple:</p>
       <ul className="flex list-disc flex-col gap-2 pl-5">
         <li>We store your entries only to show them back to you.</li>
-        <li>No ads, no trackers, and we never sell your data.</li>
+        <li>No ads, and we don&apos;t sell your data.</li>
         <li>
           Turn on end-to-end encryption and not even we can read your numbers.
         </li>
@@ -56,7 +56,6 @@ export function Terms() {
         <li>BucksBuddy is a personal money journal, offered as-is.</li>
         <li>Track your own money — nothing illegal.</li>
         <li>You&apos;re responsible for your account and what you put in it.</li>
-        <li>We may change or shut down the app.</li>
       </ul>
       <p>That&apos;s all, folks. 🥕</p>
     </LegalPage>

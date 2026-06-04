@@ -12,7 +12,7 @@ describe("Legal pages", () => {
     render(<Privacy />);
     expect(screen.getByText("Privacy")).toBeInTheDocument();
     expect(
-      screen.getByText(/we never sell your data/i),
+      screen.getByText(/we don.t sell your data/i),
     ).toBeInTheDocument();
   });
 

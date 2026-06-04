@@ -25,7 +25,7 @@ describe("Landing", () => {
     expect(screen.getByText("Track wabbits and bad habits.")).toBeInTheDocument();
     expect(screen.getByText("Income & expenses")).toBeInTheDocument();
     expect(screen.getByText("Your private safe")).toBeInTheDocument();
-    expect(screen.getByText("Optional encryption")).toBeInTheDocument();
+    expect(screen.getByText("End-to-end encryption")).toBeInTheDocument();
   });
 
   it("links to the privacy and terms pages from the footer", async () => {
