@@ -213,7 +213,7 @@ export function Home() {
         ) : (
           <p className="py-10 text-center text-label-secondary">
             {transactions.length > 0
-              ? "Nothin' today, Doc. Tap “Show all” for the full history."
+              ? "Nothin' today, Doc."
               : "Nothin' here yet, Doc. Add your first one above."}
           </p>
         )}
