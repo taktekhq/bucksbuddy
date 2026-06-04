@@ -4,7 +4,7 @@ import { StoreProvider } from "@/lib/store";
 import { Carrot } from "@/components/ui/Carrot";
 import { Login } from "@/screens/Login";
 import { Landing } from "@/screens/Landing";
-import { Privacy, Terms } from "@/screens/Legal";
+import { Legal } from "@/screens/Legal";
 import { Home } from "@/screens/Home";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
@@ -44,11 +44,9 @@ export default function App() {
     // The public landing page lives behind "/home" for now, and is previewable
     // regardless of auth state — its CTA hands off to the Login screen.
     content = <Landing />;
-  } else if (route === "/privacy") {
-    // Public legal pages — viewable signed-in or out.
-    content = <Privacy />;
-  } else if (route === "/terms") {
-    content = <Terms />;
+  } else if (route === "/legal") {
+    // Public privacy + terms page — viewable signed-in or out.
+    content = <Legal />;
   } else if (!ready) {
     content = <Splash />;
   } else if (!session) {

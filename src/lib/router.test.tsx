@@ -24,11 +24,9 @@ describe("router", () => {
     expect(result.current).toBe("/home");
   });
 
-  it("recognizes the /privacy and /terms legal routes", () => {
-    act(() => navigate("/privacy"));
-    expect(renderHook(() => useRoute()).result.current).toBe("/privacy");
-    act(() => navigate("/terms"));
-    expect(renderHook(() => useRoute()).result.current).toBe("/terms");
+  it("recognizes the /legal route", () => {
+    act(() => navigate("/legal"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/legal");
   });
 
   it("navigate is a no-op when already on the route", () => {

@@ -28,16 +28,13 @@ describe("Landing", () => {
     expect(screen.getByText("End-to-end encryption")).toBeInTheDocument();
   });
 
-  it("links to the privacy and terms pages from the footer", async () => {
+  it("links to the legal page from the Privacy and Terms button", async () => {
     render(<Landing />);
-
     window.location.hash = "/home";
-    await userEvent.click(screen.getByRole("button", { name: "Privacy" }));
-    expect(window.location.hash).toBe("#/privacy");
-
-    window.location.hash = "/home";
-    await userEvent.click(screen.getByRole("button", { name: "Terms" }));
-    expect(window.location.hash).toBe("#/terms");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Privacy and Terms" }),
+    );
+    expect(window.location.hash).toBe("#/legal");
   });
 
   it("starts Google OAuth and shows the redirecting state", async () => {

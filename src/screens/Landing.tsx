@@ -208,42 +208,31 @@ export function Landing() {
         ))}
       </section>
 
-      {/* Primary call-to-action — flat carrot pill, matching the in-app buttons. */}
+      {/* Primary call-to-action. */}
       <section className="mt-9 flex flex-col items-center gap-3">
+        <p className="text-sm text-label-secondary">
+          Free. No ads. That&apos;s all, folks. 🥕
+        </p>
+        {/* Google's sanctioned neutral (white) sign-in button: white surface,
+            grey outline, dark label, the full-colour G. Brand-mandated styling,
+            so the hex border is an intentional exception to the token palette. */}
         <button
           type="button"
           onClick={signInWithGoogle}
           disabled={loading}
-          className="press flex w-full items-center justify-center gap-3 rounded-pill bg-carrot py-3.5 text-lg font-semibold text-white transition disabled:opacity-50"
+          className="press flex w-full items-center justify-center gap-3 rounded-pill border border-[#747775] bg-white py-3.5 text-lg font-semibold text-label transition disabled:opacity-50"
         >
-          {/* The colorful Google "G" sits on a white chip so it reads correctly
-              against the carrot pill. */}
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
-            <GoogleIcon className="h-4 w-4" />
-          </span>
+          <GoogleIcon className="h-5 w-5" />
           {loading ? "Redirecting…" : "Continue with Google"}
         </button>
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
-        <p className="text-sm text-label-secondary">
-          Free. No ads. That&apos;s all, folks. 🥕
-        </p>
-        <nav className="flex items-center gap-2 text-xs text-label-secondary">
-          <button
-            type="button"
-            onClick={() => navigate("/privacy")}
-            className="press underline-offset-2 hover:underline"
-          >
-            Privacy
-          </button>
-          <span aria-hidden>·</span>
-          <button
-            type="button"
-            onClick={() => navigate("/terms")}
-            className="press underline-offset-2 hover:underline"
-          >
-            Terms
-          </button>
-        </nav>
+        <button
+          type="button"
+          onClick={() => navigate("/legal")}
+          className="press text-sm font-medium text-label-secondary underline-offset-2 hover:underline"
+        >
+          Privacy and Terms
+        </button>
       </section>
 
       <div aria-hidden className="flex-1" />
