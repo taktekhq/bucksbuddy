@@ -61,6 +61,10 @@ type Store = {
   // Sign out: clears the passphrase cached on this device before ending the
   // session, so the next person to sign in here can't reuse it.
   signOut: () => Promise<void>;
+  // Delete account: permanently removes the user and all their data via the
+  // `delete-account` edge function (the anon client can't delete an auth user),
+  // then clears local secrets and ends the session. Irreversible.
+  deleteAccount: () => Promise<Result>;
   // Savings Safe. Cash in the safe = all-time net of "safe"-category
   // transactions: money sent to the safe (Out) adds, money taken back (In)
   // subtracts.
@@ -328,6 +332,21 @@ export function StoreProvider({
     await supabase.auth.signOut();
   }, [userId]);
 
+  const deleteAccount = useCallback(async () => {
+    // The auth user can only be removed with admin privileges, so this defers to
+    // the edge function. Its FK cascades wipe the profile, transactions, gold
+    // and key vault along with the user.
+    const { error } = await supabase.functions.invoke("delete-account");
+    if (error) return { error: error.message };
+    // The account is gone server-side; drop the cached secrets and end the
+    // session so the app falls back to the landing page.
+    clearStoredPassphrase(userId);
+    masterKey.current = null;
+    setPassphrase(null);
+    await supabase.auth.signOut();
+    return { error: null };
+  }, [userId]);
+
   const addTransaction = useCallback(
     async (tx: NewTransaction) => {
       const key = masterKey.current;
@@ -485,6 +504,7 @@ export function StoreProvider({
     enableEncryption,
     disableEncryption,
     signOut,
+    deleteAccount,
     safeTotalCents,
     safeGoldEntries,
     safeGoldGrams,

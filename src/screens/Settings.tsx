@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Download, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
+import {
+  ChevronLeft,
+  Download,
+  Eye,
+  EyeOff,
+  Lock,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
 import { RateEditor } from "@/components/RateEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
@@ -92,10 +100,81 @@ export function Settings() {
         </div>
       </section>
 
+      {/* DANGER ZONE */}
+      <DeleteAccountCard />
+
       <p className="mt-2 text-center text-xs text-label-secondary">
         That&apos;s all, folks. 🥕
       </p>
     </main>
+  );
+}
+
+// Delete account — a two-step destructive action. The first tap reveals a
+// confirmation (since this can't be undone); confirming calls the store, which
+// removes everything server-side and ends the session, dropping the app back to
+// the landing page. On failure we surface the error and let them retry.
+function DeleteAccountCard() {
+  const { deleteAccount } = useStore();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function remove() {
+    setBusy(true);
+    setErr(null);
+    const { error } = await deleteAccount();
+    // On success the session ends and App swaps to the landing page, so there's
+    // nothing to reset here. On failure, surface it and let them try again.
+    if (error) {
+      setBusy(false);
+      setErr(error);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionHeader>Danger zone</SectionHeader>
+      <div className="overflow-hidden rounded-card bg-surface shadow-card">
+        {confirming ? (
+          <div className="flex flex-col gap-3 p-4">
+            <p className="text-sm text-label">
+              This permanently deletes your account and all your data. This
+              can&apos;t be undone.
+            </p>
+            <button
+              type="button"
+              onClick={remove}
+              disabled={busy}
+              className="press rounded-pill bg-expense py-3 text-base font-semibold text-surface transition disabled:opacity-50"
+            >
+              {busy ? "Deleting…" : "Delete everything"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+                setErr(null);
+              }}
+              disabled={busy}
+              className="press rounded-pill bg-grouped py-3 text-base font-semibold text-label transition disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            {err && <p className="px-1 text-sm font-medium text-danger">{err}</p>}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="press flex w-full items-center justify-between px-4 py-3.5 text-base font-medium text-expense"
+          >
+            <span>Delete account</span>
+            <Trash2 className="h-5 w-5" strokeWidth={2} />
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 
