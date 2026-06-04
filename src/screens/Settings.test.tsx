@@ -94,6 +94,59 @@ describe("Settings — account & data", () => {
   });
 });
 
+describe("Settings — delete account", () => {
+  it("confirms before deleting, then calls the store", async () => {
+    render(<Settings />);
+    // First tap only reveals the confirmation; nothing is deleted yet.
+    await userEvent.click(
+      screen.getByRole("button", { name: /Delete account/ }),
+    );
+    expect(storeValue.deleteAccount).not.toHaveBeenCalled();
+    expect(screen.getByText(/can't be undone/i)).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Delete everything" }),
+    );
+    expect(storeValue.deleteAccount).toHaveBeenCalled();
+    // On success the button stays in its busy state (the session is ending).
+    expect(
+      await screen.findByRole("button", { name: "Deleting…" }),
+    ).toBeInTheDocument();
+  });
+
+  it("cancels out of the confirmation", async () => {
+    render(<Settings />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /Delete account/ }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+      screen.queryByRole("button", { name: "Delete everything" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Delete account/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("surfaces a delete error and lets you retry", async () => {
+    storeValue = makeStoreValue({
+      deleteAccount: vi.fn(async () => ({ error: "could not delete" })),
+    });
+    render(<Settings />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /Delete account/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Delete everything" }),
+    );
+    expect(await screen.findByText("could not delete")).toBeInTheDocument();
+    // Not stuck busy — the button is back so they can try again.
+    expect(
+      screen.getByRole("button", { name: "Delete everything" }),
+    ).toBeEnabled();
+  });
+});
+
 describe("Settings — encryption", () => {
   it("off state: shows Off + a turn-on form, no strength or confirm", async () => {
     render(<Settings />);

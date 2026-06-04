@@ -20,6 +20,7 @@ export function makeStoreValue(overrides: Record<string, unknown> = {}) {
     enableEncryption: vi.fn(async () => ({ error: null })),
     disableEncryption: vi.fn(async () => ({ error: null })),
     signOut: vi.fn(async () => {}),
+    deleteAccount: vi.fn(async () => ({ error: null })),
     safeTotalCents: 0,
     safeGoldEntries: [],
     safeGoldGrams: 0,

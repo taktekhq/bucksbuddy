@@ -77,6 +77,22 @@ describe("Safe", () => {
     expect(screen.getByText(/\$100\.00\/g \(live\)/)).toBeInTheDocument();
   });
 
+  it("ignores a gold price that resolves after unmount", async () => {
+    // The effect guards setState with an `active` flag cleared on cleanup; a
+    // price arriving after unmount must be dropped (no setState-after-unmount).
+    let resolve!: (v: number | null) => void;
+    fetchGoldUsdPerGram.mockReturnValueOnce(
+      new Promise<number | null>((r) => {
+        resolve = r;
+      }),
+    );
+    const { unmount } = render(<Safe />);
+    unmount(); // cleanup sets active = false
+    await act(async () => {
+      resolve(100); // .then runs now; active is false → setGoldPerGram skipped
+    });
+  });
+
   it("colors a negative cash balance differently", () => {
     storeValue = makeStoreValue({ safeTotalCents: -1500 });
     render(<Safe />);
@@ -240,6 +256,15 @@ describe("Safe", () => {
     const deletes = screen.getAllByRole("button", { name: "Delete" });
     await userEvent.click(deletes[0]); // newest first = the cash move
     expect(storeValue.deleteTransaction).toHaveBeenCalledWith("c1");
+    confirmSpy.mockRestore();
+  });
+
+  it("deletes a gold movement on confirm", async () => {
+    storeValue = makeStoreValue({ safeGoldEntries: [goldEntry()] });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<Safe />);
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(storeValue.deleteSafeGoldEntry).toHaveBeenCalledWith("g1");
     confirmSpy.mockRestore();
   });
 

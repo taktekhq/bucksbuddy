@@ -64,8 +64,9 @@ function parseGrams(display: string): number {
   const n = Number.parseFloat(display);
   // The input is sanitized to digits + one dot, so `n` is always a finite,
   // non-negative number here; the `: 0` fallback is purely defensive.
-  /* v8 ignore next */
+  /* v8 ignore start */
   return Number.isFinite(n) && n >= 0 ? n : 0;
+  /* v8 ignore stop */
 }
 
 function groupInt(s: string): string {
@@ -148,8 +149,9 @@ export function Safe() {
 
   async function save() {
     // Defensive: the CTA is disabled unless canSave, so this never returns.
-    /* v8 ignore next */
+    /* v8 ignore start */
     if (!canSave) return;
+    /* v8 ignore stop */
     setSaving(true);
     setError(null);
 
@@ -303,8 +305,9 @@ export function Safe() {
               ≈ {formatUsdCents(goldValueCents)} ·{" "}
               {/* goldValueCents != null implies goldPerGram != null; the `?? 0`
                   is defensive for the type-checker only. */}
-              {/* v8 ignore next */}
+              {/* v8 ignore start */}
               {formatUsdCents(Math.round((goldPerGram ?? 0) * 100))}/g (live)
+              {/* v8 ignore stop */}
             </p>
           ) : (
             <p className="mt-0.5 text-xs text-white/30">
