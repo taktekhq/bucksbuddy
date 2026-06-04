@@ -10,9 +10,12 @@
 // client calls this function with its session JWT; we verify who they are with
 // the anon client, then delete *that* user with a service-role admin client.
 //
-// Deploy:  supabase functions deploy delete-account
+// Deploy (Supabase Dashboard → Edge Functions → Deploy a new function → Via
+// Editor): name it exactly `delete-account`, paste this file, Deploy. Keep
+// "Verify JWT" enabled — the app sends the signed-in user's token. Or, via CLI:
+// `supabase functions deploy delete-account`.
 // The SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY env vars are
-// injected automatically by the Supabase platform.
+// injected automatically by the Supabase platform — nothing to configure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
