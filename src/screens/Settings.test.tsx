@@ -103,7 +103,7 @@ describe("Settings — encryption", () => {
       screen.queryByPlaceholderText("Confirm passphrase"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Turn off" }),
+      screen.queryByRole("button", { name: /Turn off/i }),
     ).not.toBeInTheDocument();
     // No eye toggle while entering — the field is plainly visible.
     expect(
@@ -142,7 +142,7 @@ describe("Settings — encryption", () => {
     await userEvent.click(screen.getByRole("button", { name: "Hide passphrase" }));
     expect(field).toHaveAttribute("type", "password");
 
-    await userEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    await userEvent.click(screen.getByRole("button", { name: "Turn off encryption" }));
     expect(storeValue.disableEncryption).toHaveBeenCalled();
   });
 
@@ -165,7 +165,7 @@ describe("Settings — encryption", () => {
       disableEncryption: vi.fn(async () => ({ error: "cannot disable" })),
     });
     render(<Settings />);
-    await userEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    await userEvent.click(screen.getByRole("button", { name: "Turn off encryption" }));
     expect(await screen.findByText("cannot disable")).toBeInTheDocument();
   });
 
@@ -178,7 +178,7 @@ describe("Settings — encryption", () => {
     render(<Settings />);
     expect(screen.getByText("On · locked on this device")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Turn off" }),
+      screen.queryByRole("button", { name: /Turn off/i }),
     ).not.toBeInTheDocument();
     // No eye toggle while unlocking — the field is plainly visible.
     expect(
