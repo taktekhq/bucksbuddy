@@ -33,7 +33,7 @@ const FEATURES = [
   {
     icon: Lock,
     title: "End-to-end encryption",
-    body: "When enabled, your data can only be read by you.",
+    body: "When enabled, only you can read your data.",
   },
 ];
 
