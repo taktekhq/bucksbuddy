@@ -40,6 +40,17 @@ describe("SwipeToDelete", () => {
     expect(true).toBe(true);
   });
 
+  it("does nothing when an already-closed row is tapped", () => {
+    const { container } = render(
+      <SwipeToDelete onDelete={() => {}}>
+        <span>x</span>
+      </SwipeToDelete>,
+    );
+    const node = getMotionNode(container);
+    // Closed (x === 0) and not dragged: onContentClick takes the no-op branch.
+    fireEvent.click(node);
+  });
+
   it("snaps back to closed on a small fling", () => {
     const { container } = render(
       <SwipeToDelete onDelete={() => {}}>
