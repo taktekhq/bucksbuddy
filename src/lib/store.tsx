@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import { navigate } from "@/lib/router";
 import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
@@ -325,11 +326,13 @@ export function StoreProvider({
   const signOut = useCallback(async () => {
     // Drop the cached passphrase first so it doesn't linger on this device for
     // whoever signs in next. The in-memory key goes too. The auth listener in
-    // App flips back to the login screen once the session ends.
+    // App flips back to the login screen once the session ends; reset the hash
+    // so the URL doesn't stay stuck on the page they signed out from.
     clearStoredPassphrase(userId);
     masterKey.current = null;
     setPassphrase(null);
     await supabase.auth.signOut();
+    navigate("/");
   }, [userId]);
 
   const deleteAccount = useCallback(async () => {
@@ -344,6 +347,7 @@ export function StoreProvider({
     masterKey.current = null;
     setPassphrase(null);
     await supabase.auth.signOut();
+    navigate("/");
     return { error: null };
   }, [userId]);
 

@@ -33,6 +33,9 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
+const navigate = vi.fn();
+vi.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => navigate(...a) }));
+
 import { StoreProvider, useStore } from "@/lib/store";
 
 function setup(handlers: Record<string, Handler> = {}) {
@@ -496,6 +499,7 @@ describe("StoreProvider / useStore", () => {
     expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull();
     expect(result.current.passphrase).toBeNull();
     expect(authMock.signOut).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith("/");
   });
 
   it("deletes the account, then clears secrets and signs out", async () => {
@@ -521,6 +525,7 @@ describe("StoreProvider / useStore", () => {
     expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull();
     expect(result.current.passphrase).toBeNull();
     expect(authMock.signOut).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith("/");
   });
 
   it("surfaces a delete-account error without signing out", async () => {
