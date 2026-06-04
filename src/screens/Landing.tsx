@@ -21,17 +21,17 @@ const FEATURES = [
   {
     icon: ArrowDownUp,
     title: "Income & expenses",
-    body: "Log every buck in and out with a single tap.",
+    body: "Log every buck in and out.",
   },
   {
     icon: Vault,
     title: "Your private safe",
-    body: "Tuck savings away — cash or gold — for a rainy day.",
+    body: "Tuck savings away, cash or gold.",
   },
   {
     icon: Lock,
     title: "End-to-end encrypted",
-    body: "Your numbers are sealed shut — only you can read them.",
+    body: "Your data is safe and obscured.",
   },
 ];
 
@@ -178,8 +178,7 @@ export function Landing() {
           Track wabbits and bad habits.
         </p>
         <p className="mt-2 text-base leading-relaxed text-label-secondary">
-          A money journal for every buck — coming in, going out, and tucked away
-          safe.
+          A money journal for your spending.
         </p>
       </section>
 
