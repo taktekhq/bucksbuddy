@@ -207,8 +207,8 @@ export function StoreProvider({
   const masterKey = useRef<CryptoKey | null>(null);
 
   // Load the exchange rate plus, when unlocked, the decrypted transactions and
-  // gold. Backfilling old plaintext rows into the `_enc` columns is a separate
-  // manual step (the encrypt-backfill script), not done here.
+  // gold. Backfilling any legacy plaintext rows into the `_enc` columns was a
+  // separate one-off operator step, not done here.
   const loadData = useCallback(async () => {
     setLoading(true);
     // The exchange rate isn't encrypted, so it loads regardless of lock state.
