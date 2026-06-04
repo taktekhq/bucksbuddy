@@ -18,6 +18,11 @@ describe("router", () => {
     expect(result.current).toBe("/settings");
   });
 
+  it("recognizes the /legal route", () => {
+    act(() => navigate("/legal"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/legal");
+  });
+
   it("navigate is a no-op when already on the route", () => {
     act(() => navigate("/safe"));
     const before = window.location.hash;

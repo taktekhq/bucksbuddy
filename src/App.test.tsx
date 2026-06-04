@@ -11,7 +11,8 @@ vi.mock("@/lib/store", () => ({
     <div data-testid="store">{children}</div>
   ),
 }));
-vi.mock("@/screens/Login", () => ({ Login: () => <div>LoginScreen</div> }));
+vi.mock("@/screens/Landing", () => ({ Landing: () => <div>LandingScreen</div> }));
+vi.mock("@/screens/Legal", () => ({ Legal: () => <div>LegalScreen</div> }));
 vi.mock("@/screens/Home", () => ({ Home: () => <div>HomeScreen</div> }));
 vi.mock("@/screens/Settings", () => ({ Settings: () => <div>SettingsScreen</div> }));
 vi.mock("@/screens/Safe", () => ({ Safe: () => <div>SafeScreen</div> }));
@@ -32,10 +33,17 @@ describe("App", () => {
     expect(screen.getByRole("img", { name: "carrot" })).toBeInTheDocument();
   });
 
-  it("shows the login screen when signed out", () => {
+  it("shows the landing page when signed out", () => {
     useSession.mockReturnValue({ session: null, ready: true });
     render(<App />);
-    expect(screen.getByText("LoginScreen")).toBeInTheDocument();
+    expect(screen.getByText("LandingScreen")).toBeInTheDocument();
+  });
+
+  it("shows the public legal page regardless of session", () => {
+    useSession.mockReturnValue({ session: null, ready: true });
+    useRoute.mockReturnValue("/legal");
+    render(<App />);
+    expect(screen.getByText("LegalScreen")).toBeInTheDocument();
   });
 
   it("routes to Home, Settings and Safe when signed in", () => {

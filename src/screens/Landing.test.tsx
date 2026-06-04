@@ -11,25 +11,34 @@ vi.mock("@/lib/supabase", () => ({
   supabase: { auth: { signInWithOAuth, signInWithPassword } },
 }));
 
-import { Login } from "@/screens/Login";
+import { Landing } from "@/screens/Landing";
 
-describe("Login", () => {
+describe("Landing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     signInWithOAuth.mockResolvedValue({ error: null });
     signInWithPassword.mockResolvedValue({ error: null });
   });
 
-  it("renders the wordmark and Google button", () => {
-    render(<Login />);
-    expect(screen.getByText("What's up, Doc?")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Continue with Google/ }),
-    ).toBeInTheDocument();
+  it("renders the tagline and the three feature cards", () => {
+    render(<Landing />);
+    expect(screen.getByText("Track wabbits and bad habits.")).toBeInTheDocument();
+    expect(screen.getByText("Income & expenses")).toBeInTheDocument();
+    expect(screen.getByText("Your private safe")).toBeInTheDocument();
+    expect(screen.getByText("End-to-end encryption")).toBeInTheDocument();
+  });
+
+  it("links to the legal page from the Privacy and Terms button", async () => {
+    render(<Landing />);
+    window.location.hash = "/";
+    await userEvent.click(
+      screen.getByRole("button", { name: "Privacy and Terms" }),
+    );
+    expect(window.location.hash).toBe("#/legal");
   });
 
   it("starts Google OAuth and shows the redirecting state", async () => {
-    render(<Login />);
+    render(<Landing />);
     await userEvent.click(
       screen.getByRole("button", { name: /Continue with Google/ }),
     );
@@ -37,13 +46,12 @@ describe("Login", () => {
       provider: "google",
       options: { redirectTo: window.location.origin },
     });
-    // On success the browser would navigate away; the button stays disabled.
     expect(screen.getByRole("button", { name: "Redirecting…" })).toBeDisabled();
   });
 
   it("surfaces an OAuth error and re-enables the button", async () => {
     signInWithOAuth.mockResolvedValue({ error: { message: "oauth boom" } });
-    render(<Login />);
+    render(<Landing />);
     await userEvent.click(
       screen.getByRole("button", { name: /Continue with Google/ }),
     );
@@ -53,18 +61,27 @@ describe("Login", () => {
     ).toBeEnabled();
   });
 
-  it("reveals the hidden password form after seven carrot taps", async () => {
-    render(<Login />);
+  it("reveals the separate email sign-in flow after seven carrot taps", async () => {
+    render(<Landing />);
     const carrot = screen.getByRole("button", { name: "carrot" });
     for (let i = 0; i < 7; i++) await userEvent.click(carrot);
     expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
-    // Tapping again once revealed is a no-op (no crash, form stays).
-    await userEvent.click(carrot);
-    expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
+    // The marketing content is gone — this is a separate flow shown in place.
+    expect(
+      screen.queryByText("Track wabbits and bad habits."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to the landing from the email flow via Back", async () => {
+    render(<Landing />);
+    const carrot = screen.getByRole("button", { name: "carrot" });
+    for (let i = 0; i < 7; i++) await userEvent.click(carrot);
+    await userEvent.click(screen.getByRole("button", { name: /Back/ }));
+    expect(screen.getByText("Track wabbits and bad habits.")).toBeInTheDocument();
   });
 
   it("signs in with email and password", async () => {
-    render(<Login />);
+    render(<Landing />);
     const carrot = screen.getByRole("button", { name: "carrot" });
     for (let i = 0; i < 7; i++) await userEvent.click(carrot);
 
@@ -80,7 +97,7 @@ describe("Login", () => {
 
   it("shows a password sign-in error", async () => {
     signInWithPassword.mockResolvedValue({ error: { message: "bad creds" } });
-    render(<Login />);
+    render(<Landing />);
     const carrot = screen.getByRole("button", { name: "carrot" });
     for (let i = 0; i < 7; i++) await userEvent.click(carrot);
     await userEvent.type(screen.getByPlaceholderText("Email"), "me@x.com");

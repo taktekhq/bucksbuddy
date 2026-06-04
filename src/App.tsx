@@ -2,7 +2,8 @@ import { useSession } from "@/lib/useSession";
 import { useRoute } from "@/lib/router";
 import { StoreProvider } from "@/lib/store";
 import { Carrot } from "@/components/ui/Carrot";
-import { Login } from "@/screens/Login";
+import { Landing } from "@/screens/Landing";
+import { Legal } from "@/screens/Legal";
 import { Home } from "@/screens/Home";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
@@ -38,10 +39,15 @@ export default function App() {
   const route = useRoute();
 
   let content;
-  if (!ready) {
+  if (route === "/legal") {
+    // Public privacy + terms page — viewable signed-in or out.
+    content = <Legal />;
+  } else if (!ready) {
     content = <Splash />;
   } else if (!session) {
-    content = <Login />;
+    // The marketing landing page is the entry point for signed-out visitors;
+    // it owns the Google + email sign-in flows.
+    content = <Landing />;
   } else {
     content = (
       <StoreProvider userId={session.user.id}>
