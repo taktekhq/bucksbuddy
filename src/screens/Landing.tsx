@@ -33,7 +33,7 @@ const FEATURES = [
   {
     icon: Lock,
     title: "End-to-end encryption",
-    body: "When enabled, only you can read your data.",
+    body: "Enable so only you can read your data.",
   },
 ];
 
@@ -228,11 +228,12 @@ export function Landing() {
         </button>
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
         {/* Full-width like the sign-in button so it's an easy mobile target;
-            an off-white fill with a hairline keeps it clearly secondary. */}
+            a neutral grouped-grey fill with dark text keeps it clearly
+            secondary while staying legible. */}
         <button
           type="button"
           onClick={() => navigate("/legal")}
-          className="press w-full rounded-pill border border-separator bg-surface py-3.5 text-base font-semibold text-label-secondary"
+          className="press w-full rounded-pill bg-grouped py-3.5 text-base font-semibold text-label-muted"
         >
           Privacy and Terms
         </button>
