@@ -44,9 +44,10 @@ needs no migration — it rides along in `transactions`.
 Then run [`0003_e2e.sql`](supabase/migrations/0003_e2e.sql) (the `e2e_keys` vault + the
 encrypted `_enc` value columns on `transactions`) and
 [`0004_e2e_gold.sql`](supabase/migrations/0004_e2e_gold.sql) (the same for the gold ledger).
-These are the *expand* phase — they add the encrypted columns and keep the originals.
-To encrypt your existing rows and finish the switch, see **Encryption** below (it's a quick
-backfill script + one more migration).
+Finally run [`0005_drop_plaintext_values.sql`](supabase/migrations/0005_drop_plaintext_values.sql)
+to drop the now-unused plaintext columns. It's guarded — it refuses to run while any row
+still has an unencrypted value, so on a fresh database (nothing to migrate) it's safe to
+apply straight through.
 
 > **Savings Safe:** a vault icon next to Settings opens a dark "Safe" screen (available
 > to everyone).
@@ -119,23 +120,6 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
   plaintext columns — useful, and not the secret. So the operator can see *"an Out in
   groceries on June 1"* but not the amount.
 
-### Finishing the rollout (encrypt existing rows)
-
-A plain SQL migration **can't** do this: the key never lives on the server, so Postgres has
-nothing to encrypt with. It's a small script that holds the key, run once:
-
-```bash
-SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/encrypt-backfill.ts
-```
-
-It fills the `_enc` columns from the originals and **leaves the originals in place** so you
-can verify. It's idempotent (re-runnable) and skips users who've already set a passphrase
-(only their browser can encrypt those). Then verify the counts are zero (queries are in
-[`0005_drop_plaintext_values.sql`](supabase/migrations/0005_drop_plaintext_values.sql)) and
-run that migration to **drop** the plaintext columns — it's guarded and refuses to run if
-anything is still unencrypted, so a premature run can't lose data. End state: the same
-column count as before, just with the values encrypted.
-
 ## Local development
 
 ```bash
@@ -179,6 +163,5 @@ src/lib/                supabase client, store (in-memory cache), router, useSes
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0003_e2e.sql, 0004_e2e_gold.sql, 0005_drop_plaintext_values.sql
-scripts/                encrypt-backfill.ts (one-off E2E backfill)
 docs/DESIGN_SYSTEM.md   reusable design system
 ```
