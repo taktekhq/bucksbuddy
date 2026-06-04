@@ -175,7 +175,7 @@ export function Landing() {
           aria-label="carrot"
           className="leading-none"
         >
-          <Carrot className="text-7xl" />
+          <Carrot className="text-6xl" />
         </button>
         <h1 className="mt-5 font-display text-5xl font-bold uppercase leading-[0.95] text-label-muted">
           Bucks
