@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ArrowDownUp, ArrowLeft, Lock, Vault } from "lucide-react";
 import { Carrot } from "@/components/ui/Carrot";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { supabase } from "@/lib/supabase";
@@ -158,9 +159,9 @@ export function Landing() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(2rem+var(--safe-top))]">
+    <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(2rem+var(--safe-top))]">
       {/* Hero — the carrot doubles as the hidden email-flow trigger. */}
-      <section className="flex flex-1 flex-col items-center justify-center text-center">
+      <section className="flex flex-col items-center text-center">
         <button
           type="button"
           onClick={tapCarrot}
@@ -183,7 +184,8 @@ export function Landing() {
       </section>
 
       {/* Feature cards */}
-      <section className="mt-10 flex flex-col gap-2.5">
+      <section className="mt-9 flex flex-col gap-2.5">
+        <SectionHeader className="mb-1">Features</SectionHeader>
         {FEATURES.map(({ icon: Icon, title, body }) => (
           <div
             key={title}
@@ -201,7 +203,7 @@ export function Landing() {
       </section>
 
       {/* Primary call-to-action — flat carrot pill, matching the in-app buttons. */}
-      <section className="mt-10 flex flex-col items-center gap-3">
+      <section className="mt-9 flex flex-col items-center gap-3">
         <button
           type="button"
           onClick={signInWithGoogle}
