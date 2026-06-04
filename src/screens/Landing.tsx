@@ -3,6 +3,7 @@ import { ArrowDownUp, ArrowLeft, Lock, Vault } from "lucide-react";
 import { Carrot } from "@/components/ui/Carrot";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
+import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { supabase } from "@/lib/supabase";
 
@@ -31,8 +32,8 @@ const FEATURES = [
   },
   {
     icon: Lock,
-    title: "End-to-end encrypted",
-    body: "Your data is safe and obscured.",
+    title: "Optional encryption",
+    body: "End-to-end, only you can read it.",
   },
 ];
 
@@ -53,7 +54,8 @@ export function Landing() {
   const [password, setPassword] = useState("");
 
   function tapCarrot() {
-    if (showEmail) return;
+    // Only the landing-mode carrot is tappable; once the email flow shows, this
+    // trigger is gone, so no need to guard against re-taps.
     taps.current += 1;
     if (taps.current >= TAPS_TO_REVEAL) setShowEmail(true);
   }
@@ -225,6 +227,23 @@ export function Landing() {
         <p className="text-sm text-label-secondary">
           Free. No ads. That&apos;s all, folks. 🥕
         </p>
+        <nav className="flex items-center gap-2 text-xs text-label-secondary">
+          <button
+            type="button"
+            onClick={() => navigate("/privacy")}
+            className="press underline-offset-2 hover:underline"
+          >
+            Privacy
+          </button>
+          <span aria-hidden>·</span>
+          <button
+            type="button"
+            onClick={() => navigate("/terms")}
+            className="press underline-offset-2 hover:underline"
+          >
+            Terms
+          </button>
+        </nav>
       </section>
 
       <div aria-hidden className="flex-1" />

@@ -13,6 +13,10 @@ vi.mock("@/lib/store", () => ({
 }));
 vi.mock("@/screens/Login", () => ({ Login: () => <div>LoginScreen</div> }));
 vi.mock("@/screens/Landing", () => ({ Landing: () => <div>LandingScreen</div> }));
+vi.mock("@/screens/Legal", () => ({
+  Privacy: () => <div>PrivacyScreen</div>,
+  Terms: () => <div>TermsScreen</div>,
+}));
 vi.mock("@/screens/Home", () => ({ Home: () => <div>HomeScreen</div> }));
 vi.mock("@/screens/Settings", () => ({ Settings: () => <div>SettingsScreen</div> }));
 vi.mock("@/screens/Safe", () => ({ Safe: () => <div>SafeScreen</div> }));
@@ -49,6 +53,18 @@ describe("App", () => {
     useSession.mockReturnValue({ session, ready: true });
     rerender(<App />);
     expect(screen.getByText("LandingScreen")).toBeInTheDocument();
+  });
+
+  it("shows the public legal pages regardless of session", () => {
+    useSession.mockReturnValue({ session: null, ready: true });
+
+    useRoute.mockReturnValue("/privacy");
+    const { rerender } = render(<App />);
+    expect(screen.getByText("PrivacyScreen")).toBeInTheDocument();
+
+    useRoute.mockReturnValue("/terms");
+    rerender(<App />);
+    expect(screen.getByText("TermsScreen")).toBeInTheDocument();
   });
 
   it("routes to Home, Settings and Safe when signed in", () => {

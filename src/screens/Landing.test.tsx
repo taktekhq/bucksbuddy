@@ -25,7 +25,19 @@ describe("Landing", () => {
     expect(screen.getByText("Track wabbits and bad habits.")).toBeInTheDocument();
     expect(screen.getByText("Income & expenses")).toBeInTheDocument();
     expect(screen.getByText("Your private safe")).toBeInTheDocument();
-    expect(screen.getByText("End-to-end encrypted")).toBeInTheDocument();
+    expect(screen.getByText("Optional encryption")).toBeInTheDocument();
+  });
+
+  it("links to the privacy and terms pages from the footer", async () => {
+    render(<Landing />);
+
+    window.location.hash = "/home";
+    await userEvent.click(screen.getByRole("button", { name: "Privacy" }));
+    expect(window.location.hash).toBe("#/privacy");
+
+    window.location.hash = "/home";
+    await userEvent.click(screen.getByRole("button", { name: "Terms" }));
+    expect(window.location.hash).toBe("#/terms");
   });
 
   it("starts Google OAuth and shows the redirecting state", async () => {

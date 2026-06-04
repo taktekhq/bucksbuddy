@@ -24,6 +24,13 @@ describe("router", () => {
     expect(result.current).toBe("/home");
   });
 
+  it("recognizes the /privacy and /terms legal routes", () => {
+    act(() => navigate("/privacy"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/privacy");
+    act(() => navigate("/terms"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/terms");
+  });
+
   it("navigate is a no-op when already on the route", () => {
     act(() => navigate("/safe"));
     const before = window.location.hash;
