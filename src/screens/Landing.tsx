@@ -183,7 +183,7 @@ export function Landing() {
           Buddy
         </h1>
         <p className="mt-5 text-2xl font-bold text-label">
-          Track wabbits and bad habits.
+          For wabbits with bad habits.
         </p>
         <p className="mt-2 text-base leading-relaxed text-label-secondary">
           On-the-go money journal for your spending.

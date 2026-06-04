@@ -22,7 +22,7 @@ describe("Landing", () => {
 
   it("renders the tagline and the three feature cards", () => {
     render(<Landing />);
-    expect(screen.getByText("Track wabbits and bad habits.")).toBeInTheDocument();
+    expect(screen.getByText("For wabbits with bad habits.")).toBeInTheDocument();
     expect(screen.getByText("Income & expenses")).toBeInTheDocument();
     expect(screen.getByText("Your private safe")).toBeInTheDocument();
     expect(screen.getByText("End-to-end encryption")).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("Landing", () => {
     expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
     // The marketing content is gone — this is a separate flow shown in place.
     expect(
-      screen.queryByText("Track wabbits and bad habits."),
+      screen.queryByText("For wabbits with bad habits."),
     ).not.toBeInTheDocument();
   });
 
@@ -77,7 +77,7 @@ describe("Landing", () => {
     const carrot = screen.getByRole("button", { name: "carrot" });
     for (let i = 0; i < 7; i++) await userEvent.click(carrot);
     await userEvent.click(screen.getByRole("button", { name: /Back/ }));
-    expect(screen.getByText("Track wabbits and bad habits.")).toBeInTheDocument();
+    expect(screen.getByText("For wabbits with bad habits.")).toBeInTheDocument();
   });
 
   it("signs in with email and password", async () => {
