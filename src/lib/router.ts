@@ -1,23 +1,16 @@
 import { useEffect, useState } from "react";
 
-// Minimal hash router. Routes are "/", "/settings", "/safe", "/home", "/legal".
+// Minimal hash router. Routes are "/", "/settings", "/safe", "/legal".
 // Hash-based so the static SPA needs no server rewrites and the back button
 // works.
 //
-// "/home" is the public marketing landing page, and "/legal" is its public
-// privacy + terms page. They live behind their own routes for now (instead of
-// being the default) so they can be previewed without taking over the app — see
-// App.tsx.
-export type Route = "/" | "/settings" | "/safe" | "/home" | "/legal";
+// "/" is the home/landing entry (the marketing landing for signed-out visitors,
+// the app for signed-in ones); "/legal" is the public privacy + terms page.
+export type Route = "/" | "/settings" | "/safe" | "/legal";
 
 function current(): Route {
   const h = window.location.hash.replace(/^#/, "");
-  if (
-    h === "/settings" ||
-    h === "/safe" ||
-    h === "/home" ||
-    h === "/legal"
-  ) {
+  if (h === "/settings" || h === "/safe" || h === "/legal") {
     return h;
   }
   return "/";

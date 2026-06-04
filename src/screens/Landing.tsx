@@ -9,7 +9,8 @@ import { supabase } from "@/lib/supabase";
 
 // The public marketing landing page — succinct and on-brand: the static carrot
 // mascot, the Grobold wordmark, a cheeky tagline, three feature cards, and a big
-// "Continue with Google" call-to-action. Lives behind "/home" for now.
+// "Continue with Google" call-to-action. It's the entry point for signed-out
+// visitors (route "/") and owns the Google + email sign-in flows.
 //
 // Hidden email sign-in: tapping the carrot mascot this many times swaps the page
 // for a plain email/password form — for friends without a Google account whose

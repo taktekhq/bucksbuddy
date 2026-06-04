@@ -11,7 +11,6 @@ vi.mock("@/lib/store", () => ({
     <div data-testid="store">{children}</div>
   ),
 }));
-vi.mock("@/screens/Login", () => ({ Login: () => <div>LoginScreen</div> }));
 vi.mock("@/screens/Landing", () => ({ Landing: () => <div>LandingScreen</div> }));
 vi.mock("@/screens/Legal", () => ({ Legal: () => <div>LegalScreen</div> }));
 vi.mock("@/screens/Home", () => ({ Home: () => <div>HomeScreen</div> }));
@@ -34,21 +33,9 @@ describe("App", () => {
     expect(screen.getByRole("img", { name: "carrot" })).toBeInTheDocument();
   });
 
-  it("shows the login screen when signed out", () => {
+  it("shows the landing page when signed out", () => {
     useSession.mockReturnValue({ session: null, ready: true });
     render(<App />);
-    expect(screen.getByText("LoginScreen")).toBeInTheDocument();
-  });
-
-  it("shows the landing page at /home regardless of session", () => {
-    useRoute.mockReturnValue("/home");
-    useSession.mockReturnValue({ session: null, ready: true });
-    const { rerender } = render(<App />);
-    expect(screen.getByText("LandingScreen")).toBeInTheDocument();
-
-    // Still the landing even while signed in — it's a previewable public page.
-    useSession.mockReturnValue({ session, ready: true });
-    rerender(<App />);
     expect(screen.getByText("LandingScreen")).toBeInTheDocument();
   });
 

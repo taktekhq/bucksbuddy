@@ -7,13 +7,14 @@ import { navigate } from "@/lib/router";
 // than burying them in boilerplate. Privacy and Terms share one page, each its
 // own section. Reached from the landing's "Privacy and Terms" button.
 export function Legal() {
+  // Back returns to the landing (the signed-out home).
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
       {/* Plain iOS nav: back chevron + centered title — matches Settings. */}
       <header className="relative flex items-center justify-center py-1">
         <button
           type="button"
-          onClick={() => navigate("/home")}
+          onClick={() => navigate("/")}
           aria-label="Back"
           className="press absolute left-0 -m-2 p-2 text-carrot"
         >

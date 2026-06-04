@@ -2,7 +2,6 @@ import { useSession } from "@/lib/useSession";
 import { useRoute } from "@/lib/router";
 import { StoreProvider } from "@/lib/store";
 import { Carrot } from "@/components/ui/Carrot";
-import { Login } from "@/screens/Login";
 import { Landing } from "@/screens/Landing";
 import { Legal } from "@/screens/Legal";
 import { Home } from "@/screens/Home";
@@ -40,17 +39,15 @@ export default function App() {
   const route = useRoute();
 
   let content;
-  if (route === "/home") {
-    // The public landing page lives behind "/home" for now, and is previewable
-    // regardless of auth state — its CTA hands off to the Login screen.
-    content = <Landing />;
-  } else if (route === "/legal") {
+  if (route === "/legal") {
     // Public privacy + terms page — viewable signed-in or out.
     content = <Legal />;
   } else if (!ready) {
     content = <Splash />;
   } else if (!session) {
-    content = <Login />;
+    // The marketing landing page is the entry point for signed-out visitors;
+    // it owns the Google + email sign-in flows.
+    content = <Landing />;
   } else {
     content = (
       <StoreProvider userId={session.user.id}>

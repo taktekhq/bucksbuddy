@@ -26,6 +26,6 @@ describe("Legal page", () => {
   it("goes back to the landing page from the Back button", async () => {
     render(<Legal />);
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(window.location.hash).toBe("#/home");
+    expect(window.location.hash).toBe("#/");
   });
 });

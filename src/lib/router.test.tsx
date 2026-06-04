@@ -18,12 +18,6 @@ describe("router", () => {
     expect(result.current).toBe("/settings");
   });
 
-  it("recognizes /home (the landing page route)", () => {
-    act(() => navigate("/home"));
-    const { result } = renderHook(() => useRoute());
-    expect(result.current).toBe("/home");
-  });
-
   it("recognizes the /legal route", () => {
     act(() => navigate("/legal"));
     expect(renderHook(() => useRoute()).result.current).toBe("/legal");

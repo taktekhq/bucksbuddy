@@ -30,7 +30,7 @@ describe("Landing", () => {
 
   it("links to the legal page from the Privacy and Terms button", async () => {
     render(<Landing />);
-    window.location.hash = "/home";
+    window.location.hash = "/";
     await userEvent.click(
       screen.getByRole("button", { name: "Privacy and Terms" }),
     );

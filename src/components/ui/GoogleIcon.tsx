@@ -1,6 +1,6 @@
 // Google's brand "G" as inline SVG — lucide has no brand glyphs and we don't
-// want a new dependency just for one icon. Shared by the Login screen and the
-// Landing page's "Continue with Google" call-to-action.
+// want a new dependency just for one icon. Used by the Landing page's
+// "Continue with Google" call-to-action.
 export function GoogleIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
