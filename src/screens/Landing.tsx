@@ -228,12 +228,12 @@ export function Landing() {
         </button>
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
         {/* Full-width like the sign-in button so it's an easy mobile target;
-            a neutral grouped-grey fill with dark text keeps it clearly
-            secondary while staying legible. */}
+            a white fill stands out from the grey canvas while the dark text
+            keeps it legible and clearly secondary to the carrot CTA. */}
         <button
           type="button"
           onClick={() => navigate("/legal")}
-          className="press w-full rounded-pill bg-grouped py-3.5 text-base font-semibold text-label-muted"
+          className="press w-full rounded-pill bg-surface py-3.5 text-base font-semibold text-label-muted"
         >
           Privacy and Terms
         </button>
