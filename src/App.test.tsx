@@ -3,9 +3,13 @@ import { render, screen } from "@testing-library/react";
 
 const useSession = vi.fn();
 const useRoute = vi.fn();
+const navigate = vi.fn();
 
 vi.mock("@/lib/useSession", () => ({ useSession: () => useSession() }));
-vi.mock("@/lib/router", () => ({ useRoute: () => useRoute() }));
+vi.mock("@/lib/router", () => ({
+  useRoute: () => useRoute(),
+  navigate: (...a: unknown[]) => navigate(...a),
+}));
 vi.mock("@/lib/store", () => ({
   StoreProvider: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="store">{children}</div>
@@ -45,6 +49,29 @@ describe("App", () => {
     useRoute.mockReturnValue("/legal");
     render(<App />);
     expect(screen.getByText("LegalScreen")).toBeInTheDocument();
+  });
+
+  it("normalizes the URL to '/' when on an internal route while signed out", () => {
+    useSession.mockReturnValue({ session: null, ready: true });
+    useRoute.mockReturnValue("/settings");
+    render(<App />);
+    expect(navigate).toHaveBeenCalledWith("/");
+  });
+
+  it("leaves the URL alone for '/' or '/legal' while signed out", () => {
+    useSession.mockReturnValue({ session: null, ready: true });
+    useRoute.mockReturnValue("/");
+    const { rerender } = render(<App />);
+    useRoute.mockReturnValue("/legal");
+    rerender(<App />);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("does not normalize while the session is still loading", () => {
+    useSession.mockReturnValue({ session: null, ready: false });
+    useRoute.mockReturnValue("/settings");
+    render(<App />);
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("routes to Home, Settings, Safe and History when signed in", () => {

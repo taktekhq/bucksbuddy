@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { useSession } from "@/lib/useSession";
-import { useRoute } from "@/lib/router";
+import { navigate, useRoute } from "@/lib/router";
 import { StoreProvider } from "@/lib/store";
 import { Carrot } from "@/components/ui/Carrot";
 import { Landing } from "@/screens/Landing";
@@ -38,6 +39,15 @@ function StatusBarScrim() {
 export default function App() {
   const { session, ready } = useSession();
   const route = useRoute();
+
+  // Signing out (or visiting a signed-in route while signed out) leaves the
+  // URL pointing at an internal page even though we render the landing.
+  // Normalize the hash so the URL matches what's on screen.
+  useEffect(() => {
+    if (ready && !session && route !== "/" && route !== "/legal") {
+      navigate("/");
+    }
+  }, [ready, session, route]);
 
   let content;
   if (route === "/legal") {
