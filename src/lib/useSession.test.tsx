@@ -53,4 +53,27 @@ describe("useSession", () => {
     unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
+
+  it("flips recoveryMode on PASSWORD_RECOVERY and clears it on SIGNED_OUT", async () => {
+    let listener: (event: string, s: unknown) => void = () => {};
+    onAuthStateChange.mockImplementation((cb: typeof listener) => {
+      listener = cb;
+      return { data: { subscription: { unsubscribe } } };
+    });
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.recoveryMode).toBe(false);
+
+    // A plain SIGNED_IN must NOT enable recovery — only PASSWORD_RECOVERY can,
+    // because that's the event proving the user came from a reset link.
+    act(() => listener("SIGNED_IN", { user: { id: "u1" } }));
+    expect(result.current.recoveryMode).toBe(false);
+
+    act(() => listener("PASSWORD_RECOVERY", { user: { id: "u1" } }));
+    expect(result.current.recoveryMode).toBe(true);
+
+    act(() => listener("SIGNED_OUT", null));
+    expect(result.current.recoveryMode).toBe(false);
+  });
 });
