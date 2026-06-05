@@ -52,4 +52,21 @@ describe("router", () => {
     const { result } = renderHook(() => useRoute());
     expect(result.current).toBe("/");
   });
+
+  it("recognizes the /reset route", () => {
+    act(() => navigate("/reset"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/reset");
+  });
+
+  it("recognizes /reset even when Supabase appended a second hash fragment", () => {
+    // Dashboard recovery emails redirect with the token glued onto the URL,
+    // producing the double-fragment "#/reset#access_token=…". The route must
+    // still resolve cleanly while useSession parses the tokens.
+    act(() => {
+      window.location.hash =
+        "/reset#access_token=AT&refresh_token=RT&type=recovery&expires_in=3600";
+    });
+    const { result } = renderHook(() => useRoute());
+    expect(result.current).toBe("/reset");
+  });
 });
