@@ -8,6 +8,7 @@ import { Home } from "@/screens/Home";
 import { History } from "@/screens/History";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
+import { Reset } from "@/screens/Reset";
 
 function Splash() {
   return (
@@ -36,11 +37,17 @@ function StatusBarScrim() {
 }
 
 export default function App() {
-  const { session, ready } = useSession();
+  const { session, ready, recoveryMode } = useSession();
   const route = useRoute();
 
   let content;
-  if (route === "/legal") {
+  if (recoveryMode) {
+    // Password recovery wins over route + session: the user clicked a reset
+    // link from email, the SDK swapped the token for a session, and now they
+    // need to set a new password before doing anything else. Without that
+    // event having fired, this screen never renders (see useSession).
+    content = <Reset />;
+  } else if (route === "/legal") {
     // Public privacy + terms page — viewable signed-in or out.
     content = <Legal />;
   } else if (!ready) {
