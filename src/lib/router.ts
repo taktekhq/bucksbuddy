@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
 
 // Minimal hash router. Routes are "/", "/settings", "/safe", "/history",
-// "/legal". Hash-based so the static SPA needs no server rewrites and the back
-// button works.
+// "/legal", "/reset". Hash-based so the static SPA needs no server rewrites and
+// the back button works.
 //
 // "/" is the home/landing entry (the marketing landing for signed-out visitors,
 // the app for signed-in ones); "/history" is the full-history page; "/legal" is
-// the public privacy + terms page.
-export type Route = "/" | "/settings" | "/safe" | "/history" | "/legal";
+// the public privacy + terms page; "/reset" is the post-recovery URL after
+// useSession parses the tokens out of a Supabase reset-password email.
+export type Route = "/" | "/settings" | "/safe" | "/history" | "/legal" | "/reset";
 
 function current(): Route {
-  const h = window.location.hash.replace(/^#/, "");
-  if (h === "/settings" || h === "/safe" || h === "/history" || h === "/legal") {
+  // A Supabase recovery email appends "#access_token=…" to the redirect URL.
+  // When that URL already has a hash (e.g. "#/reset"), the result is the
+  // double-fragment "#/reset#access_token=…". Take only what's before the
+  // second '#' so the route resolves cleanly.
+  const h = window.location.hash.replace(/^#/, "").split("#")[0];
+  if (
+    h === "/settings" ||
+    h === "/safe" ||
+    h === "/history" ||
+    h === "/legal" ||
+    h === "/reset"
+  ) {
     return h;
   }
   return "/";
