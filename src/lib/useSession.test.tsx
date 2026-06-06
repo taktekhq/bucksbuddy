@@ -129,4 +129,15 @@ describe("useSession", () => {
     await waitFor(() => expect(getSession).toHaveBeenCalled());
     expect(setSession).not.toHaveBeenCalled();
   });
+
+  it("treats a malformed recovery hash with missing tokens as no recovery", async () => {
+    // Passes the marker check ("type=recovery" and "access_token=" are both
+    // present) but the values are empty/missing, so URLSearchParams returns
+    // null. Must fall through to getSession rather than calling setSession
+    // with bogus tokens.
+    window.location.hash = "#access_token=&type=recovery";
+    renderHook(() => useSession());
+    await waitFor(() => expect(getSession).toHaveBeenCalled());
+    expect(setSession).not.toHaveBeenCalled();
+  });
 });
