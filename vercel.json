@@ -3,6 +3,11 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    { "source": "/privacy", "destination": "/#/legal" },
+    { "source": "/terms", "destination": "/#/legal" },
+    { "source": "/contact", "destination": "/#/contact" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
