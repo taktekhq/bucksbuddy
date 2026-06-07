@@ -3,7 +3,13 @@ import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import { Analytics } from "@vercel/analytics/react";
 import App from "@/App";
+import { redirectBarePath } from "@/lib/router";
 import "./index.css";
+
+// Map bare marketing paths (/privacy, /terms, /contact) onto their hash routes
+// before anything renders, so a visitor who lands on one of those clean URLs
+// sees the right page instead of the default landing. See redirectBarePath.
+redirectBarePath();
 
 // Keep the installed PWA up to date automatically. With registerType:
 // "autoUpdate", a freshly-fetched service worker is applied and the page

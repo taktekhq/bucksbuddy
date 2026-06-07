@@ -10,8 +10,8 @@ import { useEffect, useState } from "react";
 // "/reset" is the post-recovery URL after useSession parses the tokens out of a
 // Supabase reset-password email.
 //
-// The bare paths "/privacy", "/terms" and "/contact" (no hash) redirect to the
-// matching hash routes server-side — see the "redirects" in vercel.json.
+// The bare paths "/privacy", "/terms" and "/contact" (no hash) are normalized
+// onto the matching hash routes at startup by redirectBarePath() below.
 export type Route =
   | "/"
   | "/settings"
@@ -38,6 +38,27 @@ function current(): Route {
     return h;
   }
   return "/";
+}
+
+// Bare (non-hash) paths that external links, shared URLs and search crawlers
+// reach for — clean paths like /privacy rather than /#/legal. The app is
+// hash-routed, so we map each onto its canonical hash route. A server-side
+// redirect in vercel.json can't do this: Vercel won't emit a "#" fragment in a
+// redirect's Location header, so a rule with a hash destination is silently
+// dropped. Instead Vercel's SPA fallback serves index.html for these paths and
+// we rewrite the URL in place here, before the app first renders.
+const BARE_PATH_REDIRECTS: Record<string, string> = {
+  "/privacy": "/#/legal",
+  "/terms": "/#/legal",
+  "/contact": "/#/contact",
+};
+
+// Called once from the entry point, before React mounts. If the page was opened
+// at one of the bare marketing paths, rewrite the URL to its hash route so the
+// router resolves it cleanly and the pathname returns to "/". No-op otherwise.
+export function redirectBarePath() {
+  const dest = BARE_PATH_REDIRECTS[window.location.pathname];
+  if (dest) window.history.replaceState(null, "", dest);
 }
 
 export function navigate(to: Route) {
