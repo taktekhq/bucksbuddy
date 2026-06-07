@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { navigate, useRoute } from "@/lib/router";
+import { navigate, useRoute, redirectBarePath } from "@/lib/router";
 
 describe("router", () => {
   beforeEach(() => {
@@ -61,6 +61,31 @@ describe("router", () => {
   it("recognizes the /reset route", () => {
     act(() => navigate("/reset"));
     expect(renderHook(() => useRoute()).result.current).toBe("/reset");
+  });
+
+  it("redirects the bare /privacy and /terms paths to /#/legal", () => {
+    window.history.replaceState(null, "", "/privacy");
+    redirectBarePath();
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.hash).toBe("#/legal");
+
+    window.history.replaceState(null, "", "/terms");
+    redirectBarePath();
+    expect(window.location.hash).toBe("#/legal");
+  });
+
+  it("redirects the bare /contact path to /#/contact", () => {
+    window.history.replaceState(null, "", "/contact");
+    redirectBarePath();
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.hash).toBe("#/contact");
+  });
+
+  it("leaves other paths untouched", () => {
+    window.history.replaceState(null, "", "/");
+    redirectBarePath();
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.hash).toBe("");
   });
 
   it("recognizes /reset even when Supabase appended a second hash fragment", () => {
