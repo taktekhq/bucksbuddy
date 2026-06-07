@@ -4,6 +4,7 @@ import { StoreProvider } from "@/lib/store";
 import { Carrot } from "@/components/ui/Carrot";
 import { Landing } from "@/screens/Landing";
 import { Legal } from "@/screens/Legal";
+import { Contact } from "@/screens/Contact";
 import { Home } from "@/screens/Home";
 import { History } from "@/screens/History";
 import { Settings } from "@/screens/Settings";
@@ -50,6 +51,9 @@ export default function App() {
   } else if (route === "/legal") {
     // Public privacy + terms page — viewable signed-in or out.
     content = <Legal />;
+  } else if (route === "/contact") {
+    // Public contact page — viewable signed-in or out.
+    content = <Contact />;
   } else if (!ready) {
     content = <Splash />;
   } else if (!session) {

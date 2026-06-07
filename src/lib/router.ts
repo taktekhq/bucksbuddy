@@ -1,14 +1,25 @@
 import { useEffect, useState } from "react";
 
 // Minimal hash router. Routes are "/", "/settings", "/safe", "/history",
-// "/legal", "/reset". Hash-based so the static SPA needs no server rewrites and
-// the back button works.
+// "/legal", "/contact", "/reset". Hash-based so the static SPA needs no server
+// rewrites and the back button works.
 //
 // "/" is the home/landing entry (the marketing landing for signed-out visitors,
 // the app for signed-in ones); "/history" is the full-history page; "/legal" is
-// the public privacy + terms page; "/reset" is the post-recovery URL after
-// useSession parses the tokens out of a Supabase reset-password email.
-export type Route = "/" | "/settings" | "/safe" | "/history" | "/legal" | "/reset";
+// the public privacy + terms page; "/contact" is the public contact page;
+// "/reset" is the post-recovery URL after useSession parses the tokens out of a
+// Supabase reset-password email.
+//
+// The bare paths "/privacy", "/terms" and "/contact" (no hash) redirect to the
+// matching hash routes server-side — see the "redirects" in vercel.json.
+export type Route =
+  | "/"
+  | "/settings"
+  | "/safe"
+  | "/history"
+  | "/legal"
+  | "/contact"
+  | "/reset";
 
 function current(): Route {
   // A Supabase recovery email appends "#access_token=…" to the redirect URL.
@@ -21,6 +32,7 @@ function current(): Route {
     h === "/safe" ||
     h === "/history" ||
     h === "/legal" ||
+    h === "/contact" ||
     h === "/reset"
   ) {
     return h;

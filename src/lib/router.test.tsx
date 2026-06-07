@@ -23,6 +23,11 @@ describe("router", () => {
     expect(renderHook(() => useRoute()).result.current).toBe("/legal");
   });
 
+  it("recognizes the /contact route", () => {
+    act(() => navigate("/contact"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/contact");
+  });
+
   it("recognizes the /history route", () => {
     act(() => navigate("/history"));
     expect(renderHook(() => useRoute()).result.current).toBe("/history");
