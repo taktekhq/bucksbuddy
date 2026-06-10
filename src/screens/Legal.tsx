@@ -2,10 +2,13 @@ import { ChevronLeft } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { navigate } from "@/lib/router";
 
-// The public legal page — deliberately tiny. BucksBuddy is a personal money
-// journal for a small circle, so this says the few true things plainly rather
-// than burying them in boilerplate. Privacy and Terms share one page, each its
-// own section. Reached from the landing's "Privacy and Terms" button.
+// The public legal page. BucksBuddy is a personal money journal for a small
+// circle, so this says the true things plainly rather than burying them in
+// boilerplate. The Privacy section is intentionally specific about Google user
+// data — Google's API verification requires the policy to spell out exactly
+// what Google data we access and how we use it. Privacy and Terms share one
+// page, each its own section. Reached from the landing's "Privacy and Terms"
+// button.
 export function Legal() {
   // Back returns to the landing (the signed-out home).
   return (
@@ -40,6 +43,117 @@ export function Legal() {
             </li>
             <li>Delete your account anytime to wipe your data.</li>
           </ul>
+
+          <p className="pt-2 font-semibold text-label">
+            Google user data we access
+          </p>
+          <p>
+            BucksBuddy uses &ldquo;Sign in with Google&rdquo; as the only way to
+            create and access your account. When you sign in, Google shares a
+            limited set of profile information with us, based on the standard{" "}
+            <span className="whitespace-nowrap">openid</span>, email, and profile
+            scopes:
+          </p>
+          <ul className="flex list-disc flex-col gap-2 pl-5">
+            <li>
+              Your Google account&apos;s unique identifier (the OpenID{" "}
+              <code className="text-[13px]">sub</code> claim).
+            </li>
+            <li>Your email address (and whether Google has verified it).</li>
+            <li>Your name.</li>
+            <li>Your Google profile picture, if you have one.</li>
+          </ul>
+          <p>
+            We do not request access to any other Google data — no Gmail, Drive,
+            Contacts, Calendar, or any other Google service or API.
+          </p>
+
+          <p className="pt-2 font-semibold text-label">
+            How we use Google user data
+          </p>
+          <p>We use this information only to:</p>
+          <ul className="flex list-disc flex-col gap-2 pl-5">
+            <li>
+              Create and secure your BucksBuddy account and sign you in on each
+              visit.
+            </li>
+            <li>
+              Identify you within the app — for example, showing your name,
+              email, or picture in Settings so you know which account you&apos;re
+              using.
+            </li>
+            <li>
+              Contact you about your account or support requests, using the
+              email address from Google.
+            </li>
+          </ul>
+          <p>
+            We never use your Google user data for advertising, profiling, or any
+            purpose unrelated to running BucksBuddy.
+          </p>
+
+          <p className="pt-2 font-semibold text-label">
+            How we store and protect it
+          </p>
+          <p>
+            Your account details and money entries are stored in our database,
+            hosted on our behalf by Supabase, our infrastructure provider, who
+            processes the data only to provide that hosting. Access is restricted
+            to your own account, and data is encrypted in transit. If you turn on
+            end-to-end encryption, your amounts and notes are encrypted on your
+            device with a passphrase only you hold, so not even we can read them.
+          </p>
+
+          <p className="pt-2 font-semibold text-label">
+            How we share it
+          </p>
+          <p>
+            We do not sell, rent, or share your Google user data with third
+            parties, and we do not transfer it to others except as needed to run
+            BucksBuddy (our hosting provider above) or where required by law.
+            BucksBuddy&apos;s use and transfer of information received from Google
+            APIs adheres to the{" "}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-carrot underline"
+            >
+              Google API Services User Data Policy
+            </a>
+            , including the Limited Use requirements.
+          </p>
+
+          <p className="pt-2 font-semibold text-label">
+            Retention and deletion
+          </p>
+          <p>
+            We keep your data only while your account is active. You can delete
+            your account at any time from Settings, which permanently removes your
+            profile, all entries, and the Google account details we stored. You
+            can also revoke BucksBuddy&apos;s access to your Google account at any
+            time from your{" "}
+            <a
+              href="https://myaccount.google.com/permissions"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-carrot underline"
+            >
+              Google Account permissions
+            </a>{" "}
+            page.
+          </p>
+
+          <p className="pt-2">
+            Questions about your data? Email us at{" "}
+            <a
+              href="mailto:nizar@taktek.io"
+              className="text-carrot underline"
+            >
+              nizar@taktek.io
+            </a>
+            .
+          </p>
         </div>
       </section>
 
