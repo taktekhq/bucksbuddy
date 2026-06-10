@@ -23,6 +23,28 @@ describe("Legal page", () => {
     ).toBeInTheDocument();
   });
 
+  it("thoroughly discloses Google user data access, use, and Limited Use", () => {
+    render(<Legal />);
+    // The data accessed and how it's used must both be spelled out for Google's
+    // API verification.
+    expect(screen.getByText(/Google user data we access/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/How we use Google user data/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/we do not request access/i)).toBeInTheDocument();
+    // The Limited Use commitment must be present, linking the Google policy.
+    expect(
+      screen.getByText(/Limited Use requirements/i),
+    ).toBeInTheDocument();
+    const policyLink = screen.getByRole("link", {
+      name: /Google API Services User Data Policy/i,
+    });
+    expect(policyLink).toHaveAttribute(
+      "href",
+      "https://developers.google.com/terms/api-services-user-data-policy",
+    );
+  });
+
   it("goes back to the landing page from the Back button", async () => {
     render(<Legal />);
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
