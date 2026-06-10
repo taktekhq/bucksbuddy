@@ -129,7 +129,6 @@ export const EXPENSE_CATEGORIES: Category[] = [
       { id: "clothes", label: "Clothes" },
       { id: "electronics", label: "Electronics" },
       { id: "home", label: "Home" },
-      { id: "beauty", label: "Beauty" },
     ],
   },
   {
@@ -156,6 +155,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
     subcategories: [
       { id: "pharmacy", label: "Pharmacy" },
       { id: "doctor", label: "Doctor" },
+      { id: "hospital", label: "Hospital" },
       { id: "dental", label: "Dental" },
       { id: "insurance", label: "Insurance" },
       { id: "lab", label: "Lab/Tests" },
