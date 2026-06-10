@@ -65,7 +65,11 @@ export const INCOME_CATEGORIES: Category[] = [
   { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
 
+// Ordered so the 3-col picker reads in tidy rows: food & drink, then getting
+// around, then personal/lifestyle, then home & bills, then social/discretionary,
+// then the catch-alls. Order here == order on screen.
 export const EXPENSE_CATEGORIES: Category[] = [
+  // Row 1 — food & drink.
   {
     id: "groceries",
     label: "Groceries",
@@ -91,9 +95,59 @@ export const EXPENSE_CATEGORIES: Category[] = [
       { id: "snacks", label: "Snacks" },
     ],
   },
+  {
+    id: "coffee",
+    label: "Coffee",
+    icon: Coffee,
+    color: "#8B5E3C",
+    subcategories: [
+      { id: "cafe", label: "Café" },
+      { id: "beans", label: "Beans" },
+    ],
+  },
+  // Row 2 — getting around.
   { id: "gas", label: "Gas", icon: Fuel, color: "#FF3B30" },
-  { id: "gifts", label: "Gifts", icon: Gift, color: "#FF2D55" },
-  { id: "rent", label: "Rent", icon: Home, color: "#5856D6" },
+  { id: "parking", label: "Parking", icon: CircleParking, color: "#30B0C7" },
+  {
+    id: "transport",
+    label: "Transport",
+    icon: Car,
+    color: "#32ADE6",
+    subcategories: [
+      { id: "taxi", label: "Taxi" },
+      { id: "bus", label: "Bus" },
+      { id: "flight", label: "Flight" },
+    ],
+  },
+  // Row 3 — personal & lifestyle.
+  {
+    id: "shopping",
+    label: "Shopping",
+    icon: ShoppingBag,
+    color: "#A2845E",
+    subcategories: [
+      { id: "clothes", label: "Clothes" },
+      { id: "electronics", label: "Electronics" },
+      { id: "home", label: "Home" },
+      { id: "beauty", label: "Beauty" },
+    ],
+  },
+  {
+    id: "self_care",
+    label: "Self Care",
+    icon: Sparkles,
+    color: "#FF6482",
+    subcategories: [
+      { id: "hair", label: "Hair" },
+      { id: "nails", label: "Nails" },
+      { id: "eyebrows", label: "Eyebrows" },
+      { id: "lashes", label: "Lashes" },
+      { id: "skincare", label: "Skincare" },
+      { id: "spa", label: "Spa" },
+    ],
+  },
+  { id: "gym", label: "Gym", icon: Dumbbell, color: "#007AFF" },
+  // Row 4 — home & bills.
   {
     id: "health",
     label: "Health",
@@ -108,21 +162,6 @@ export const EXPENSE_CATEGORIES: Category[] = [
     ],
   },
   {
-    id: "fun",
-    label: "Fun",
-    icon: PartyPopper,
-    color: "#F56300",
-    subcategories: [
-      { id: "movies", label: "Movies" },
-      { id: "games", label: "Games" },
-      { id: "events", label: "Events" },
-      { id: "drinks", label: "Drinks" },
-    ],
-  },
-  { id: "gym", label: "Gym", icon: Dumbbell, color: "#007AFF" },
-  { id: "work", label: "Work", icon: Briefcase, color: "#5856D6" },
-  { id: "parking", label: "Parking", icon: CircleParking, color: "#30B0C7" },
-  {
     id: "fees",
     label: "Fees",
     icon: Landmark,
@@ -135,41 +174,24 @@ export const EXPENSE_CATEGORIES: Category[] = [
       { id: "utilities", label: "Utilities" },
     ],
   },
+  { id: "rent", label: "Rent", icon: Home, color: "#5856D6" },
+  // Row 5 — social & discretionary.
   {
-    id: "transport",
-    label: "Transport",
-    icon: Car,
-    color: "#32ADE6",
+    id: "fun",
+    label: "Fun",
+    icon: PartyPopper,
+    color: "#F56300",
     subcategories: [
-      { id: "taxi", label: "Taxi" },
-      { id: "bus", label: "Bus" },
-      { id: "flight", label: "Flight" },
+      { id: "movies", label: "Movies" },
+      { id: "games", label: "Games" },
+      { id: "events", label: "Events" },
+      { id: "drinks", label: "Drinks" },
     ],
   },
-  {
-    id: "shopping",
-    label: "Shopping",
-    icon: ShoppingBag,
-    color: "#A2845E",
-    subcategories: [
-      { id: "clothes", label: "Clothes" },
-      { id: "electronics", label: "Electronics" },
-      { id: "home", label: "Home" },
-      { id: "beauty", label: "Beauty" },
-    ],
-  },
-  {
-    id: "coffee",
-    label: "Coffee",
-    icon: Coffee,
-    color: "#8B5E3C",
-    subcategories: [
-      { id: "cafe", label: "Café" },
-      { id: "beans", label: "Beans" },
-    ],
-  },
-  { id: "self_care", label: "Self Care", icon: Sparkles, color: "#FF6482" },
+  { id: "gifts", label: "Gifts", icon: Gift, color: "#FF2D55" },
   { id: "tips", label: "Tips", icon: HandCoins, color: "#FFCC00" },
+  // Row 6 — catch-alls.
+  { id: "work", label: "Work", icon: Briefcase, color: "#5856D6" },
   { id: "family", label: "Family", icon: Users, color: "#00C7BE" },
   { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
