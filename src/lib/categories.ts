@@ -188,7 +188,17 @@ export const EXPENSE_CATEGORIES: Category[] = [
       { id: "drinks", label: "Drinks" },
     ],
   },
-  { id: "gifts", label: "Gifts", icon: Gift, color: "#FF2D55" },
+  {
+    id: "gifts",
+    label: "Gifts",
+    icon: Gift,
+    color: "#FF2D55",
+    subcategories: [
+      { id: "birthday", label: "Birthday" },
+      { id: "wedding", label: "Wedding" },
+      { id: "donation", label: "Donation" },
+    ],
+  },
   { id: "tips", label: "Tips", icon: HandCoins, color: "#FFCC00" },
   // Row 6 — catch-alls.
   { id: "work", label: "Work", icon: Briefcase, color: "#5856D6" },
