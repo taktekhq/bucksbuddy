@@ -129,6 +129,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
       { id: "clothes", label: "Clothes" },
       { id: "electronics", label: "Electronics" },
       { id: "home", label: "Home" },
+      { id: "beauty", label: "Beauty" },
     ],
   },
   {
