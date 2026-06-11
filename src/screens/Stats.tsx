@@ -94,24 +94,9 @@ function dayLabel(date: string): string {
   });
 }
 
-/** "9 AM" / "6 PM" from a local hour. */
-function hourLabel(hour: number): string {
-  return new Date(2000, 0, 1, hour).toLocaleTimeString("en-US", {
-    hour: "numeric",
-  });
-}
-
 /** "1 entry" / "3 entries" — the fact chips shouldn't say "1 days". */
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
-}
-
-/** "Tuesdays" from a weekday index (Jan 1, 2023 was a Sunday). */
-function weekdayLabel(weekday: number): string {
-  const name = new Date(2023, 0, 1 + weekday).toLocaleDateString("en-US", {
-    weekday: "long",
-  });
-  return `${name}s`;
 }
 
 /** How long the safe lasts: short runways in days, long ones in months. */
@@ -161,10 +146,6 @@ function PersonalStats() {
     facts.avgPerDayCents > 0
       ? Math.round(safeTotalCents / facts.avgPerDayCents)
       : 0;
-
-  // Everything spent that isn't a "want" is a need (see WANT_BASES).
-  const needCents = facts.spentCents - facts.wantCents;
-  const needPct = (needCents / Math.max(facts.spentCents, 1)) * 100;
 
   return (
     <>
@@ -224,6 +205,8 @@ function PersonalStats() {
         </section>
       )}
 
+      {/* Pairs by design: splurge|busiest, runway|forecast, treats|coffee,
+          weekends|no-spend — then the in-vs-out bar across the bottom. */}
       <section className="flex flex-col gap-2">
         <Caption>Fun facts</Caption>
         <div className="grid grid-cols-2 gap-2">
@@ -250,18 +233,18 @@ function PersonalStats() {
               }
             />
           )}
-          {!masked && facts.forecastCents > 0 && (
-            <Fact
-              caption="On pace for"
-              value={formatUsdCents(facts.forecastCents)}
-              sub="by month's end"
-            />
-          )}
           {!masked && runwayDays > 0 && (
             <Fact
               caption="Safe runway"
               value={runwayLabel(runwayDays)}
               sub="at this pace"
+            />
+          )}
+          {!masked && facts.forecastCents > 0 && (
+            <Fact
+              caption="On pace for"
+              value={formatUsdCents(facts.forecastCents)}
+              sub="by month's end"
             />
           )}
           {!masked && facts.treatCents > 0 && (
@@ -271,21 +254,7 @@ function PersonalStats() {
               sub="fun · shopping · self care"
             />
           )}
-          {facts.daysSincePayday !== null && (
-            <Fact
-              caption="Since payday"
-              value={count(facts.daysSincePayday, "day", "days")}
-            />
-          )}
-          {facts.favoriteWeekday !== null && (
-            <Fact
-              caption="Favorite day"
-              value={weekdayLabel(facts.favoriteWeekday)}
-            />
-          )}
-          {facts.primeHour !== null && (
-            <Fact caption="Prime time" value={hourLabel(facts.primeHour)} />
-          )}
+          <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
           {facts.spendCount > 0 && (
             <Fact
               caption="Weekends"
@@ -294,14 +263,6 @@ function PersonalStats() {
             />
           )}
           <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
-          <Fact
-            caption="Quiet streak"
-            value={count(facts.quietStreakDays, "day", "days")}
-          />
-          <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
-          {!masked && facts.coffeeCents > 0 && (
-            <Fact caption="Coffee tab" value={formatUsdCents(facts.coffeeCents)} />
-          )}
           {!masked && flow > 0 && (
             <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
@@ -317,28 +278,6 @@ function PersonalStats() {
               <div className="mt-1.5 flex justify-between font-numeric text-xs font-semibold tabular-nums">
                 <span className="text-income">+{formatUsdCents(facts.incomeCents)}</span>
                 <span className="text-expense">-{formatUsdCents(facts.spentCents)}</span>
-              </div>
-            </div>
-          )}
-          {!masked && facts.spentCents > 0 && (
-            <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
-                Needs vs wants
-              </p>
-              <div className="mt-2 flex h-2 overflow-hidden rounded-pill bg-white/10">
-                <div
-                  className="h-full"
-                  style={{ width: `${needPct}%`, backgroundColor: "#32ADE6" }}
-                />
-                <div className="h-full flex-1" style={{ backgroundColor: "#F56300" }} />
-              </div>
-              <div className="mt-1.5 flex justify-between font-numeric text-xs font-semibold tabular-nums">
-                <span style={{ color: "#32ADE6" }}>
-                  Needs {formatUsdCents(needCents)}
-                </span>
-                <span className="text-carrot">
-                  Wants {formatUsdCents(facts.wantCents)}
-                </span>
               </div>
             </div>
           )}

@@ -60,15 +60,9 @@ function insights(overrides: Partial<MonthInsights> = {}): MonthInsights {
     } as Transaction,
     busiestDay: { date: "2026-06-05", count: 2, totalCents: 800 },
     noSpendDays: 7,
-    quietStreakDays: 4,
     coffeeCount: 1,
-    coffeeCents: 350,
     treatCents: 950,
-    wantCents: 1200,
-    primeHour: 18,
-    favoriteWeekday: 5,
     weekendShare: 0.6,
-    daysSincePayday: 14,
     anyMasked: false,
     ...overrides,
   };
@@ -116,38 +110,43 @@ describe("Stats", () => {
     expect(screen.getByText("Groceries")).toBeInTheDocument();
     expect(screen.getByText("$7.00")).toBeInTheDocument();
 
-    // Fun facts: the splurge carries its note, the busiest day its total.
+    // Fun facts, in their paired order: the splurge carries its note, the
+    // busiest day its total.
     expect(screen.getByText("Biggest splurge")).toBeInTheDocument();
     expect(screen.getAllByText("$10.00")).not.toHaveLength(0);
     expect(screen.getByText(/Food · Restaurant · fancy dinner/)).toBeInTheDocument();
     expect(screen.getByText("2 entries")).toBeInTheDocument();
     expect(screen.getByText(/Jun 5 · \$8\.00/)).toBeInTheDocument();
-    expect(screen.getByText("On pace for")).toBeInTheDocument();
-    expect(screen.getByText("$60.00")).toBeInTheDocument();
     // 90000 safe cents over the $2.00/day pace = 450 days ≈ 14.8 months.
     expect(screen.getByText("Safe runway")).toBeInTheDocument();
     expect(screen.getByText("14.8 months")).toBeInTheDocument();
+    expect(screen.getByText("On pace for")).toBeInTheDocument();
+    expect(screen.getByText("$60.00")).toBeInTheDocument();
     expect(screen.getByText("Treat yourself")).toBeInTheDocument();
     expect(screen.getByText("$9.50")).toBeInTheDocument();
-    expect(screen.getByText("Since payday")).toBeInTheDocument();
-    expect(screen.getByText("14 days")).toBeInTheDocument();
-    expect(screen.getByText("Favorite day")).toBeInTheDocument();
-    expect(screen.getByText("Fridays")).toBeInTheDocument();
+    expect(screen.getByText("Coffee runs")).toBeInTheDocument();
     expect(screen.getByText("Weekends")).toBeInTheDocument();
     expect(screen.getByText("60%")).toBeInTheDocument();
     expect(screen.getByText("No-spend days")).toBeInTheDocument();
-    expect(screen.getByText("Quiet streak")).toBeInTheDocument();
-    expect(screen.getByText("4 days")).toBeInTheDocument();
-    expect(screen.getByText("Coffee runs")).toBeInTheDocument();
-    expect(screen.getByText("Coffee tab")).toBeInTheDocument();
-    expect(screen.getByText("$3.50")).toBeInTheDocument();
-    expect(screen.getByText("Prime time")).toBeInTheDocument();
-    expect(screen.getByText("6 PM")).toBeInTheDocument();
     expect(screen.getByText("+$50.00")).toBeInTheDocument();
     expect(screen.getByText("-$20.00")).toBeInTheDocument();
-    expect(screen.getByText("Needs vs wants")).toBeInTheDocument();
-    expect(screen.getByText("Needs $8.00")).toBeInTheDocument();
-    expect(screen.getByText("Wants $12.00")).toBeInTheDocument();
+
+    // The chips follow the designed pairing order.
+    const captions = screen
+      .getAllByText(
+        /^(Biggest splurge|Busiest day|Safe runway|On pace for|Treat yourself|Coffee runs|Weekends|No-spend days)$/,
+      )
+      .map((el) => el.textContent);
+    expect(captions).toEqual([
+      "Biggest splurge",
+      "Busiest day",
+      "Safe runway",
+      "On pace for",
+      "Treat yourself",
+      "Coffee runs",
+      "Weekends",
+      "No-spend days",
+    ]);
   });
 
   it("shows a short safe runway in days, not months", () => {
@@ -195,7 +194,6 @@ describe("Stats", () => {
         incomeCents: 0,
         anyMasked: true,
         busiestDay: { date: "2026-06-05", count: 1, totalCents: 0 },
-        quietStreakDays: 1,
       }),
     );
     render(<Stats signedIn />);
@@ -207,24 +205,19 @@ describe("Stats", () => {
     expect(screen.getByText("×1")).toBeInTheDocument();
 
     // Money facts hidden; count facts stay (busiest day without its total),
-    // and counts of one don't read "1 entries" / "1 days".
+    // and a count of one doesn't read "1 entries".
     expect(screen.queryByText("Biggest splurge")).not.toBeInTheDocument();
-    expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
     expect(screen.queryByText("Safe runway")).not.toBeInTheDocument();
+    expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
     expect(screen.queryByText("Treat yourself")).not.toBeInTheDocument();
-    expect(screen.queryByText("Coffee tab")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
-    expect(screen.queryByText("Needs vs wants")).not.toBeInTheDocument();
     expect(screen.getByText("Busiest day")).toBeInTheDocument();
     expect(screen.getByText("1 entry")).toBeInTheDocument();
     expect(screen.getByText(/Jun 5/)).toBeInTheDocument();
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
-    expect(screen.getByText("Since payday")).toBeInTheDocument();
-    expect(screen.getByText("Favorite day")).toBeInTheDocument();
+    expect(screen.getByText("Coffee runs")).toBeInTheDocument();
     expect(screen.getByText("Weekends")).toBeInTheDocument();
-    expect(screen.getByText("Quiet streak")).toBeInTheDocument();
-    expect(screen.getByText("1 day")).toBeInTheDocument();
-    expect(screen.getByText("Prime time")).toBeInTheDocument();
+    expect(screen.getByText("No-spend days")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText(/Enter your passphrase in Settings/));
     expect(navigate).toHaveBeenCalledWith("/settings");
@@ -250,31 +243,20 @@ describe("Stats", () => {
         forecastCents: 0,
         biggestExpense: null,
         busiestDay: null,
-        quietStreakDays: 10,
         coffeeCount: 0,
-        coffeeCents: 0,
         treatCents: 0,
-        wantCents: 0,
-        primeHour: null,
-        favoriteWeekday: null,
         weekendShare: 0,
-        daysSincePayday: null,
       }),
     );
     render(<Stats signedIn />);
     expect(screen.getByText("Fun facts")).toBeInTheDocument();
     expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
     expect(screen.queryByText("Busiest day")).not.toBeInTheDocument();
-    expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
     expect(screen.queryByText("Safe runway")).not.toBeInTheDocument();
+    expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
     expect(screen.queryByText("Treat yourself")).not.toBeInTheDocument();
-    expect(screen.queryByText("Since payday")).not.toBeInTheDocument();
-    expect(screen.queryByText("Favorite day")).not.toBeInTheDocument();
     expect(screen.queryByText("Weekends")).not.toBeInTheDocument();
-    expect(screen.queryByText("Prime time")).not.toBeInTheDocument();
-    expect(screen.queryByText("Coffee tab")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
-    expect(screen.queryByText("Needs vs wants")).not.toBeInTheDocument();
   });
 
   it("greets signed-out visitors with the teaser and the public title", async () => {

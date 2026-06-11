@@ -167,34 +167,25 @@ describe("monthInsights", () => {
       tx({ id: "w1", category: "fun/drinks", amount_usd_cents: 500, occurred_at: at(2026, 5, 6, 20) }),
       tx({ id: "w2", category: "self_care/spa", amount_usd_cents: 800, occurred_at: at(2026, 5, 7, 15) }),
       tx({ id: "e", is_income: true, category: "salary", amount_usd_cents: 5000, occurred_at: at(2026, 5, 3) }),
-      // Older income after a newer one — the payday pick must keep June 3.
-      tx({ id: "e2", is_income: true, category: "allowance", amount_usd_cents: 1000, occurred_at: at(2026, 5, 1) }),
       // Safe transfers are internal: neither spending (out) nor income (back in).
       tx({ id: "f", category: "safe", amount_usd_cents: 400, occurred_at: at(2026, 5, 7) }),
       tx({ id: "g", is_income: true, category: "safe", amount_usd_cents: 400, occurred_at: at(2026, 5, 8) }),
-      // Outside the month, both directions; the July salary is also post-dated,
-      // so it can't count as the latest payday.
+      // Outside the month, both directions.
       tx({ id: "h", amount_usd_cents: 9999, occurred_at: at(2026, 4, 31) }),
       tx({ id: "i", is_income: true, category: "salary", amount_usd_cents: 9999, occurred_at: at(2026, 6, 1) }),
     ];
     expect(monthInsights(rows, NOW)).toEqual({
       spentCents: 3900,
-      incomeCents: 6000,
+      incomeCents: 5000,
       spendCount: 8,
       avgPerDayCents: 390, // 3900 over the 10 elapsed days
       forecastCents: 11700, // that pace carried across June's 30 days
       biggestExpense: big,
       busiestDay: { date: key(2026, 5, 9), count: 3, totalCents: 600 },
       noSpendDays: 5, // 10 elapsed − 5 days with spending
-      quietStreakDays: 2, // June 3–4
       coffeeCount: 4,
-      coffeeCents: 900,
       treatCents: 1300, // fun + self care
-      wantCents: 3200, // coffee + food + fun + self care; groceries stay a need
-      primeHour: 9, // three of eight entries logged at 9am
-      favoriteWeekday: 2, // Tuesdays (June 2 and the June 9 binge)
       weekendShare: 0.25, // 2 of 8 entries on Sat/Sun
-      daysSincePayday: 7, // salary on June 3, now June 10
       anyMasked: false,
     });
   });
@@ -209,15 +200,9 @@ describe("monthInsights", () => {
       biggestExpense: null,
       busiestDay: null,
       noSpendDays: 10,
-      quietStreakDays: 10,
       coffeeCount: 0,
-      coffeeCents: 0,
       treatCents: 0,
-      wantCents: 0,
-      primeHour: null,
-      favoriteWeekday: null,
       weekendShare: 0,
-      daysSincePayday: null,
       anyMasked: false,
     });
   });
