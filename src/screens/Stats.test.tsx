@@ -125,7 +125,7 @@ describe("Stats", () => {
     expect(screen.getByText("Treat yourself")).toBeInTheDocument();
     expect(screen.getByText("$9.50")).toBeInTheDocument();
     expect(screen.getByText("Coffee runs")).toBeInTheDocument();
-    expect(screen.getByText("Weekends")).toBeInTheDocument();
+    expect(screen.getByText("Weekend Spend")).toBeInTheDocument();
     expect(screen.getByText("60%")).toBeInTheDocument();
     expect(screen.getByText("No-spend days")).toBeInTheDocument();
     expect(screen.getByText("+$50.00")).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("Stats", () => {
     // The chips follow the designed pairing order.
     const captions = screen
       .getAllByText(
-        /^(Biggest splurge|Busiest day|Safe runway|On pace for|Treat yourself|Coffee runs|Weekends|No-spend days)$/,
+        /^(Biggest splurge|Busiest day|Safe runway|On pace for|Treat yourself|Coffee runs|Weekend Spend|No-spend days)$/,
       )
       .map((el) => el.textContent);
     expect(captions).toEqual([
@@ -144,7 +144,7 @@ describe("Stats", () => {
       "On pace for",
       "Treat yourself",
       "Coffee runs",
-      "Weekends",
+      "Weekend Spend",
       "No-spend days",
     ]);
   });
@@ -216,7 +216,7 @@ describe("Stats", () => {
     expect(screen.getByText(/Jun 5/)).toBeInTheDocument();
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
     expect(screen.getByText("Coffee runs")).toBeInTheDocument();
-    expect(screen.getByText("Weekends")).toBeInTheDocument();
+    expect(screen.getByText("Weekend Spend")).toBeInTheDocument();
     expect(screen.getByText("No-spend days")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText(/Enter your passphrase in Settings/));
@@ -255,7 +255,7 @@ describe("Stats", () => {
     expect(screen.queryByText("Safe runway")).not.toBeInTheDocument();
     expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
     expect(screen.queryByText("Treat yourself")).not.toBeInTheDocument();
-    expect(screen.queryByText("Weekends")).not.toBeInTheDocument();
+    expect(screen.queryByText("Weekend Spend")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
   });
 

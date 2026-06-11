@@ -248,18 +248,13 @@ function PersonalStats() {
             />
           )}
           {!masked && facts.treatCents > 0 && (
-            <Fact
-              caption="Treat yourself"
-              value={formatUsdCents(facts.treatCents)}
-              sub="fun · shopping · self care"
-            />
+            <Fact caption="Treat yourself" value={formatUsdCents(facts.treatCents)} />
           )}
           <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
           {facts.spendCount > 0 && (
             <Fact
-              caption="Weekends"
+              caption="Weekend Spend"
               value={`${Math.round(facts.weekendShare * 100)}%`}
-              sub="of your entries"
             />
           )}
           <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
