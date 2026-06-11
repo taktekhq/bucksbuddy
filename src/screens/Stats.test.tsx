@@ -164,7 +164,7 @@ describe("Stats", () => {
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
     expect(screen.getByText("Busiest day")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByText(/enter your passphrase in Settings/));
+    await userEvent.click(screen.getByText(/Enter your passphrase in Settings/));
     expect(navigate).toHaveBeenCalledWith("/settings");
   });
 
@@ -217,7 +217,7 @@ describe("Stats", () => {
     expect(screen.getByText("What everyone logs most")).toBeInTheDocument();
     expect(screen.getByText("Food")).toBeInTheDocument();
     expect(screen.getByText("120")).toBeInTheDocument();
-    expect(screen.getByText(/Counts only — amounts are encrypted/)).toBeInTheDocument();
+    expect(screen.getByText(/Counts only, amounts are encrypted/)).toBeInTheDocument();
   });
 
   it("hides the category bars when the community list is empty", async () => {

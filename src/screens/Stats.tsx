@@ -166,7 +166,7 @@ function PersonalStats() {
             <Lock className="h-5 w-5" strokeWidth={2} />
           </span>
           <span className="text-sm text-white/85">
-            Amounts are locked — enter your passphrase in Settings to see the
+            Amounts are locked. Enter your passphrase in Settings to see the
             money picture.
           </span>
         </button>
@@ -310,7 +310,7 @@ function CommunityStats() {
             </div>
           )}
           <p className="px-1 text-xs text-white/40">
-            Counts only — amounts are encrypted, so nobody (including us) can
+            Counts only, amounts are encrypted. Nobody (including us) can
             total them. 🔒
           </p>
         </>
