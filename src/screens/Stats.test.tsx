@@ -149,12 +149,12 @@ describe("Stats", () => {
     ]);
   });
 
-  it("shows a short safe runway in days, not months", () => {
-    storeValue = makeStoreValue({ safeTotalCents: 1000 });
+  it("shows a short safe runway in days, not months (and singular at one)", () => {
+    storeValue = makeStoreValue({ safeTotalCents: 200 });
     render(<Stats signedIn />);
-    // 1000 safe cents over the $2.00/day pace = 5 days.
+    // 200 safe cents over the $2.00/day pace = 1 day — not "1 days".
     expect(screen.getByText("Safe runway")).toBeInTheDocument();
-    expect(screen.getByText("5 days")).toBeInTheDocument();
+    expect(screen.getByText("1 day")).toBeInTheDocument();
   });
 
   it("navigates back home", async () => {
@@ -182,51 +182,39 @@ describe("Stats", () => {
     expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
   });
 
-  it("switches to counts and nudges to Settings while locked", async () => {
-    storeValue = makeStoreValue({ locked: true });
-    topCategories.mockReturnValue([
-      { category: "coffee", totalCents: 0, count: 2, share: 0 },
-      { category: "groceries", totalCents: 0, count: 1, share: 0 },
-    ]);
-    monthInsights.mockReturnValue(
-      insights({
-        spentCents: 0,
-        incomeCents: 0,
-        anyMasked: true,
-        busiestDay: { date: "2026-06-05", count: 1, totalCents: 0 },
-      }),
-    );
+  it("veils personal stats in the user's own ciphertext while locked", async () => {
+    const maskedTx = (id: string, amountMask?: string) =>
+      ({ id, amountMask }) as unknown as Transaction;
+    storeValue = makeStoreValue({
+      locked: true,
+      // The third row has no mask (e.g. still decrypting) — it's skipped.
+      transactions: [maskedTx("t1", "a8F2"), maskedTx("t2", "x9Qd"), maskedTx("t3")],
+    });
     render(<Stats signedIn />);
 
-    // The headline counts entries instead of pretending zeros are money.
-    expect(screen.getByText("3 entries")).toBeInTheDocument();
+    // The page keeps its shape, but every personal number is a cipher
+    // fragment borrowed from the masked rows — and no graphs render.
+    expect(screen.getByText(monthLabel())).toBeInTheDocument();
     expect(screen.getByText("amounts locked")).toBeInTheDocument();
-    expect(screen.getByText("×2")).toBeInTheDocument();
-    expect(screen.getByText("×1")).toBeInTheDocument();
-
-    // Money facts hidden; count facts stay (busiest day without its total),
-    // and a count of one doesn't read "1 entries".
-    expect(screen.queryByText("Biggest splurge")).not.toBeInTheDocument();
-    expect(screen.queryByText("Safe runway")).not.toBeInTheDocument();
-    expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
-    expect(screen.queryByText("Treat yourself")).not.toBeInTheDocument();
-    expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
-    expect(screen.getByText("Busiest day")).toBeInTheDocument();
-    expect(screen.getByText("1 entry")).toBeInTheDocument();
-    expect(screen.getByText(/Jun 5/)).toBeInTheDocument();
-    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
-    expect(screen.getByText("Coffee runs")).toBeInTheDocument();
+    expect(screen.getAllByText(/a8F2/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/x9Qd/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Fun facts")).toBeInTheDocument();
+    expect(screen.getByText("Biggest splurge")).toBeInTheDocument();
     expect(screen.getByText("Weekend Spend")).toBeInTheDocument();
-    expect(screen.getByText("No-spend days")).toBeInTheDocument();
+    expect(screen.queryByTestId("spark-area")).not.toBeInTheDocument();
+    expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
+    expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByText(/Enter your passphrase in Settings/));
     expect(navigate).toHaveBeenCalledWith("/settings");
   });
 
-  it("masks money even when only the rows are flagged (belt and braces)", () => {
+  it("locks the page even when only the rows are flagged (belt and braces)", () => {
+    // No masked rows in hand to borrow ciphertext from → dotted placeholders.
     monthInsights.mockReturnValue(insights({ anyMasked: true }));
     render(<Stats signedIn />);
-    expect(screen.getByText("amounts locked")).toBeInTheDocument();
+    expect(screen.getByText(/Your stats are encrypted/)).toBeInTheDocument();
+    expect(screen.getAllByText(/••••/).length).toBeGreaterThan(0);
   });
 
   it("keeps the page useful when the window has data but the month doesn't", () => {

@@ -185,7 +185,7 @@ describe("monthInsights", () => {
       noSpendDays: 5, // 10 elapsed − 5 days with spending
       coffeeCount: 4,
       treatCents: 1300, // fun + self care
-      weekendShare: 0.25, // 2 of 8 entries on Sat/Sun
+      weekendShare: 1300 / 3900, // the Sat drinks + Sun spa, of all spending
       anyMasked: false,
     });
   });

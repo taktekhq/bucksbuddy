@@ -113,21 +113,70 @@ function PersonalStats() {
   const cats = useMemo(() => topCategories(transactions), [transactions]);
   const facts = useMemo(() => monthInsights(transactions), [transactions]);
 
-  // While locked, money values are masked zeros — show the rhythm (counts)
-  // instead of pretending the amounts are real.
-  const masked = locked || facts.anyMasked;
-
   const barItems = useMemo<StatBarItem[]>(() => {
-    const top = Math.max(...cats.map((c) => (masked ? c.count : c.totalCents)), 1);
+    const top = Math.max(...cats.map((c) => c.totalCents), 1);
     return cats.map((c) => ({
       id: c.category,
       label: categoryLabel(c.category),
       icon: categoryIcon(c.category),
       color: categoryColor(c.category),
-      value: masked ? `×${c.count}` : formatUsdCents(c.totalCents),
-      fraction: (masked ? c.count : c.totalCents) / top,
+      value: formatUsdCents(c.totalCents),
+      fraction: c.totalCents / top,
     }));
-  }, [cats, masked]);
+  }, [cats]);
+
+  // While locked, money values are masked zeros — every stat would be a lie,
+  // so the page keeps its shape but wears the cipher: no graphs, and real
+  // fragments of the user's own ciphertext stand in for the numbers (same
+  // convention as the masked history rows). Community numbers stay public.
+  const cipherBits = transactions
+    .map((t) => t.amountMask)
+    .filter((m): m is string => m != null);
+  const garble = (i: number) => cipherBits[i % cipherBits.length] ?? "••••";
+
+  if (locked || facts.anyMasked) {
+    return (
+      <>
+        <section className="rounded-card bg-white/10 px-5 py-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
+            {monthLabel()}
+          </p>
+          <p className="mt-1 font-numeric text-4xl font-bold tabular-nums text-white/45">
+            ${garble(0)}
+          </p>
+          <p className="mt-0.5 text-sm text-white/55">amounts locked</p>
+        </section>
+
+        <button
+          type="button"
+          onClick={() => navigate("/settings")}
+          className="press flex w-full items-center gap-3 rounded-card bg-white/10 px-4 py-3.5 text-left"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/70">
+            <Lock className="h-5 w-5" strokeWidth={2} />
+          </span>
+          <span className="text-sm text-white/85">
+            Your stats are encrypted. Enter your passphrase in Settings to see
+            them.
+          </span>
+        </button>
+
+        <section className="flex flex-col gap-2">
+          <Caption>Fun facts</Caption>
+          <div className="grid grid-cols-2 gap-2 opacity-60">
+            <Fact caption="Biggest splurge" value={`$${garble(1)}`} />
+            <Fact caption="Busiest day" value={garble(2)} />
+            <Fact caption="Safe runway" value={garble(3)} />
+            <Fact caption="On pace for" value={`$${garble(4)}`} />
+            <Fact caption="Treat yourself" value={`$${garble(5)}`} />
+            <Fact caption="Coffee runs" value={garble(6)} />
+            <Fact caption="Weekend Spend" value={garble(7)} />
+            <Fact caption="No-spend days" value={garble(8)} />
+          </div>
+        </section>
+      </>
+    );
+  }
 
   const hasAny = facts.spendCount > 0 || series.some((p) => p.count > 0);
   if (!hasAny) {
@@ -154,7 +203,7 @@ function PersonalStats() {
           on top of it. */}
       <section className="relative overflow-hidden rounded-card bg-white/10">
         <SparkArea
-          values={series.map((p) => (masked ? p.count : p.totalCents))}
+          values={series.map((p) => p.totalCents)}
           stroke="rgba(245, 99, 0, 0.55)"
           fill="rgba(245, 99, 0, 0.16)"
           className="pointer-events-none absolute inset-0 h-full w-full"
@@ -164,37 +213,17 @@ function PersonalStats() {
             {monthLabel()}
           </p>
           <p className="mt-1 font-numeric text-4xl font-bold tabular-nums">
-            {masked
-              ? count(facts.spendCount, "entry", "entries")
-              : formatUsdCents(facts.spentCents)}
+            {formatUsdCents(facts.spentCents)}
           </p>
           <p className="mt-0.5 text-sm text-white/55">
-            {masked
-              ? "amounts locked"
-              : `≈ ${formatUsdCents(facts.avgPerDayCents)} a day`}
+            ≈ {formatUsdCents(facts.avgPerDayCents)} a day
           </p>
           {/* Breathing room so the chart isn't all hidden behind the text. */}
           <p className="mt-14 text-right text-[11px] uppercase tracking-wide text-white/45">
-            {masked ? "entries per day" : "spent per day"} · last 30 days
+            spent per day · last 30 days
           </p>
         </div>
       </section>
-
-      {masked && (
-        <button
-          type="button"
-          onClick={() => navigate("/settings")}
-          className="press flex w-full items-center gap-3 rounded-card bg-white/10 px-4 py-3.5 text-left"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/70">
-            <Lock className="h-5 w-5" strokeWidth={2} />
-          </span>
-          <span className="text-sm text-white/85">
-            Amounts are locked. Enter your passphrase in Settings to see the
-            money picture.
-          </span>
-        </button>
-      )}
 
       {barItems.length > 0 && (
         <section className="flex flex-col gap-2">
@@ -210,7 +239,7 @@ function PersonalStats() {
       <section className="flex flex-col gap-2">
         <Caption>Fun facts</Caption>
         <div className="grid grid-cols-2 gap-2">
-          {!masked && facts.biggestExpense && (
+          {facts.biggestExpense && (
             <Fact
               caption="Biggest splurge"
               value={formatUsdCents(facts.biggestExpense.amount_usd_cents)}
@@ -226,28 +255,24 @@ function PersonalStats() {
             <Fact
               caption="Busiest day"
               value={count(facts.busiestDay.count, "entry", "entries")}
-              sub={
-                masked
-                  ? dayLabel(facts.busiestDay.date)
-                  : `${dayLabel(facts.busiestDay.date)} · ${formatUsdCents(facts.busiestDay.totalCents)}`
-              }
+              sub={`${dayLabel(facts.busiestDay.date)} · ${formatUsdCents(facts.busiestDay.totalCents)}`}
             />
           )}
-          {!masked && runwayDays > 0 && (
+          {runwayDays > 0 && (
             <Fact
               caption="Safe runway"
               value={runwayLabel(runwayDays)}
               sub="at this pace"
             />
           )}
-          {!masked && facts.forecastCents > 0 && (
+          {facts.forecastCents > 0 && (
             <Fact
               caption="On pace for"
               value={formatUsdCents(facts.forecastCents)}
               sub="by month's end"
             />
           )}
-          {!masked && facts.treatCents > 0 && (
+          {facts.treatCents > 0 && (
             <Fact caption="Treat yourself" value={formatUsdCents(facts.treatCents)} />
           )}
           <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
@@ -258,7 +283,7 @@ function PersonalStats() {
             />
           )}
           <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
-          {!masked && flow > 0 && (
+          {flow > 0 && (
             <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
                 In vs out
