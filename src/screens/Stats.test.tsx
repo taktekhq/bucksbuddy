@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { makeStoreValue } from "@/test/storeValue";
 import { monthLabel } from "@/lib/dates";
 import type { Transaction } from "@/types/db";
 import type { PublicStats } from "@/lib/publicStats";
 import type { CategoryStat, DayPoint, MonthInsights } from "@/lib/stats";
+
+vi.mock("framer-motion", async () => (await import("@/test/framerMock")).default);
 
 let storeValue = makeStoreValue();
 vi.mock("@/lib/store", () => ({ useStore: () => storeValue }));
@@ -23,11 +25,15 @@ vi.mock("@/lib/publicStats", () => ({
 const dailySpendSeries = vi.fn();
 const topCategories = vi.fn();
 const monthInsights = vi.fn();
+const treatTransactions = vi.fn();
+const weekendTransactions = vi.fn();
 vi.mock("@/lib/stats", () => ({
   FETCH_CAP: 500,
   dailySpendSeries: (...a: unknown[]) => dailySpendSeries(...a),
   topCategories: (...a: unknown[]) => topCategories(...a),
   monthInsights: (...a: unknown[]) => monthInsights(...a),
+  treatTransactions: (...a: unknown[]) => treatTransactions(...a),
+  weekendTransactions: (...a: unknown[]) => weekendTransactions(...a),
 }));
 
 import { Stats } from "@/screens/Stats";
@@ -93,6 +99,8 @@ describe("Stats", () => {
     dailySpendSeries.mockReturnValue([point("2026-06-09", 0, 0), point("2026-06-10", 2000, 3)]);
     topCategories.mockReturnValue(CATS);
     monthInsights.mockReturnValue(insights());
+    treatTransactions.mockReturnValue([]);
+    weekendTransactions.mockReturnValue([]);
   });
 
   it("shows the month's money picture when signed in", () => {
@@ -143,10 +151,86 @@ describe("Stats", () => {
       "Safe runway",
       "On pace for",
       "Treat yourself",
-      "Coffee runs",
       "Weekend Spend",
+      "Coffee runs",
       "No-spend days",
     ]);
+  });
+
+  it("opens the receipts behind Treat yourself and Weekend Spend", async () => {
+    const receipt = (
+      id: string,
+      category: string,
+      amount_usd_cents: number,
+      note: string | null,
+    ) =>
+      ({
+        id,
+        category,
+        amount_usd_cents,
+        note,
+        occurred_at: "2026-06-07T15:00:00.000Z",
+      }) as unknown as Transaction;
+    treatTransactions.mockReturnValue([
+      receipt("r1", "self_care/spa", 800, "mani pedi"),
+      receipt("r2", "fun/drinks", 500, null),
+    ]);
+    render(<Stats signedIn />);
+
+    await userEvent.click(screen.getByRole("button", { name: /Treat yourself/ }));
+    expect(screen.getByText("Self Care · Spa")).toBeInTheDocument();
+    expect(screen.getByText("mani pedi")).toBeInTheDocument();
+    expect(screen.getByText("Fun · Drinks")).toBeInTheDocument();
+    expect(screen.getByText("$13.00")).toBeInTheDocument(); // sheet total
+
+    // Tap the backdrop to dismiss, then open the (empty) weekend receipts.
+    await userEvent.click(screen.getByTestId("sheet-backdrop"));
+    expect(screen.queryByText("mani pedi")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Weekend Spend/ }));
+    expect(screen.getByText(/Nothin' here this month/)).toBeInTheDocument();
+  });
+
+  it("drags the receipts sheet away, like the category picker", async () => {
+    treatTransactions.mockReturnValue([
+      {
+        id: "r1",
+        category: "fun",
+        amount_usd_cents: 500,
+        note: null,
+        occurred_at: "2026-06-07T15:00:00.000Z",
+      } as unknown as Transaction,
+    ]);
+    render(<Stats signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: /Treat yourself/ }));
+
+    type Draggable = HTMLElement & {
+      __motion: { onDragEnd: (e: unknown, info: unknown) => void };
+    };
+    // A gentle nudge stays put; a decisive flick (velocity) dismisses.
+    act(() => {
+      (screen.getByTestId("tx-sheet") as Draggable).__motion.onDragEnd(null, {
+        offset: { y: 10 },
+        velocity: { y: 0 },
+      });
+    });
+    expect(screen.getByTestId("tx-sheet")).toBeInTheDocument();
+    act(() => {
+      (screen.getByTestId("tx-sheet") as Draggable).__motion.onDragEnd(null, {
+        offset: { y: 10 },
+        velocity: { y: 700 },
+      });
+    });
+    expect(screen.queryByTestId("tx-sheet")).not.toBeInTheDocument();
+
+    // A long pull (offset) dismisses too.
+    await userEvent.click(screen.getByRole("button", { name: /Treat yourself/ }));
+    act(() => {
+      (screen.getByTestId("tx-sheet") as Draggable).__motion.onDragEnd(null, {
+        offset: { y: 200 },
+        velocity: { y: 0 },
+      });
+    });
+    expect(screen.queryByTestId("tx-sheet")).not.toBeInTheDocument();
   });
 
   it("shows a short safe runway in days, not months (and singular at one)", () => {

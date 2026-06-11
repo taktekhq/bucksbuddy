@@ -69,19 +69,6 @@ export function dailySpendSeries(
   return series;
 }
 
-/**
- * Centered moving average over ±radius neighbors. Sparse daily spending is a
- * comb of isolated spikes; where the series is decoration (the wash behind
- * the Home hero) this turns it into soft dunes. Don't use it where the chart
- * is the data.
- */
-export function smoothSeries(values: number[], radius = 1): number[] {
-  return values.map((_, i) => {
-    const window = values.slice(Math.max(0, i - radius), i + radius + 1);
-    return window.reduce((sum, v) => sum + v, 0) / window.length;
-  });
-}
-
 export type CategoryStat = {
   category: string; // base id ("food", never "food/restaurant") for label/icon/color lookups
   totalCents: number;
@@ -126,6 +113,34 @@ export function topCategories(
 
 /** One local day's spending activity, for the busiest-day pick. */
 export type DayStat = { date: string; count: number; totalCents: number };
+
+// This month's spending rows passing `keep`, newest first — the receipts
+// behind a tappable fun-fact chip.
+function monthSpending(
+  rows: Transaction[],
+  now: Date,
+  keep: (r: Transaction, at: Date) => boolean,
+): Transaction[] {
+  const { from, to } = currentMonthRange(now);
+  return rows
+    .filter((r) => {
+      const at = new Date(r.occurred_at);
+      return isSpending(r) && at >= from && at < to && keep(r, at);
+    })
+    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
+}
+
+/** The entries behind "Treat yourself", newest first. */
+export function treatTransactions(rows: Transaction[], now = new Date()): Transaction[] {
+  return monthSpending(rows, now, (r) =>
+    TREAT_BASES.has(splitCategory(r.category).base),
+  );
+}
+
+/** The entries behind "Weekend Spend" (Sat/Sun), newest first. */
+export function weekendTransactions(rows: Transaction[], now = new Date()): Transaction[] {
+  return monthSpending(rows, now, (_r, at) => at.getDay() === 0 || at.getDay() === 6);
+}
 
 // "Treat yourself" categories: the want-not-need bases.
 const TREAT_BASES = new Set(["fun", "shopping", "self_care"]);

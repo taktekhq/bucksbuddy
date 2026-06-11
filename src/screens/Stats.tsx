@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, Lock } from "lucide-react";
+import { AnimatePresence, motion, type PanInfo } from "framer-motion";
+import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { Carrot } from "@/components/ui/Carrot";
 import { SparkArea } from "@/components/ui/SparkArea";
 import { StatBars, type StatBarItem } from "@/components/ui/StatBars";
@@ -9,8 +10,15 @@ import { useThemeColor } from "@/lib/useThemeColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { monthLabel } from "@/lib/dates";
 import { formatUsdCents } from "@/lib/money";
-import { dailySpendSeries, monthInsights, topCategories } from "@/lib/stats";
+import {
+  dailySpendSeries,
+  monthInsights,
+  topCategories,
+  treatTransactions,
+  weekendTransactions,
+} from "@/lib/stats";
 import { fetchPublicStats, type PublicStats } from "@/lib/publicStats";
+import type { Transaction } from "@/types/db";
 
 // The stats page — a deep indigo "observatory" you climb up to and look at
 // your money from, deliberately distinct from History's charcoal rabbit hole
@@ -73,16 +81,41 @@ function Caption({ children }: { children: ReactNode }) {
 }
 
 // A small stat chip: tiny caption, big numeric value, optional one-liner.
-function Fact({ caption, value, sub }: { caption: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-card bg-white/10 px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
+// Give it an onClick and it becomes a button with a disclosure chevron —
+// some chips open the receipts behind their number.
+function Fact({
+  caption,
+  value,
+  sub,
+  onClick,
+}: {
+  caption: string;
+  value: string;
+  sub?: string;
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
+      <p className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-white/55">
         {caption}
+        {onClick && <ChevronRight className="h-3.5 w-3.5 text-white/40" strokeWidth={2.5} />}
       </p>
       <p className="mt-1 font-numeric text-xl font-bold tabular-nums">{value}</p>
       {sub && <p className="mt-0.5 truncate text-xs text-white/55">{sub}</p>}
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="press rounded-card bg-white/10 px-4 py-3 text-left"
+      >
+        {body}
+      </button>
+    );
+  }
+  return <div className="rounded-card bg-white/10 px-4 py-3">{body}</div>;
 }
 
 /** "Sun, Jun 7" from a local "YYYY-MM-DD" key (noon dodges TZ edges). */
@@ -99,6 +132,116 @@ function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+/** "Jun 7" from an ISO timestamp, for the receipt rows. */
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// The receipts behind a tappable fun-fact chip: a dark bottom sheet (same
+// gesture language as the category picker) listing this month's entries.
+function TxSheet({
+  open,
+  title,
+  rows,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  rows: Transaction[];
+  onClose: () => void;
+}) {
+  const totalCents = rows.reduce((sum, r) => sum + r.amount_usd_cents, 0);
+
+  function handleDragEnd(_: unknown, info: PanInfo) {
+    if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            data-testid="sheet-backdrop"
+            className="fixed inset-0 z-40 bg-black/50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
+          <motion.div
+            data-testid="tx-sheet"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md touch-none rounded-t-[28px] px-5 pb-[calc(1.5rem+var(--safe-bottom))] pt-2 text-white shadow-card"
+            style={{ backgroundColor: "#23234A" }}
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "tween", duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={handleDragEnd}
+          >
+            {/* Grabber. */}
+            <div className="mx-auto mb-4 h-1.5 w-10 cursor-grab rounded-full bg-white/20" />
+
+            <header className="mb-1 flex items-baseline justify-between gap-3">
+              <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-white/70">
+                {title} · {monthLabel()}
+              </h3>
+              <span className="font-numeric text-sm font-bold tabular-nums">
+                {formatUsdCents(totalCents)}
+              </span>
+            </header>
+
+            {rows.length === 0 ? (
+              <p className="py-8 text-center text-white/55">
+                Nothin&apos; here this month, Doc.
+              </p>
+            ) : (
+              <ul className="max-h-[55vh] overflow-y-auto">
+                {rows.map((tx) => {
+                  const Icon = categoryIcon(tx.category);
+                  const color = categoryColor(tx.category);
+                  return (
+                    <li
+                      key={tx.id}
+                      className="flex items-center gap-3 border-b border-white/5 py-2.5 last:border-0"
+                    >
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                        style={{ backgroundColor: `${color}26`, color }}
+                      >
+                        <Icon className="h-4 w-4" strokeWidth={2} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">
+                          {categoryLabel(tx.category)}
+                        </p>
+                        {tx.note && (
+                          <p className="truncate text-xs text-white/55">{tx.note}</p>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-numeric text-sm font-bold tabular-nums">
+                          {formatUsdCents(tx.amount_usd_cents)}
+                        </p>
+                        <p className="text-xs text-white/45">{shortDate(tx.occurred_at)}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 /** How long the safe lasts: short runways in days, long ones in months. */
 function runwayLabel(days: number): string {
   if (days >= 60) return `${(days / 30.44).toFixed(1)} months`;
@@ -112,6 +255,10 @@ function PersonalStats() {
   const series = useMemo(() => dailySpendSeries(transactions, 30), [transactions]);
   const cats = useMemo(() => topCategories(transactions), [transactions]);
   const facts = useMemo(() => monthInsights(transactions), [transactions]);
+  // Which chip's receipts are open, if any.
+  const [sheet, setSheet] = useState<"treats" | "weekend" | null>(null);
+  const treats = useMemo(() => treatTransactions(transactions), [transactions]);
+  const weekend = useMemo(() => weekendTransactions(transactions), [transactions]);
 
   const barItems = useMemo<StatBarItem[]>(() => {
     const top = Math.max(...cats.map((c) => c.totalCents), 1);
@@ -169,8 +316,8 @@ function PersonalStats() {
             <Fact caption="Safe runway" value={garble(3)} />
             <Fact caption="On pace for" value={`$${garble(4)}`} />
             <Fact caption="Treat yourself" value={`$${garble(5)}`} />
-            <Fact caption="Coffee runs" value={garble(6)} />
-            <Fact caption="Weekend Spend" value={garble(7)} />
+            <Fact caption="Weekend Spend" value={garble(6)} />
+            <Fact caption="Coffee runs" value={garble(7)} />
             <Fact caption="No-spend days" value={garble(8)} />
           </div>
         </section>
@@ -234,8 +381,8 @@ function PersonalStats() {
         </section>
       )}
 
-      {/* Pairs by design: splurge|busiest, runway|forecast, treats|coffee,
-          weekends|no-spend — then the in-vs-out bar across the bottom. */}
+      {/* Pairs by design: splurge|busiest, runway|forecast, treats|weekend,
+          coffee|no-spend — then the in-vs-out bar across the bottom. */}
       <section className="flex flex-col gap-2">
         <Caption>Fun facts</Caption>
         <div className="grid grid-cols-2 gap-2">
@@ -273,15 +420,20 @@ function PersonalStats() {
             />
           )}
           {facts.treatCents > 0 && (
-            <Fact caption="Treat yourself" value={formatUsdCents(facts.treatCents)} />
+            <Fact
+              caption="Treat yourself"
+              value={formatUsdCents(facts.treatCents)}
+              onClick={() => setSheet("treats")}
+            />
           )}
-          <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
           {facts.spendCount > 0 && (
             <Fact
               caption="Weekend Spend"
               value={`${Math.round(facts.weekendShare * 100)}%`}
+              onClick={() => setSheet("weekend")}
             />
           )}
+          <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
           <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
           {flow > 0 && (
             <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
@@ -303,6 +455,13 @@ function PersonalStats() {
           )}
         </div>
       </section>
+
+      <TxSheet
+        open={sheet !== null}
+        title={sheet === "weekend" ? "Weekend Spend" : "Treat yourself"}
+        rows={sheet === "weekend" ? weekend : treats}
+        onClose={() => setSheet(null)}
+      />
     </>
   );
 }
