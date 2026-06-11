@@ -38,6 +38,13 @@ describe("router", () => {
     expect(renderHook(() => useRoute()).result.current).toBe("/stats");
   });
 
+  it("recognizes the receipts routes under /stats", () => {
+    act(() => navigate("/stats/treats"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/stats/treats");
+    act(() => navigate("/stats/weekend"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/stats/weekend");
+  });
+
   it("navigate is a no-op when already on the route", () => {
     act(() => navigate("/safe"));
     const before = window.location.hash;

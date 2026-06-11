@@ -156,7 +156,7 @@ export type MonthInsights = {
   noSpendDays: number; // elapsed days with nothing spent
   coffeeCount: number; // ☕ entries — the fun one
   treatCents: number; // fun + shopping + self care
-  weekendShare: number; // 0..1 of spending money landing on Sat/Sun
+  weekendCents: number; // spending money landing on Sat/Sun
   anyMasked: boolean; // some row is obscured (locked device): money stats are lies
 };
 
@@ -223,7 +223,7 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
     noSpendDays: Math.max(daysElapsed - byDay.size, 0),
     coffeeCount,
     treatCents,
-    weekendShare: weekendCents / Math.max(spentCents, 1),
+    weekendCents,
     anyMasked,
   };
 }

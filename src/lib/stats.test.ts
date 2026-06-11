@@ -186,7 +186,7 @@ describe("monthInsights", () => {
       noSpendDays: 5, // 10 elapsed − 5 days with spending
       coffeeCount: 4,
       treatCents: 1300, // fun + self care
-      weekendShare: 1300 / 3900, // the Sat drinks + Sun spa, of all spending
+      weekendCents: 1300, // the Sat drinks + Sun spa
       anyMasked: false,
     });
   });
@@ -203,7 +203,7 @@ describe("monthInsights", () => {
       noSpendDays: 10,
       coffeeCount: 0,
       treatCents: 0,
-      weekendShare: 0,
+      weekendCents: 0,
       anyMasked: false,
     });
   });

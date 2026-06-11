@@ -148,7 +148,10 @@ export function Home() {
           washed-out behind everything (overflow-hidden clips it to the card's
           radius). */}
       <section>
-        <div className="relative overflow-hidden rounded-card bg-surface px-5 py-5 shadow-card">
+        {/* min-h matches the Stats headline card exactly, so tapping through
+            feels like the same card changing rooms. (Keep in sync with
+            Stats.tsx.) */}
+        <div className="relative min-h-[188px] overflow-hidden rounded-card bg-surface px-5 py-5 shadow-card">
           {!locked && (
             <SparkArea
               values={sparkValues}
