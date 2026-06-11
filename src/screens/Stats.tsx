@@ -106,10 +106,24 @@ function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+/** "Tuesdays" from a weekday index (Jan 1, 2023 was a Sunday). */
+function weekdayLabel(weekday: number): string {
+  const name = new Date(2023, 0, 1 + weekday).toLocaleDateString("en-US", {
+    weekday: "long",
+  });
+  return `${name}s`;
+}
+
+/** How long the safe lasts: short runways in days, long ones in months. */
+function runwayLabel(days: number): string {
+  if (days >= 60) return `${(days / 30.44).toFixed(1)} months`;
+  return count(days, "day", "days");
+}
+
 // The signed-in half. Lives in its own component so the top-level Stats never
 // touches useStore() — signed-out renders have no StoreProvider above them.
 function PersonalStats() {
-  const { transactions, locked } = useStore();
+  const { transactions, locked, safeTotalCents } = useStore();
   const series = useMemo(() => dailySpendSeries(transactions, 30), [transactions]);
   const cats = useMemo(() => topCategories(transactions), [transactions]);
   const facts = useMemo(() => monthInsights(transactions), [transactions]);
@@ -141,6 +155,12 @@ function PersonalStats() {
 
   const flow = facts.incomeCents + facts.spentCents;
   const inPct = (facts.incomeCents / Math.max(flow, 1)) * 100;
+
+  // How many days the safe's cash would cover at this month's pace.
+  const runwayDays =
+    facts.avgPerDayCents > 0
+      ? Math.round(safeTotalCents / facts.avgPerDayCents)
+      : 0;
 
   return (
     <>
@@ -215,13 +235,6 @@ function PersonalStats() {
                 .join(" · ")}
             />
           )}
-          {!masked && facts.priciestDay && (
-            <Fact
-              caption="Priciest day"
-              value={formatUsdCents(facts.priciestDay.totalCents)}
-              sub={dayLabel(facts.priciestDay.date)}
-            />
-          )}
           {facts.busiestDay && (
             <Fact
               caption="Busiest day"
@@ -233,10 +246,47 @@ function PersonalStats() {
               }
             />
           )}
-          {!masked && (
+          {!masked && facts.forecastCents > 0 && (
             <Fact
-              caption="Average entry"
-              value={formatUsdCents(facts.avgEntryCents)}
+              caption="On pace for"
+              value={formatUsdCents(facts.forecastCents)}
+              sub="by month's end"
+            />
+          )}
+          {!masked && runwayDays > 0 && (
+            <Fact
+              caption="Safe runway"
+              value={runwayLabel(runwayDays)}
+              sub="at this pace"
+            />
+          )}
+          {!masked && facts.treatCents > 0 && (
+            <Fact
+              caption="Treat yourself"
+              value={formatUsdCents(facts.treatCents)}
+              sub="fun · shopping · self care"
+            />
+          )}
+          {facts.daysSincePayday !== null && (
+            <Fact
+              caption="Since payday"
+              value={count(facts.daysSincePayday, "day", "days")}
+            />
+          )}
+          {facts.favoriteWeekday !== null && (
+            <Fact
+              caption="Favorite day"
+              value={weekdayLabel(facts.favoriteWeekday)}
+            />
+          )}
+          {facts.primeHour !== null && (
+            <Fact caption="Prime time" value={hourLabel(facts.primeHour)} />
+          )}
+          {facts.spendCount > 0 && (
+            <Fact
+              caption="Weekends"
+              value={`${Math.round(facts.weekendShare * 100)}%`}
+              sub="of your entries"
             />
           )}
           <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
@@ -245,9 +295,6 @@ function PersonalStats() {
             value={count(facts.quietStreakDays, "day", "days")}
           />
           <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
-          {facts.primeHour !== null && (
-            <Fact caption="Prime time" value={hourLabel(facts.primeHour)} />
-          )}
           {!masked && flow > 0 && (
             <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">

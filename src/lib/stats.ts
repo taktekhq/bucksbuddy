@@ -124,22 +124,28 @@ export function topCategories(
   return sorted.slice(0, limit);
 }
 
-/** One local day's spending activity, for the busiest/priciest picks. */
+/** One local day's spending activity, for the busiest-day pick. */
 export type DayStat = { date: string; count: number; totalCents: number };
+
+// "Treat yourself" categories: the want-not-need bases.
+const TREAT_BASES = new Set(["fun", "shopping", "self_care"]);
 
 export type MonthInsights = {
   spentCents: number;
   incomeCents: number;
   spendCount: number; // spending entries logged this month
   avgPerDayCents: number; // spentCents over the days elapsed so far
-  avgEntryCents: number; // spentCents over the entries logged
+  forecastCents: number; // month-end projection at the current pace
   biggestExpense: Transaction | null;
   busiestDay: DayStat | null; // most spending entries
-  priciestDay: DayStat | null; // most cents out the door
   noSpendDays: number; // elapsed days with nothing spent
   quietStreakDays: number; // longest run of consecutive no-spend days
   coffeeCount: number; // ☕ entries — the fun one
+  treatCents: number; // fun + shopping + self care
   primeHour: number | null; // local hour (0–23) you log spending most
+  favoriteWeekday: number | null; // 0 (Sun) – 6 (Sat) with the most entries
+  weekendShare: number; // 0..1 of spending entries landing on Sat/Sun
+  daysSincePayday: number | null; // since the latest (non-future) income, any month
   anyMasked: boolean; // some row is obscured (locked device): money stats are lies
 };
 
@@ -147,30 +153,46 @@ export type MonthInsights = {
 export function monthInsights(rows: Transaction[], now = new Date()): MonthInsights {
   const { from, to } = currentMonthRange(now);
   const daysElapsed = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 
   let spentCents = 0;
   let incomeCents = 0;
   let spendCount = 0;
   let coffeeCount = 0;
+  let treatCents = 0;
+  let weekendCount = 0;
   let anyMasked = false;
   let biggestExpense: Transaction | null = null;
+  let lastIncomeAt: Date | null = null;
   const byDay = new Map<string, DayStat>();
   const byHour = new Map<number, number>();
+  const byWeekday = new Map<number, number>();
 
   for (const r of rows) {
     const at = new Date(r.occurred_at);
+    // Payday is "days since", so it looks past the month window — but not
+    // into the future, post-dated income doesn't pay today's bills.
+    if (
+      r.is_income &&
+      at <= now &&
+      splitCategory(r.category).base !== SAFE_CATEGORY_ID
+    ) {
+      if (!lastIncomeAt || at > lastIncomeAt) lastIncomeAt = at;
+    }
     if (at < from || at >= to) continue;
     if (r.amountMask != null) anyMasked = true;
+    const base = splitCategory(r.category).base;
     if (!isSpending(r)) {
       // Money IN — but pulling cash back out of the Safe isn't income.
-      if (r.is_income && splitCategory(r.category).base !== SAFE_CATEGORY_ID) {
+      if (r.is_income && base !== SAFE_CATEGORY_ID) {
         incomeCents += r.amount_usd_cents;
       }
       continue;
     }
     spentCents += r.amount_usd_cents;
     spendCount += 1;
-    if (splitCategory(r.category).base === "coffee") coffeeCount += 1;
+    if (base === "coffee") coffeeCount += 1;
+    if (TREAT_BASES.has(base)) treatCents += r.amount_usd_cents;
     if (!biggestExpense || r.amount_usd_cents > biggestExpense.amount_usd_cents) {
       biggestExpense = r;
     }
@@ -183,21 +205,30 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
     stat.count += 1;
     stat.totalCents += r.amount_usd_cents;
     byHour.set(at.getHours(), (byHour.get(at.getHours()) ?? 0) + 1);
+    byWeekday.set(at.getDay(), (byWeekday.get(at.getDay()) ?? 0) + 1);
+    if (at.getDay() === 0 || at.getDay() === 6) weekendCount += 1;
   }
 
   let busiestDay: DayStat | null = null;
-  let priciestDay: DayStat | null = null;
   for (const stat of byDay.values()) {
     if (!busiestDay || stat.count > busiestDay.count) busiestDay = stat;
-    if (!priciestDay || stat.totalCents > priciestDay.totalCents) priciestDay = stat;
   }
 
   let primeHour: number | null = null;
   let primeCount = 0;
-  for (const [hour, count] of byHour) {
-    if (count > primeCount) {
+  for (const [hour, hourCount] of byHour) {
+    if (hourCount > primeCount) {
       primeHour = hour;
-      primeCount = count;
+      primeCount = hourCount;
+    }
+  }
+
+  let favoriteWeekday: number | null = null;
+  let favoriteCount = 0;
+  for (const [weekday, weekdayCount] of byWeekday) {
+    if (weekdayCount > favoriteCount) {
+      favoriteWeekday = weekday;
+      favoriteCount = weekdayCount;
     }
   }
 
@@ -213,20 +244,28 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
     }
   }
 
+  const startOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
   return {
     spentCents,
     incomeCents,
     spendCount,
     avgPerDayCents: Math.round(spentCents / daysElapsed),
-    avgEntryCents: Math.round(spentCents / Math.max(spendCount, 1)),
+    forecastCents: Math.round((spentCents / daysElapsed) * daysInMonth),
     biggestExpense,
     busiestDay,
-    priciestDay,
     // Future-dated entries later this month could outnumber elapsed days.
     noSpendDays: Math.max(daysElapsed - byDay.size, 0),
     quietStreakDays,
     coffeeCount,
+    treatCents,
     primeHour,
+    favoriteWeekday,
+    weekendShare: weekendCount / Math.max(spendCount, 1),
+    daysSincePayday: lastIncomeAt
+      ? Math.round((startOfDay(now) - startOfDay(lastIncomeAt)) / 86_400_000)
+      : null,
     anyMasked,
   };
 }
