@@ -16,6 +16,11 @@ vi.mock("@/screens/Legal", () => ({ Legal: () => <div>LegalScreen</div> }));
 vi.mock("@/screens/Contact", () => ({ Contact: () => <div>ContactScreen</div> }));
 vi.mock("@/screens/Home", () => ({ Home: () => <div>HomeScreen</div> }));
 vi.mock("@/screens/History", () => ({ History: () => <div>HistoryScreen</div> }));
+vi.mock("@/screens/Stats", () => ({
+  Stats: ({ signedIn }: { signedIn: boolean }) => (
+    <div>StatsScreen {signedIn ? "personal" : "public"}</div>
+  ),
+}));
 vi.mock("@/screens/Settings", () => ({ Settings: () => <div>SettingsScreen</div> }));
 vi.mock("@/screens/Safe", () => ({ Safe: () => <div>SafeScreen</div> }));
 vi.mock("@/screens/Reset", () => ({ Reset: () => <div>ResetScreen</div> }));
@@ -65,6 +70,22 @@ describe("App", () => {
     render(<App />);
     expect(screen.getByText("ResetScreen")).toBeInTheDocument();
     expect(screen.queryByText("LegalScreen")).not.toBeInTheDocument();
+  });
+
+  it("shows personal stats inside the store when signed in", () => {
+    useSession.mockReturnValue({ session, ready: true, recoveryMode: false });
+    useRoute.mockReturnValue("/stats");
+    render(<App />);
+    expect(screen.getByText("StatsScreen personal")).toBeInTheDocument();
+    expect(screen.getByTestId("store")).toBeInTheDocument();
+  });
+
+  it("shows community-only stats without the store when signed out", () => {
+    useSession.mockReturnValue({ session: null, ready: true, recoveryMode: false });
+    useRoute.mockReturnValue("/stats");
+    render(<App />);
+    expect(screen.getByText("StatsScreen public")).toBeInTheDocument();
+    expect(screen.queryByTestId("store")).not.toBeInTheDocument();
   });
 
   it("routes to Home, Settings, Safe and History when signed in", () => {

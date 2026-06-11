@@ -14,6 +14,7 @@ import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
+import { FETCH_CAP } from "@/lib/stats";
 import {
   cipherMask,
   clearStoredPassphrase,
@@ -229,12 +230,14 @@ export function StoreProvider({
         .from("transactions")
         .select("*")
         .order("occurred_at", { ascending: false })
-        .limit(500),
+        // The cap lives in lib/stats so the daily series knows where the
+        // fetched data ends and "unknown" begins.
+        .limit(FETCH_CAP),
       supabase
         .from("safe_gold_entries")
         .select("*")
         .order("occurred_at", { ascending: false })
-        .limit(500),
+        .limit(FETCH_CAP),
     ]);
     const txRows = (txData ?? []) as TransactionRow[];
     const goldRows = (goldData ?? []) as SafeGoldEntryRow[];

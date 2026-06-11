@@ -1,7 +1,17 @@
-import { useEffect, useState } from "react";
-import { Banknote, Coins, Eye, EyeOff, Lock, Settings, Vault } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Banknote,
+  ChevronRight,
+  Coins,
+  Eye,
+  EyeOff,
+  Lock,
+  Settings,
+  Vault,
+} from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { SparkArea } from "@/components/ui/SparkArea";
 import { Carrot } from "@/components/ui/Carrot";
 import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
@@ -10,6 +20,7 @@ import { navigate } from "@/lib/router";
 import { takePendingEdit } from "@/lib/editIntent";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { isToday, monthLabel } from "@/lib/dates";
+import { dailySpendSeries, smoothSeries } from "@/lib/stats";
 import { formatUsdCents } from "@/lib/money";
 import { formatGrams } from "@/lib/gold";
 import type { Transaction } from "@/types/db";
@@ -75,6 +86,19 @@ export function Home() {
   // obscured, so the safe balance can't be revealed either.
   const reveal = safeShown && !locked;
 
+  // The last 30 days of spending, washed faintly behind the hero — smoothed
+  // into dunes because here it's decoration (the honest daily chart lives on
+  // /stats). Hidden while locked: masked amounts read as zeros, and a flat
+  // line would be a lie.
+  const sparkValues = useMemo(
+    () =>
+      smoothSeries(
+        dailySpendSeries(transactions, 30).map((p) => p.totalCents),
+        2,
+      ),
+    [transactions],
+  );
+
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
       {/* Savings tint as a fixed, viewport-filling backdrop so the gradient
@@ -123,11 +147,38 @@ export function Home() {
       </header>
 
       {/* Money for the month — month caption above the net number. The safe
-          balance rides along underneath so saved money shows in the picture. */}
+          balance rides along underneath so saved money shows in the picture.
+          Tapping the number opens the Stats page; the spending sparkline sits
+          washed-out behind everything (overflow-hidden clips it to the card's
+          radius). */}
       <section>
-        <div className="rounded-card bg-surface px-5 py-5 shadow-card">
-          <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} masked={locked} />
-          <div className="mt-4 flex items-center gap-3 rounded-card bg-income/10 px-4 py-3">
+        <div className="relative overflow-hidden rounded-card bg-surface px-5 py-5 shadow-card">
+          {!locked && (
+            <SparkArea
+              values={sparkValues}
+              fill="#F56300"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-14 w-full opacity-10"
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => navigate("/stats")}
+            aria-label="See your stats"
+            className="press relative block w-full text-left"
+          >
+            <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} masked={locked} />
+            {/* iOS-style disclosure hint: this number goes somewhere. */}
+            <span
+              aria-hidden
+              className="absolute right-0 top-1/2 -translate-y-1/2 text-label-muted"
+            >
+              <ChevronRight className="h-5 w-5" strokeWidth={2} />
+            </span>
+          </button>
+          {/* Only the number is the stats tap target — this row already has
+              buttons of its own, and nesting them would be invalid HTML.
+              `relative` keeps the row above the sparkline. */}
+          <div className="relative mt-4 flex items-center gap-3 rounded-card bg-income/10 px-4 py-3">
             <button
               type="button"
               onClick={() => navigate("/safe")}

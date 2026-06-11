@@ -7,6 +7,7 @@ import { Legal } from "@/screens/Legal";
 import { Contact } from "@/screens/Contact";
 import { Home } from "@/screens/Home";
 import { History } from "@/screens/History";
+import { Stats } from "@/screens/Stats";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
 import { Reset } from "@/screens/Reset";
@@ -56,6 +57,18 @@ export default function App() {
     content = <Contact />;
   } else if (!ready) {
     content = <Splash />;
+  } else if (route === "/stats") {
+    // Half-public: signed-in users get their personal breakdown (which needs
+    // the store), signed-out visitors get the community numbers only. Sits
+    // after the splash gate so a signed-in user never flashes the public
+    // variant while the session loads.
+    content = session ? (
+      <StoreProvider userId={session.user.id}>
+        <Stats signedIn />
+      </StoreProvider>
+    ) : (
+      <Stats signedIn={false} />
+    );
   } else if (!session) {
     // The marketing landing page is the entry point for signed-out visitors;
     // it owns the Google + email sign-in flows.
