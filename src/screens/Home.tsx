@@ -20,7 +20,7 @@ import { navigate } from "@/lib/router";
 import { takePendingEdit } from "@/lib/editIntent";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { isToday, monthLabel } from "@/lib/dates";
-import { dailySpendSeries } from "@/lib/stats";
+import { dailySpendSeries, smoothSeries } from "@/lib/stats";
 import { formatUsdCents } from "@/lib/money";
 import { formatGrams } from "@/lib/gold";
 import type { Transaction } from "@/types/db";
@@ -86,10 +86,16 @@ export function Home() {
   // obscured, so the safe balance can't be revealed either.
   const reveal = safeShown && !locked;
 
-  // The last 30 days of spending, washed faintly behind the hero. Hidden while
-  // locked: masked amounts read as zeros, and a flat line would be a lie.
+  // The last 30 days of spending, washed faintly behind the hero — smoothed
+  // into dunes because here it's decoration (the honest daily chart lives on
+  // /stats). Hidden while locked: masked amounts read as zeros, and a flat
+  // line would be a lie.
   const sparkValues = useMemo(
-    () => dailySpendSeries(transactions, 30).map((p) => p.totalCents),
+    () =>
+      smoothSeries(
+        dailySpendSeries(transactions, 30).map((p) => p.totalCents),
+        2,
+      ),
     [transactions],
   );
 
@@ -150,9 +156,8 @@ export function Home() {
           {!locked && (
             <SparkArea
               values={sparkValues}
-              stroke="#F56300"
               fill="#F56300"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full opacity-[0.08]"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-14 w-full opacity-10"
             />
           )}
           <button

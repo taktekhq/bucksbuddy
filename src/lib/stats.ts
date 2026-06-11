@@ -69,6 +69,19 @@ export function dailySpendSeries(
   return series;
 }
 
+/**
+ * Centered moving average over ±radius neighbors. Sparse daily spending is a
+ * comb of isolated spikes; where the series is decoration (the wash behind
+ * the Home hero) this turns it into soft dunes. Don't use it where the chart
+ * is the data.
+ */
+export function smoothSeries(values: number[], radius = 1): number[] {
+  return values.map((_, i) => {
+    const window = values.slice(Math.max(0, i - radius), i + radius + 1);
+    return window.reduce((sum, v) => sum + v, 0) / window.length;
+  });
+}
+
 export type CategoryStat = {
   category: string; // base id ("food", never "food/restaurant") for label/icon/color lookups
   totalCents: number;

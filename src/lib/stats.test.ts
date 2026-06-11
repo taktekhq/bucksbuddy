@@ -4,6 +4,7 @@ import {
   dailySpendSeries,
   isSpending,
   monthInsights,
+  smoothSeries,
   topCategories,
 } from "@/lib/stats";
 import type { Transaction } from "@/types/db";
@@ -191,6 +192,17 @@ describe("monthInsights", () => {
   it("flags masked rows so the UI doesn't trust the zeros", () => {
     const masked = monthInsights([tx({ amount_usd_cents: 0, amountMask: "ab" })], NOW);
     expect(masked.anyMasked).toBe(true);
+  });
+});
+
+describe("smoothSeries", () => {
+  it("spreads an isolated spike across its neighbors", () => {
+    expect(smoothSeries([0, 0, 6, 0, 0])).toEqual([0, 2, 2, 2, 0]);
+  });
+
+  it("widens with the radius and leaves flat series alone", () => {
+    expect(smoothSeries([0, 0, 10, 0, 0], 2)).toEqual([10 / 3, 2.5, 2, 2.5, 10 / 3]);
+    expect(smoothSeries([3, 3, 3])).toEqual([3, 3, 3]);
   });
 });
 
