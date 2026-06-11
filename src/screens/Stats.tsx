@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { Carrot } from "@/components/ui/Carrot";
 import { SparkArea } from "@/components/ui/SparkArea";
@@ -10,15 +9,8 @@ import { useThemeColor } from "@/lib/useThemeColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { monthLabel } from "@/lib/dates";
 import { formatUsdCents } from "@/lib/money";
-import {
-  dailySpendSeries,
-  monthInsights,
-  topCategories,
-  treatTransactions,
-  weekendTransactions,
-} from "@/lib/stats";
+import { dailySpendSeries, monthInsights, topCategories } from "@/lib/stats";
 import { fetchPublicStats, type PublicStats } from "@/lib/publicStats";
-import type { Transaction } from "@/types/db";
 
 // The stats page — a deep indigo "observatory" you climb up to and look at
 // your money from, deliberately distinct from History's charcoal rabbit hole
@@ -82,7 +74,7 @@ function Caption({ children }: { children: ReactNode }) {
 
 // A small stat chip: tiny caption, big numeric value, optional one-liner.
 // Give it an onClick and it becomes a button with a disclosure chevron —
-// some chips open the receipts behind their number.
+// some chips open the receipts page behind their number.
 function Fact({
   caption,
   value,
@@ -132,116 +124,6 @@ function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** "Jun 7" from an ISO timestamp, for the receipt rows. */
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-// The receipts behind a tappable fun-fact chip: a dark bottom sheet (same
-// gesture language as the category picker) listing this month's entries.
-function TxSheet({
-  open,
-  title,
-  rows,
-  onClose,
-}: {
-  open: boolean;
-  title: string;
-  rows: Transaction[];
-  onClose: () => void;
-}) {
-  const totalCents = rows.reduce((sum, r) => sum + r.amount_usd_cents, 0);
-
-  function handleDragEnd(_: unknown, info: PanInfo) {
-    if (info.offset.y > 120 || info.velocity.y > 600) onClose();
-  }
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            data-testid="sheet-backdrop"
-            className="fixed inset-0 z-40 bg-black/50"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          <motion.div
-            data-testid="tx-sheet"
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md touch-none rounded-t-[28px] px-5 pb-[calc(1.5rem+var(--safe-bottom))] pt-2 text-white shadow-card"
-            style={{ backgroundColor: "#23234A" }}
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "tween", duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.6 }}
-            onDragEnd={handleDragEnd}
-          >
-            {/* Grabber. */}
-            <div className="mx-auto mb-4 h-1.5 w-10 cursor-grab rounded-full bg-white/20" />
-
-            <header className="mb-1 flex items-baseline justify-between gap-3">
-              <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-white/70">
-                {title} · {monthLabel()}
-              </h3>
-              <span className="font-numeric text-sm font-bold tabular-nums">
-                {formatUsdCents(totalCents)}
-              </span>
-            </header>
-
-            {rows.length === 0 ? (
-              <p className="py-8 text-center text-white/55">
-                Nothin&apos; here this month, Doc.
-              </p>
-            ) : (
-              <ul className="max-h-[55vh] overflow-y-auto">
-                {rows.map((tx) => {
-                  const Icon = categoryIcon(tx.category);
-                  const color = categoryColor(tx.category);
-                  return (
-                    <li
-                      key={tx.id}
-                      className="flex items-center gap-3 border-b border-white/5 py-2.5 last:border-0"
-                    >
-                      <span
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                        style={{ backgroundColor: `${color}26`, color }}
-                      >
-                        <Icon className="h-4 w-4" strokeWidth={2} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">
-                          {categoryLabel(tx.category)}
-                        </p>
-                        {tx.note && (
-                          <p className="truncate text-xs text-white/55">{tx.note}</p>
-                        )}
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="font-numeric text-sm font-bold tabular-nums">
-                          {formatUsdCents(tx.amount_usd_cents)}
-                        </p>
-                        <p className="text-xs text-white/45">{shortDate(tx.occurred_at)}</p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
-
 /** How long the safe lasts: short runways in days, long ones in months. */
 function runwayLabel(days: number): string {
   if (days >= 60) return `${(days / 30.44).toFixed(1)} months`;
@@ -255,10 +137,6 @@ function PersonalStats() {
   const series = useMemo(() => dailySpendSeries(transactions, 30), [transactions]);
   const cats = useMemo(() => topCategories(transactions), [transactions]);
   const facts = useMemo(() => monthInsights(transactions), [transactions]);
-  // Which chip's receipts are open, if any.
-  const [sheet, setSheet] = useState<"treats" | "weekend" | null>(null);
-  const treats = useMemo(() => treatTransactions(transactions), [transactions]);
-  const weekend = useMemo(() => weekendTransactions(transactions), [transactions]);
 
   const barItems = useMemo<StatBarItem[]>(() => {
     const top = Math.max(...cats.map((c) => c.totalCents), 1);
@@ -355,7 +233,10 @@ function PersonalStats() {
           fill="rgba(245, 99, 0, 0.16)"
           className="pointer-events-none absolute inset-0 h-full w-full"
         />
-        <div className="relative px-5 py-5">
+        {/* min-h matches the Home hero card exactly, so tapping the hero
+            lands on the same card with the same chart — only the room gets
+            darker. (Keep in sync with Home.tsx.) */}
+        <div className="relative flex min-h-[188px] flex-col px-5 py-5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
             {monthLabel()}
           </p>
@@ -365,8 +246,7 @@ function PersonalStats() {
           <p className="mt-0.5 text-sm text-white/55">
             ≈ {formatUsdCents(facts.avgPerDayCents)} a day
           </p>
-          {/* Breathing room so the chart isn't all hidden behind the text. */}
-          <p className="mt-14 text-right text-[11px] uppercase tracking-wide text-white/45">
+          <p className="mt-auto text-right text-[11px] uppercase tracking-wide text-white/45">
             spent per day · last 30 days
           </p>
         </div>
@@ -423,14 +303,14 @@ function PersonalStats() {
             <Fact
               caption="Treat yourself"
               value={formatUsdCents(facts.treatCents)}
-              onClick={() => setSheet("treats")}
+              onClick={() => navigate("/stats/treats")}
             />
           )}
-          {facts.spendCount > 0 && (
+          {facts.weekendCents > 0 && (
             <Fact
               caption="Weekend Spend"
-              value={`${Math.round(facts.weekendShare * 100)}%`}
-              onClick={() => setSheet("weekend")}
+              value={formatUsdCents(facts.weekendCents)}
+              onClick={() => navigate("/stats/weekend")}
             />
           )}
           <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
@@ -455,13 +335,6 @@ function PersonalStats() {
           )}
         </div>
       </section>
-
-      <TxSheet
-        open={sheet !== null}
-        title={sheet === "weekend" ? "Weekend Spend" : "Treat yourself"}
-        rows={sheet === "weekend" ? weekend : treats}
-        onClose={() => setSheet(null)}
-      />
     </>
   );
 }

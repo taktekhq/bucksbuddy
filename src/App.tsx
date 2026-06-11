@@ -8,6 +8,7 @@ import { Contact } from "@/screens/Contact";
 import { Home } from "@/screens/Home";
 import { History } from "@/screens/History";
 import { Stats } from "@/screens/Stats";
+import { Receipts } from "@/screens/Receipts";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
 import { Reset } from "@/screens/Reset";
@@ -82,6 +83,10 @@ export default function App() {
           <Safe />
         ) : route === "/history" ? (
           <History />
+        ) : route === "/stats/treats" ? (
+          <Receipts kind="treats" />
+        ) : route === "/stats/weekend" ? (
+          <Receipts kind="weekend" />
         ) : (
           <Home />
         )}

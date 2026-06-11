@@ -20,6 +20,8 @@ export type Route =
   | "/safe"
   | "/history"
   | "/stats"
+  | "/stats/treats"
+  | "/stats/weekend"
   | "/legal"
   | "/contact"
   | "/reset";
@@ -35,6 +37,8 @@ function current(): Route {
     h === "/safe" ||
     h === "/history" ||
     h === "/stats" ||
+    h === "/stats/treats" ||
+    h === "/stats/weekend" ||
     h === "/legal" ||
     h === "/contact" ||
     h === "/reset"
