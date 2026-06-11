@@ -124,15 +124,24 @@ export function topCategories(
   return sorted.slice(0, limit);
 }
 
+/** One local day's spending activity, for the busiest-day pick. */
+export type DayStat = { date: string; count: number; totalCents: number };
+
+// "Treat yourself" categories: the want-not-need bases.
+const TREAT_BASES = new Set(["fun", "shopping", "self_care"]);
+
 export type MonthInsights = {
   spentCents: number;
   incomeCents: number;
   spendCount: number; // spending entries logged this month
   avgPerDayCents: number; // spentCents over the days elapsed so far
+  forecastCents: number; // month-end projection at the current pace
   biggestExpense: Transaction | null;
-  busiestDay: { date: string; count: number } | null; // most spending entries
+  busiestDay: DayStat | null; // most spending entries
   noSpendDays: number; // elapsed days with nothing spent
   coffeeCount: number; // ☕ entries — the fun one
+  treatCents: number; // fun + shopping + self care
+  weekendShare: number; // 0..1 of spending money landing on Sat/Sun
   anyMasked: boolean; // some row is obscured (locked device): money stats are lies
 };
 
@@ -140,39 +149,51 @@ export type MonthInsights = {
 export function monthInsights(rows: Transaction[], now = new Date()): MonthInsights {
   const { from, to } = currentMonthRange(now);
   const daysElapsed = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 
   let spentCents = 0;
   let incomeCents = 0;
   let spendCount = 0;
   let coffeeCount = 0;
+  let treatCents = 0;
+  let weekendCents = 0;
   let anyMasked = false;
   let biggestExpense: Transaction | null = null;
-  const countByDay = new Map<string, number>();
+  const byDay = new Map<string, DayStat>();
 
   for (const r of rows) {
     const at = new Date(r.occurred_at);
     if (at < from || at >= to) continue;
     if (r.amountMask != null) anyMasked = true;
+    const base = splitCategory(r.category).base;
     if (!isSpending(r)) {
       // Money IN — but pulling cash back out of the Safe isn't income.
-      if (r.is_income && splitCategory(r.category).base !== SAFE_CATEGORY_ID) {
+      if (r.is_income && base !== SAFE_CATEGORY_ID) {
         incomeCents += r.amount_usd_cents;
       }
       continue;
     }
     spentCents += r.amount_usd_cents;
     spendCount += 1;
-    if (splitCategory(r.category).base === "coffee") coffeeCount += 1;
+    if (base === "coffee") coffeeCount += 1;
+    if (TREAT_BASES.has(base)) treatCents += r.amount_usd_cents;
     if (!biggestExpense || r.amount_usd_cents > biggestExpense.amount_usd_cents) {
       biggestExpense = r;
     }
     const day = dayKey(at);
-    countByDay.set(day, (countByDay.get(day) ?? 0) + 1);
+    let stat = byDay.get(day);
+    if (!stat) {
+      stat = { date: day, count: 0, totalCents: 0 };
+      byDay.set(day, stat);
+    }
+    stat.count += 1;
+    stat.totalCents += r.amount_usd_cents;
+    if (at.getDay() === 0 || at.getDay() === 6) weekendCents += r.amount_usd_cents;
   }
 
-  let busiestDay: { date: string; count: number } | null = null;
-  for (const [date, count] of countByDay) {
-    if (!busiestDay || count > busiestDay.count) busiestDay = { date, count };
+  let busiestDay: DayStat | null = null;
+  for (const stat of byDay.values()) {
+    if (!busiestDay || stat.count > busiestDay.count) busiestDay = stat;
   }
 
   return {
@@ -180,11 +201,14 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
     incomeCents,
     spendCount,
     avgPerDayCents: Math.round(spentCents / daysElapsed),
+    forecastCents: Math.round((spentCents / daysElapsed) * daysInMonth),
     biggestExpense,
     busiestDay,
     // Future-dated entries later this month could outnumber elapsed days.
-    noSpendDays: Math.max(daysElapsed - countByDay.size, 0),
+    noSpendDays: Math.max(daysElapsed - byDay.size, 0),
     coffeeCount,
+    treatCents,
+    weekendShare: weekendCents / Math.max(spentCents, 1),
     anyMasked,
   };
 }

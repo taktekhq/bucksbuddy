@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { makeStoreValue } from "@/test/storeValue";
+import { monthLabel } from "@/lib/dates";
 import type { Transaction } from "@/types/db";
 import type { PublicStats } from "@/lib/publicStats";
 import type { CategoryStat, DayPoint, MonthInsights } from "@/lib/stats";
@@ -43,6 +44,7 @@ function insights(overrides: Partial<MonthInsights> = {}): MonthInsights {
     incomeCents: 5000,
     spendCount: 3,
     avgPerDayCents: 200,
+    forecastCents: 6000,
     biggestExpense: {
       id: "big",
       user_id: "u1",
@@ -53,12 +55,14 @@ function insights(overrides: Partial<MonthInsights> = {}): MonthInsights {
       original_amount: 10,
       rate_used: 89500,
       occurred_at: "2026-06-05T10:00:00.000Z",
-      note: null,
+      note: "fancy dinner",
       created_at: "2026-06-05T10:00:00.000Z",
     } as Transaction,
-    busiestDay: { date: "2026-06-05", count: 2 },
+    busiestDay: { date: "2026-06-05", count: 2, totalCents: 800 },
     noSpendDays: 7,
     coffeeCount: 1,
+    treatCents: 950,
+    weekendShare: 0.6,
     anyMasked: false,
     ...overrides,
   };
@@ -92,9 +96,10 @@ describe("Stats", () => {
   });
 
   it("shows the month's money picture when signed in", () => {
+    storeValue = makeStoreValue({ safeTotalCents: 90000 });
     render(<Stats signedIn />);
     expect(screen.getByText("Your Stats")).toBeInTheDocument();
-    expect(screen.getByText(/Spent ·/)).toBeInTheDocument();
+    expect(screen.getByText(monthLabel())).toBeInTheDocument();
     expect(screen.getByText("$20.00")).toBeInTheDocument();
     expect(screen.getByText("≈ $2.00 a day")).toBeInTheDocument();
     expect(screen.getByTestId("spark-area")).toBeInTheDocument();
@@ -105,15 +110,51 @@ describe("Stats", () => {
     expect(screen.getByText("Groceries")).toBeInTheDocument();
     expect(screen.getByText("$7.00")).toBeInTheDocument();
 
-    // Fun facts.
+    // Fun facts, in their paired order: the splurge carries its note, the
+    // busiest day its total.
     expect(screen.getByText("Biggest splurge")).toBeInTheDocument();
     expect(screen.getAllByText("$10.00")).not.toHaveLength(0);
+    expect(screen.getByText(/Food · Restaurant · fancy dinner/)).toBeInTheDocument();
     expect(screen.getByText("2 entries")).toBeInTheDocument();
-    expect(screen.getByText(/Jun 5/)).toBeInTheDocument();
-    expect(screen.getByText("No-spend days")).toBeInTheDocument();
+    expect(screen.getByText(/Jun 5 · \$8\.00/)).toBeInTheDocument();
+    // 90000 safe cents over the $2.00/day pace = 450 days ≈ 14.8 months.
+    expect(screen.getByText("Safe runway")).toBeInTheDocument();
+    expect(screen.getByText("14.8 months")).toBeInTheDocument();
+    expect(screen.getByText("On pace for")).toBeInTheDocument();
+    expect(screen.getByText("$60.00")).toBeInTheDocument();
+    expect(screen.getByText("Treat yourself")).toBeInTheDocument();
+    expect(screen.getByText("$9.50")).toBeInTheDocument();
     expect(screen.getByText("Coffee runs")).toBeInTheDocument();
+    expect(screen.getByText("Weekend Spend")).toBeInTheDocument();
+    expect(screen.getByText("60%")).toBeInTheDocument();
+    expect(screen.getByText("No-spend days")).toBeInTheDocument();
     expect(screen.getByText("+$50.00")).toBeInTheDocument();
     expect(screen.getByText("-$20.00")).toBeInTheDocument();
+
+    // The chips follow the designed pairing order.
+    const captions = screen
+      .getAllByText(
+        /^(Biggest splurge|Busiest day|Safe runway|On pace for|Treat yourself|Coffee runs|Weekend Spend|No-spend days)$/,
+      )
+      .map((el) => el.textContent);
+    expect(captions).toEqual([
+      "Biggest splurge",
+      "Busiest day",
+      "Safe runway",
+      "On pace for",
+      "Treat yourself",
+      "Coffee runs",
+      "Weekend Spend",
+      "No-spend days",
+    ]);
+  });
+
+  it("shows a short safe runway in days, not months (and singular at one)", () => {
+    storeValue = makeStoreValue({ safeTotalCents: 200 });
+    render(<Stats signedIn />);
+    // 200 safe cents over the $2.00/day pace = 1 day — not "1 days".
+    expect(screen.getByText("Safe runway")).toBeInTheDocument();
+    expect(screen.getByText("1 day")).toBeInTheDocument();
   });
 
   it("navigates back home", async () => {
@@ -141,37 +182,39 @@ describe("Stats", () => {
     expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
   });
 
-  it("switches to counts and nudges to Settings while locked", async () => {
-    storeValue = makeStoreValue({ locked: true });
-    topCategories.mockReturnValue([
-      { category: "coffee", totalCents: 0, count: 2, share: 0 },
-      { category: "groceries", totalCents: 0, count: 1, share: 0 },
-    ]);
-    monthInsights.mockReturnValue(
-      insights({ spentCents: 0, incomeCents: 0, anyMasked: true }),
-    );
+  it("veils personal stats in the user's own ciphertext while locked", async () => {
+    const maskedTx = (id: string, amountMask?: string) =>
+      ({ id, amountMask }) as unknown as Transaction;
+    storeValue = makeStoreValue({
+      locked: true,
+      // The third row has no mask (e.g. still decrypting) — it's skipped.
+      transactions: [maskedTx("t1", "a8F2"), maskedTx("t2", "x9Qd"), maskedTx("t3")],
+    });
     render(<Stats signedIn />);
 
-    // The headline counts entries instead of pretending zeros are money.
-    expect(screen.getByText(/Entries ·/)).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    // The page keeps its shape, but every personal number is a cipher
+    // fragment borrowed from the masked rows — and no graphs render.
+    expect(screen.getByText(monthLabel())).toBeInTheDocument();
     expect(screen.getByText("amounts locked")).toBeInTheDocument();
-    expect(screen.getByText("×2")).toBeInTheDocument();
-    expect(screen.getByText("×1")).toBeInTheDocument();
-
-    // Money facts hidden; count facts stay.
-    expect(screen.queryByText("Biggest splurge")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/a8F2/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/x9Qd/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Fun facts")).toBeInTheDocument();
+    expect(screen.getByText("Biggest splurge")).toBeInTheDocument();
+    expect(screen.getByText("Weekend Spend")).toBeInTheDocument();
+    expect(screen.queryByTestId("spark-area")).not.toBeInTheDocument();
+    expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
-    expect(screen.getByText("Busiest day")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText(/Enter your passphrase in Settings/));
     expect(navigate).toHaveBeenCalledWith("/settings");
   });
 
-  it("masks money even when only the rows are flagged (belt and braces)", () => {
+  it("locks the page even when only the rows are flagged (belt and braces)", () => {
+    // No masked rows in hand to borrow ciphertext from → dotted placeholders.
     monthInsights.mockReturnValue(insights({ anyMasked: true }));
     render(<Stats signedIn />);
-    expect(screen.getByText("amounts locked")).toBeInTheDocument();
+    expect(screen.getByText(/Your stats are encrypted/)).toBeInTheDocument();
+    expect(screen.getAllByText(/••••/).length).toBeGreaterThan(0);
   });
 
   it("keeps the page useful when the window has data but the month doesn't", () => {
@@ -185,15 +228,22 @@ describe("Stats", () => {
         incomeCents: 0,
         spendCount: 0,
         avgPerDayCents: 0,
+        forecastCents: 0,
         biggestExpense: null,
         busiestDay: null,
         coffeeCount: 0,
+        treatCents: 0,
+        weekendShare: 0,
       }),
     );
     render(<Stats signedIn />);
     expect(screen.getByText("Fun facts")).toBeInTheDocument();
     expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
     expect(screen.queryByText("Busiest day")).not.toBeInTheDocument();
+    expect(screen.queryByText("Safe runway")).not.toBeInTheDocument();
+    expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
+    expect(screen.queryByText("Treat yourself")).not.toBeInTheDocument();
+    expect(screen.queryByText("Weekend Spend")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
   });
 
@@ -213,7 +263,7 @@ describe("Stats", () => {
     expect(screen.getByText("3,400")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("Wabbits")).toBeInTheDocument();
-    expect(screen.getByText("Locked vaults")).toBeInTheDocument();
+    expect(screen.getByText("E2EE")).toBeInTheDocument();
     expect(screen.getByText("What everyone logs most")).toBeInTheDocument();
     expect(screen.getByText("Food")).toBeInTheDocument();
     expect(screen.getByText("120")).toBeInTheDocument();

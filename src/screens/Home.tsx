@@ -157,7 +157,7 @@ export function Home() {
             <SparkArea
               values={sparkValues}
               fill="#F56300"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-14 w-full opacity-10"
+              className="pointer-events-none absolute inset-0 h-full w-full opacity-10"
             />
           )}
           <button

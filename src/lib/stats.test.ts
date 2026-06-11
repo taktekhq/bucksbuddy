@@ -149,11 +149,23 @@ describe("topCategories", () => {
 
 describe("monthInsights", () => {
   it("sums up the month's story", () => {
+    const big = tx({
+      id: "big",
+      category: "food/restaurant",
+      amount_usd_cents: 1000,
+      occurred_at: at(2026, 5, 5),
+    });
     const rows = [
       tx({ id: "a", category: "groceries", amount_usd_cents: 700, occurred_at: at(2026, 5, 2) }),
-      tx({ id: "big", category: "food/restaurant", amount_usd_cents: 1000, occurred_at: at(2026, 5, 5) }),
+      // A coffee binge: busiest day (3 entries) without being the priciest.
+      tx({ id: "d1", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 9, 9) }),
+      tx({ id: "d2", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 9, 9) }),
+      tx({ id: "d3", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 9, 9) }),
+      big,
       tx({ id: "c", category: "coffee", amount_usd_cents: 300, occurred_at: at(2026, 5, 5, 18) }),
-      tx({ id: "d", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 9) }),
+      // A weekend treat each day: June 6, 2026 is a Saturday, the 7th a Sunday.
+      tx({ id: "w1", category: "fun/drinks", amount_usd_cents: 500, occurred_at: at(2026, 5, 6, 20) }),
+      tx({ id: "w2", category: "self_care/spa", amount_usd_cents: 800, occurred_at: at(2026, 5, 7, 15) }),
       tx({ id: "e", is_income: true, category: "salary", amount_usd_cents: 5000, occurred_at: at(2026, 5, 3) }),
       // Safe transfers are internal: neither spending (out) nor income (back in).
       tx({ id: "f", category: "safe", amount_usd_cents: 400, occurred_at: at(2026, 5, 7) }),
@@ -163,14 +175,17 @@ describe("monthInsights", () => {
       tx({ id: "i", is_income: true, category: "salary", amount_usd_cents: 9999, occurred_at: at(2026, 6, 1) }),
     ];
     expect(monthInsights(rows, NOW)).toEqual({
-      spentCents: 2200,
+      spentCents: 3900,
       incomeCents: 5000,
-      spendCount: 4,
-      avgPerDayCents: 220, // 2200 over the 10 elapsed days
-      biggestExpense: rows[1],
-      busiestDay: { date: key(2026, 5, 5), count: 2 },
-      noSpendDays: 7, // 10 elapsed − 3 days with spending
-      coffeeCount: 2,
+      spendCount: 8,
+      avgPerDayCents: 390, // 3900 over the 10 elapsed days
+      forecastCents: 11700, // that pace carried across June's 30 days
+      biggestExpense: big,
+      busiestDay: { date: key(2026, 5, 9), count: 3, totalCents: 600 },
+      noSpendDays: 5, // 10 elapsed − 5 days with spending
+      coffeeCount: 4,
+      treatCents: 1300, // fun + self care
+      weekendShare: 1300 / 3900, // the Sat drinks + Sun spa, of all spending
       anyMasked: false,
     });
   });
@@ -181,10 +196,13 @@ describe("monthInsights", () => {
       incomeCents: 0,
       spendCount: 0,
       avgPerDayCents: 0,
+      forecastCents: 0,
       biggestExpense: null,
       busiestDay: null,
       noSpendDays: 10,
       coffeeCount: 0,
+      treatCents: 0,
+      weekendShare: 0,
       anyMasked: false,
     });
   });

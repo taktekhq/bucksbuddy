@@ -22,8 +22,6 @@ const OBSERVATORY_BG =
   "linear-gradient(180deg, #23234A 0px, #1B1B38 220px, #141428 460px)";
 const OBSERVATORY_FLOOR = "#141428";
 
-const CARROT = "#F56300";
-
 export function Stats({ signedIn }: { signedIn: boolean }) {
   // Tint the status bar to match the top of the page.
   useThemeColor("#23234A");
@@ -64,9 +62,11 @@ export function Stats({ signedIn }: { signedIn: boolean }) {
   );
 }
 
+// Section titles wear Grobold like everywhere else in the app (SectionHeader
+// is its grey-canvas twin; this one sits on the dark observatory).
 function Caption({ children }: { children: ReactNode }) {
   return (
-    <h2 className="px-1 text-[13px] font-semibold uppercase tracking-wide text-white/55">
+    <h2 className="px-1 font-display text-sm font-semibold uppercase tracking-wide text-white/60">
       {children}
     </h2>
   );
@@ -94,29 +94,89 @@ function dayLabel(date: string): string {
   });
 }
 
+/** "1 entry" / "3 entries" — the fact chips shouldn't say "1 days". */
+function count(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** How long the safe lasts: short runways in days, long ones in months. */
+function runwayLabel(days: number): string {
+  if (days >= 60) return `${(days / 30.44).toFixed(1)} months`;
+  return count(days, "day", "days");
+}
+
 // The signed-in half. Lives in its own component so the top-level Stats never
 // touches useStore() — signed-out renders have no StoreProvider above them.
 function PersonalStats() {
-  const { transactions, locked } = useStore();
+  const { transactions, locked, safeTotalCents } = useStore();
   const series = useMemo(() => dailySpendSeries(transactions, 30), [transactions]);
   const cats = useMemo(() => topCategories(transactions), [transactions]);
   const facts = useMemo(() => monthInsights(transactions), [transactions]);
 
-  // While locked, money values are masked zeros — show the rhythm (counts)
-  // instead of pretending the amounts are real.
-  const masked = locked || facts.anyMasked;
-
   const barItems = useMemo<StatBarItem[]>(() => {
-    const top = Math.max(...cats.map((c) => (masked ? c.count : c.totalCents)), 1);
+    const top = Math.max(...cats.map((c) => c.totalCents), 1);
     return cats.map((c) => ({
       id: c.category,
       label: categoryLabel(c.category),
       icon: categoryIcon(c.category),
       color: categoryColor(c.category),
-      value: masked ? `×${c.count}` : formatUsdCents(c.totalCents),
-      fraction: (masked ? c.count : c.totalCents) / top,
+      value: formatUsdCents(c.totalCents),
+      fraction: c.totalCents / top,
     }));
-  }, [cats, masked]);
+  }, [cats]);
+
+  // While locked, money values are masked zeros — every stat would be a lie,
+  // so the page keeps its shape but wears the cipher: no graphs, and real
+  // fragments of the user's own ciphertext stand in for the numbers (same
+  // convention as the masked history rows). Community numbers stay public.
+  const cipherBits = transactions
+    .map((t) => t.amountMask)
+    .filter((m): m is string => m != null);
+  const garble = (i: number) => cipherBits[i % cipherBits.length] ?? "••••";
+
+  if (locked || facts.anyMasked) {
+    return (
+      <>
+        <section className="rounded-card bg-white/10 px-5 py-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
+            {monthLabel()}
+          </p>
+          <p className="mt-1 font-numeric text-4xl font-bold tabular-nums text-white/45">
+            ${garble(0)}
+          </p>
+          <p className="mt-0.5 text-sm text-white/55">amounts locked</p>
+        </section>
+
+        <button
+          type="button"
+          onClick={() => navigate("/settings")}
+          className="press flex w-full items-center gap-3 rounded-card bg-white/10 px-4 py-3.5 text-left"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/70">
+            <Lock className="h-5 w-5" strokeWidth={2} />
+          </span>
+          <span className="text-sm text-white/85">
+            Your stats are encrypted. Enter your passphrase in Settings to see
+            them.
+          </span>
+        </button>
+
+        <section className="flex flex-col gap-2">
+          <Caption>Fun facts</Caption>
+          <div className="grid grid-cols-2 gap-2 opacity-60">
+            <Fact caption="Biggest splurge" value={`$${garble(1)}`} />
+            <Fact caption="Busiest day" value={garble(2)} />
+            <Fact caption="Safe runway" value={garble(3)} />
+            <Fact caption="On pace for" value={`$${garble(4)}`} />
+            <Fact caption="Treat yourself" value={`$${garble(5)}`} />
+            <Fact caption="Coffee runs" value={garble(6)} />
+            <Fact caption="Weekend Spend" value={garble(7)} />
+            <Fact caption="No-spend days" value={garble(8)} />
+          </div>
+        </section>
+      </>
+    );
+  }
 
   const hasAny = facts.spendCount > 0 || series.some((p) => p.count > 0);
   if (!hasAny) {
@@ -130,47 +190,40 @@ function PersonalStats() {
   const flow = facts.incomeCents + facts.spentCents;
   const inPct = (facts.incomeCents / Math.max(flow, 1)) * 100;
 
+  // How many days the safe's cash would cover at this month's pace.
+  const runwayDays =
+    facts.avgPerDayCents > 0
+      ? Math.round(safeTotalCents / facts.avgPerDayCents)
+      : 0;
+
   return (
     <>
-      {/* Headline: the month so far, with the last 30 days' rhythm under it. */}
-      <section className="rounded-card bg-white/10 px-5 py-5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
-          {masked ? "Entries" : "Spent"} · {monthLabel()}
-        </p>
-        <p className="mt-1 font-numeric text-4xl font-bold tabular-nums">
-          {masked ? String(facts.spendCount) : formatUsdCents(facts.spentCents)}
-        </p>
-        <p className="mt-0.5 text-sm text-white/55">
-          {masked
-            ? "amounts locked"
-            : `≈ ${formatUsdCents(facts.avgPerDayCents)} a day`}
-        </p>
+      {/* Headline: the month so far. The daily rhythm isn't given a slot of
+          its own. It fills the whole card as a backdrop and the numbers sit
+          on top of it. */}
+      <section className="relative overflow-hidden rounded-card bg-white/10">
         <SparkArea
-          values={series.map((p) => (masked ? p.count : p.totalCents))}
-          stroke={CARROT}
-          fill="rgba(245, 99, 0, 0.18)"
-          className="mt-4 h-24 w-full"
+          values={series.map((p) => p.totalCents)}
+          stroke="rgba(245, 99, 0, 0.55)"
+          fill="rgba(245, 99, 0, 0.16)"
+          className="pointer-events-none absolute inset-0 h-full w-full"
         />
-        <p className="mt-1 text-right text-[11px] uppercase tracking-wide text-white/40">
-          {masked ? "entries per day" : "spent per day"} · last 30 days
-        </p>
+        <div className="relative px-5 py-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
+            {monthLabel()}
+          </p>
+          <p className="mt-1 font-numeric text-4xl font-bold tabular-nums">
+            {formatUsdCents(facts.spentCents)}
+          </p>
+          <p className="mt-0.5 text-sm text-white/55">
+            ≈ {formatUsdCents(facts.avgPerDayCents)} a day
+          </p>
+          {/* Breathing room so the chart isn't all hidden behind the text. */}
+          <p className="mt-14 text-right text-[11px] uppercase tracking-wide text-white/45">
+            spent per day · last 30 days
+          </p>
+        </div>
       </section>
-
-      {masked && (
-        <button
-          type="button"
-          onClick={() => navigate("/settings")}
-          className="press flex w-full items-center gap-3 rounded-card bg-white/10 px-4 py-3.5 text-left"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/70">
-            <Lock className="h-5 w-5" strokeWidth={2} />
-          </span>
-          <span className="text-sm text-white/85">
-            Amounts are locked. Enter your passphrase in Settings to see the
-            money picture.
-          </span>
-        </button>
-      )}
 
       {barItems.length > 0 && (
         <section className="flex flex-col gap-2">
@@ -181,34 +234,56 @@ function PersonalStats() {
         </section>
       )}
 
+      {/* Pairs by design: splurge|busiest, runway|forecast, treats|coffee,
+          weekends|no-spend — then the in-vs-out bar across the bottom. */}
       <section className="flex flex-col gap-2">
         <Caption>Fun facts</Caption>
         <div className="grid grid-cols-2 gap-2">
-          {!masked && facts.biggestExpense && (
+          {facts.biggestExpense && (
             <Fact
               caption="Biggest splurge"
               value={formatUsdCents(facts.biggestExpense.amount_usd_cents)}
-              sub={categoryLabel(facts.biggestExpense.category)}
+              sub={[
+                categoryLabel(facts.biggestExpense.category),
+                facts.biggestExpense.note,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             />
           )}
           {facts.busiestDay && (
             <Fact
               caption="Busiest day"
-              value={`${facts.busiestDay.count} entries`}
-              sub={dayLabel(facts.busiestDay.date)}
+              value={count(facts.busiestDay.count, "entry", "entries")}
+              sub={`${dayLabel(facts.busiestDay.date)} · ${formatUsdCents(facts.busiestDay.totalCents)}`}
             />
           )}
-          <Fact
-            caption="No-spend days"
-            value={String(facts.noSpendDays)}
-            sub="quiet days this month"
-          />
-          <Fact
-            caption="Coffee runs"
-            value={String(facts.coffeeCount)}
-            sub="logged this month"
-          />
-          {!masked && flow > 0 && (
+          {runwayDays > 0 && (
+            <Fact
+              caption="Safe runway"
+              value={runwayLabel(runwayDays)}
+              sub="at this pace"
+            />
+          )}
+          {facts.forecastCents > 0 && (
+            <Fact
+              caption="On pace for"
+              value={formatUsdCents(facts.forecastCents)}
+              sub="by month's end"
+            />
+          )}
+          {facts.treatCents > 0 && (
+            <Fact caption="Treat yourself" value={formatUsdCents(facts.treatCents)} />
+          )}
+          <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
+          {facts.spendCount > 0 && (
+            <Fact
+              caption="Weekend Spend"
+              value={`${Math.round(facts.weekendShare * 100)}%`}
+            />
+          )}
+          <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
+          {flow > 0 && (
             <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
                 In vs out
@@ -296,10 +371,7 @@ function CommunityStats() {
           <div className="grid grid-cols-3 gap-2">
             <Fact caption="Wabbits" value={stats.users.toLocaleString("en-US")} />
             <Fact caption="Entries" value={stats.transactions.toLocaleString("en-US")} />
-            <Fact
-              caption="Locked vaults"
-              value={stats.encryptedUsers.toLocaleString("en-US")}
-            />
+            <Fact caption="E2EE" value={stats.encryptedUsers.toLocaleString("en-US")} />
           </div>
           {communityBars.length > 0 && (
             <div className="rounded-card bg-white/10 p-4">
