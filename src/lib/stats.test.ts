@@ -149,11 +149,20 @@ describe("topCategories", () => {
 
 describe("monthInsights", () => {
   it("sums up the month's story", () => {
+    const big = tx({
+      id: "big",
+      category: "food/restaurant",
+      amount_usd_cents: 1000,
+      occurred_at: at(2026, 5, 5),
+    });
     const rows = [
       tx({ id: "a", category: "groceries", amount_usd_cents: 700, occurred_at: at(2026, 5, 2) }),
-      tx({ id: "big", category: "food/restaurant", amount_usd_cents: 1000, occurred_at: at(2026, 5, 5) }),
+      // A coffee binge: busiest day (3 entries) without being the priciest.
+      tx({ id: "d1", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 9, 9) }),
+      tx({ id: "d2", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 9, 9) }),
+      tx({ id: "d3", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 9, 9) }),
+      big,
       tx({ id: "c", category: "coffee", amount_usd_cents: 300, occurred_at: at(2026, 5, 5, 18) }),
-      tx({ id: "d", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 9) }),
       tx({ id: "e", is_income: true, category: "salary", amount_usd_cents: 5000, occurred_at: at(2026, 5, 3) }),
       // Safe transfers are internal: neither spending (out) nor income (back in).
       tx({ id: "f", category: "safe", amount_usd_cents: 400, occurred_at: at(2026, 5, 7) }),
@@ -163,14 +172,18 @@ describe("monthInsights", () => {
       tx({ id: "i", is_income: true, category: "salary", amount_usd_cents: 9999, occurred_at: at(2026, 6, 1) }),
     ];
     expect(monthInsights(rows, NOW)).toEqual({
-      spentCents: 2200,
+      spentCents: 2600,
       incomeCents: 5000,
-      spendCount: 4,
-      avgPerDayCents: 220, // 2200 over the 10 elapsed days
-      biggestExpense: rows[1],
-      busiestDay: { date: key(2026, 5, 5), count: 2 },
+      spendCount: 6,
+      avgPerDayCents: 260, // 2600 over the 10 elapsed days
+      avgEntryCents: 433, // 2600 over the 6 entries
+      biggestExpense: big,
+      busiestDay: { date: key(2026, 5, 9), count: 3, totalCents: 600 },
+      priciestDay: { date: key(2026, 5, 5), count: 2, totalCents: 1300 },
       noSpendDays: 7, // 10 elapsed − 3 days with spending
-      coffeeCount: 2,
+      quietStreakDays: 3, // June 6–8
+      coffeeCount: 4,
+      primeHour: 9, // three of six entries logged at 9am
       anyMasked: false,
     });
   });
@@ -181,10 +194,14 @@ describe("monthInsights", () => {
       incomeCents: 0,
       spendCount: 0,
       avgPerDayCents: 0,
+      avgEntryCents: 0,
       biggestExpense: null,
       busiestDay: null,
+      priciestDay: null,
       noSpendDays: 10,
+      quietStreakDays: 10,
       coffeeCount: 0,
+      primeHour: null,
       anyMasked: false,
     });
   });

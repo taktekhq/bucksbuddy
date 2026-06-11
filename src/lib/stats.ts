@@ -124,15 +124,22 @@ export function topCategories(
   return sorted.slice(0, limit);
 }
 
+/** One local day's spending activity, for the busiest/priciest picks. */
+export type DayStat = { date: string; count: number; totalCents: number };
+
 export type MonthInsights = {
   spentCents: number;
   incomeCents: number;
   spendCount: number; // spending entries logged this month
   avgPerDayCents: number; // spentCents over the days elapsed so far
+  avgEntryCents: number; // spentCents over the entries logged
   biggestExpense: Transaction | null;
-  busiestDay: { date: string; count: number } | null; // most spending entries
+  busiestDay: DayStat | null; // most spending entries
+  priciestDay: DayStat | null; // most cents out the door
   noSpendDays: number; // elapsed days with nothing spent
+  quietStreakDays: number; // longest run of consecutive no-spend days
   coffeeCount: number; // ☕ entries — the fun one
+  primeHour: number | null; // local hour (0–23) you log spending most
   anyMasked: boolean; // some row is obscured (locked device): money stats are lies
 };
 
@@ -147,7 +154,8 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
   let coffeeCount = 0;
   let anyMasked = false;
   let biggestExpense: Transaction | null = null;
-  const countByDay = new Map<string, number>();
+  const byDay = new Map<string, DayStat>();
+  const byHour = new Map<number, number>();
 
   for (const r of rows) {
     const at = new Date(r.occurred_at);
@@ -167,12 +175,42 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
       biggestExpense = r;
     }
     const day = dayKey(at);
-    countByDay.set(day, (countByDay.get(day) ?? 0) + 1);
+    let stat = byDay.get(day);
+    if (!stat) {
+      stat = { date: day, count: 0, totalCents: 0 };
+      byDay.set(day, stat);
+    }
+    stat.count += 1;
+    stat.totalCents += r.amount_usd_cents;
+    byHour.set(at.getHours(), (byHour.get(at.getHours()) ?? 0) + 1);
   }
 
-  let busiestDay: { date: string; count: number } | null = null;
-  for (const [date, count] of countByDay) {
-    if (!busiestDay || count > busiestDay.count) busiestDay = { date, count };
+  let busiestDay: DayStat | null = null;
+  let priciestDay: DayStat | null = null;
+  for (const stat of byDay.values()) {
+    if (!busiestDay || stat.count > busiestDay.count) busiestDay = stat;
+    if (!priciestDay || stat.totalCents > priciestDay.totalCents) priciestDay = stat;
+  }
+
+  let primeHour: number | null = null;
+  let primeCount = 0;
+  for (const [hour, count] of byHour) {
+    if (count > primeCount) {
+      primeHour = hour;
+      primeCount = count;
+    }
+  }
+
+  // Longest run of consecutive elapsed days with no spending.
+  let quietStreakDays = 0;
+  let run = 0;
+  for (let d = 1; d <= daysElapsed; d++) {
+    if (byDay.has(dayKey(new Date(now.getFullYear(), now.getMonth(), d)))) {
+      run = 0;
+    } else {
+      run += 1;
+      quietStreakDays = Math.max(quietStreakDays, run);
+    }
   }
 
   return {
@@ -180,11 +218,15 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
     incomeCents,
     spendCount,
     avgPerDayCents: Math.round(spentCents / daysElapsed),
+    avgEntryCents: Math.round(spentCents / Math.max(spendCount, 1)),
     biggestExpense,
     busiestDay,
+    priciestDay,
     // Future-dated entries later this month could outnumber elapsed days.
-    noSpendDays: Math.max(daysElapsed - countByDay.size, 0),
+    noSpendDays: Math.max(daysElapsed - byDay.size, 0),
+    quietStreakDays,
     coffeeCount,
+    primeHour,
     anyMasked,
   };
 }

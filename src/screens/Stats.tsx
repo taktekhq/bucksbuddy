@@ -22,8 +22,6 @@ const OBSERVATORY_BG =
   "linear-gradient(180deg, #23234A 0px, #1B1B38 220px, #141428 460px)";
 const OBSERVATORY_FLOOR = "#141428";
 
-const CARROT = "#F56300";
-
 export function Stats({ signedIn }: { signedIn: boolean }) {
   // Tint the status bar to match the top of the page.
   useThemeColor("#23234A");
@@ -64,9 +62,11 @@ export function Stats({ signedIn }: { signedIn: boolean }) {
   );
 }
 
+// Section titles wear Grobold like everywhere else in the app (SectionHeader
+// is its grey-canvas twin; this one sits on the dark observatory).
 function Caption({ children }: { children: ReactNode }) {
   return (
-    <h2 className="px-1 text-[13px] font-semibold uppercase tracking-wide text-white/55">
+    <h2 className="px-1 font-display text-sm font-semibold uppercase tracking-wide text-white/60">
       {children}
     </h2>
   );
@@ -92,6 +92,18 @@ function dayLabel(date: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+/** "9 AM" / "6 PM" from a local hour. */
+function hourLabel(hour: number): string {
+  return new Date(2000, 0, 1, hour).toLocaleTimeString("en-US", {
+    hour: "numeric",
+  });
+}
+
+/** "1 entry" / "3 entries" — the fact chips shouldn't say "1 days". */
+function count(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
 }
 
 // The signed-in half. Lives in its own component so the top-level Stats never
@@ -132,28 +144,35 @@ function PersonalStats() {
 
   return (
     <>
-      {/* Headline: the month so far, with the last 30 days' rhythm under it. */}
-      <section className="rounded-card bg-white/10 px-5 py-5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
-          {masked ? "Entries" : "Spent"} · {monthLabel()}
-        </p>
-        <p className="mt-1 font-numeric text-4xl font-bold tabular-nums">
-          {masked ? String(facts.spendCount) : formatUsdCents(facts.spentCents)}
-        </p>
-        <p className="mt-0.5 text-sm text-white/55">
-          {masked
-            ? "amounts locked"
-            : `≈ ${formatUsdCents(facts.avgPerDayCents)} a day`}
-        </p>
+      {/* Headline: the month so far. The daily rhythm isn't given a slot of
+          its own. It fills the whole card as a backdrop and the numbers sit
+          on top of it. */}
+      <section className="relative overflow-hidden rounded-card bg-white/10">
         <SparkArea
           values={series.map((p) => (masked ? p.count : p.totalCents))}
-          stroke={CARROT}
-          fill="rgba(245, 99, 0, 0.18)"
-          className="mt-4 h-24 w-full"
+          stroke="rgba(245, 99, 0, 0.55)"
+          fill="rgba(245, 99, 0, 0.16)"
+          className="pointer-events-none absolute inset-0 h-full w-full"
         />
-        <p className="mt-1 text-right text-[11px] uppercase tracking-wide text-white/40">
-          {masked ? "entries per day" : "spent per day"} · last 30 days
-        </p>
+        <div className="relative px-5 py-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
+            {monthLabel()}
+          </p>
+          <p className="mt-1 font-numeric text-4xl font-bold tabular-nums">
+            {masked
+              ? count(facts.spendCount, "entry", "entries")
+              : formatUsdCents(facts.spentCents)}
+          </p>
+          <p className="mt-0.5 text-sm text-white/55">
+            {masked
+              ? "amounts locked"
+              : `≈ ${formatUsdCents(facts.avgPerDayCents)} a day`}
+          </p>
+          {/* Breathing room so the chart isn't all hidden behind the text. */}
+          <p className="mt-14 text-right text-[11px] uppercase tracking-wide text-white/45">
+            {masked ? "entries per day" : "spent per day"} · last 30 days
+          </p>
+        </div>
       </section>
 
       {masked && (
@@ -188,26 +207,47 @@ function PersonalStats() {
             <Fact
               caption="Biggest splurge"
               value={formatUsdCents(facts.biggestExpense.amount_usd_cents)}
-              sub={categoryLabel(facts.biggestExpense.category)}
+              sub={[
+                categoryLabel(facts.biggestExpense.category),
+                facts.biggestExpense.note,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+          )}
+          {!masked && facts.priciestDay && (
+            <Fact
+              caption="Priciest day"
+              value={formatUsdCents(facts.priciestDay.totalCents)}
+              sub={dayLabel(facts.priciestDay.date)}
             />
           )}
           {facts.busiestDay && (
             <Fact
               caption="Busiest day"
-              value={`${facts.busiestDay.count} entries`}
-              sub={dayLabel(facts.busiestDay.date)}
+              value={count(facts.busiestDay.count, "entry", "entries")}
+              sub={
+                masked
+                  ? dayLabel(facts.busiestDay.date)
+                  : `${dayLabel(facts.busiestDay.date)} · ${formatUsdCents(facts.busiestDay.totalCents)}`
+              }
             />
           )}
+          {!masked && (
+            <Fact
+              caption="Average entry"
+              value={formatUsdCents(facts.avgEntryCents)}
+            />
+          )}
+          <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
           <Fact
-            caption="No-spend days"
-            value={String(facts.noSpendDays)}
-            sub="quiet days this month"
+            caption="Quiet streak"
+            value={count(facts.quietStreakDays, "day", "days")}
           />
-          <Fact
-            caption="Coffee runs"
-            value={String(facts.coffeeCount)}
-            sub="logged this month"
-          />
+          <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
+          {facts.primeHour !== null && (
+            <Fact caption="Prime time" value={hourLabel(facts.primeHour)} />
+          )}
           {!masked && flow > 0 && (
             <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
@@ -296,10 +336,7 @@ function CommunityStats() {
           <div className="grid grid-cols-3 gap-2">
             <Fact caption="Wabbits" value={stats.users.toLocaleString("en-US")} />
             <Fact caption="Entries" value={stats.transactions.toLocaleString("en-US")} />
-            <Fact
-              caption="Locked vaults"
-              value={stats.encryptedUsers.toLocaleString("en-US")}
-            />
+            <Fact caption="E2EE" value={stats.encryptedUsers.toLocaleString("en-US")} />
           </div>
           {communityBars.length > 0 && (
             <div className="rounded-card bg-white/10 p-4">

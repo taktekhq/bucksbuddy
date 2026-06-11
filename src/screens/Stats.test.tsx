@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { makeStoreValue } from "@/test/storeValue";
+import { monthLabel } from "@/lib/dates";
 import type { Transaction } from "@/types/db";
 import type { PublicStats } from "@/lib/publicStats";
 import type { CategoryStat, DayPoint, MonthInsights } from "@/lib/stats";
@@ -43,6 +44,7 @@ function insights(overrides: Partial<MonthInsights> = {}): MonthInsights {
     incomeCents: 5000,
     spendCount: 3,
     avgPerDayCents: 200,
+    avgEntryCents: 667,
     biggestExpense: {
       id: "big",
       user_id: "u1",
@@ -53,12 +55,15 @@ function insights(overrides: Partial<MonthInsights> = {}): MonthInsights {
       original_amount: 10,
       rate_used: 89500,
       occurred_at: "2026-06-05T10:00:00.000Z",
-      note: null,
+      note: "fancy dinner",
       created_at: "2026-06-05T10:00:00.000Z",
     } as Transaction,
-    busiestDay: { date: "2026-06-05", count: 2 },
+    busiestDay: { date: "2026-06-05", count: 2, totalCents: 800 },
+    priciestDay: { date: "2026-06-07", count: 1, totalCents: 900 },
     noSpendDays: 7,
+    quietStreakDays: 4,
     coffeeCount: 1,
+    primeHour: 18,
     anyMasked: false,
     ...overrides,
   };
@@ -94,7 +99,7 @@ describe("Stats", () => {
   it("shows the month's money picture when signed in", () => {
     render(<Stats signedIn />);
     expect(screen.getByText("Your Stats")).toBeInTheDocument();
-    expect(screen.getByText(/Spent ·/)).toBeInTheDocument();
+    expect(screen.getByText(monthLabel())).toBeInTheDocument();
     expect(screen.getByText("$20.00")).toBeInTheDocument();
     expect(screen.getByText("≈ $2.00 a day")).toBeInTheDocument();
     expect(screen.getByTestId("spark-area")).toBeInTheDocument();
@@ -105,13 +110,23 @@ describe("Stats", () => {
     expect(screen.getByText("Groceries")).toBeInTheDocument();
     expect(screen.getByText("$7.00")).toBeInTheDocument();
 
-    // Fun facts.
+    // Fun facts: the splurge carries its note, the busiest day its total.
     expect(screen.getByText("Biggest splurge")).toBeInTheDocument();
     expect(screen.getAllByText("$10.00")).not.toHaveLength(0);
+    expect(screen.getByText(/Food · Restaurant · fancy dinner/)).toBeInTheDocument();
     expect(screen.getByText("2 entries")).toBeInTheDocument();
-    expect(screen.getByText(/Jun 5/)).toBeInTheDocument();
+    expect(screen.getByText(/Jun 5 · \$8\.00/)).toBeInTheDocument();
+    expect(screen.getByText("Priciest day")).toBeInTheDocument();
+    expect(screen.getByText("$9.00")).toBeInTheDocument();
+    expect(screen.getByText(/Jun 7/)).toBeInTheDocument();
+    expect(screen.getByText("Average entry")).toBeInTheDocument();
+    expect(screen.getByText("$6.67")).toBeInTheDocument();
     expect(screen.getByText("No-spend days")).toBeInTheDocument();
+    expect(screen.getByText("Quiet streak")).toBeInTheDocument();
+    expect(screen.getByText("4 days")).toBeInTheDocument();
     expect(screen.getByText("Coffee runs")).toBeInTheDocument();
+    expect(screen.getByText("Prime time")).toBeInTheDocument();
+    expect(screen.getByText("6 PM")).toBeInTheDocument();
     expect(screen.getByText("+$50.00")).toBeInTheDocument();
     expect(screen.getByText("-$20.00")).toBeInTheDocument();
   });
@@ -148,21 +163,35 @@ describe("Stats", () => {
       { category: "groceries", totalCents: 0, count: 1, share: 0 },
     ]);
     monthInsights.mockReturnValue(
-      insights({ spentCents: 0, incomeCents: 0, anyMasked: true }),
+      insights({
+        spentCents: 0,
+        incomeCents: 0,
+        anyMasked: true,
+        busiestDay: { date: "2026-06-05", count: 1, totalCents: 0 },
+        quietStreakDays: 1,
+      }),
     );
     render(<Stats signedIn />);
 
     // The headline counts entries instead of pretending zeros are money.
-    expect(screen.getByText(/Entries ·/)).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("3 entries")).toBeInTheDocument();
     expect(screen.getByText("amounts locked")).toBeInTheDocument();
     expect(screen.getByText("×2")).toBeInTheDocument();
     expect(screen.getByText("×1")).toBeInTheDocument();
 
-    // Money facts hidden; count facts stay.
+    // Money facts hidden; count facts stay (busiest day without its total),
+    // and counts of one don't read "1 entries" / "1 days".
     expect(screen.queryByText("Biggest splurge")).not.toBeInTheDocument();
+    expect(screen.queryByText("Priciest day")).not.toBeInTheDocument();
+    expect(screen.queryByText("Average entry")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
     expect(screen.getByText("Busiest day")).toBeInTheDocument();
+    expect(screen.getByText("1 entry")).toBeInTheDocument();
+    expect(screen.getByText(/Jun 5/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+    expect(screen.getByText("Quiet streak")).toBeInTheDocument();
+    expect(screen.getByText("1 day")).toBeInTheDocument();
+    expect(screen.getByText("Prime time")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText(/Enter your passphrase in Settings/));
     expect(navigate).toHaveBeenCalledWith("/settings");
@@ -185,15 +214,21 @@ describe("Stats", () => {
         incomeCents: 0,
         spendCount: 0,
         avgPerDayCents: 0,
+        avgEntryCents: 0,
         biggestExpense: null,
         busiestDay: null,
+        priciestDay: null,
+        quietStreakDays: 10,
         coffeeCount: 0,
+        primeHour: null,
       }),
     );
     render(<Stats signedIn />);
     expect(screen.getByText("Fun facts")).toBeInTheDocument();
     expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
     expect(screen.queryByText("Busiest day")).not.toBeInTheDocument();
+    expect(screen.queryByText("Priciest day")).not.toBeInTheDocument();
+    expect(screen.queryByText("Prime time")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
   });
 
@@ -213,7 +248,7 @@ describe("Stats", () => {
     expect(screen.getByText("3,400")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("Wabbits")).toBeInTheDocument();
-    expect(screen.getByText("Locked vaults")).toBeInTheDocument();
+    expect(screen.getByText("E2EE")).toBeInTheDocument();
     expect(screen.getByText("What everyone logs most")).toBeInTheDocument();
     expect(screen.getByText("Food")).toBeInTheDocument();
     expect(screen.getByText("120")).toBeInTheDocument();
