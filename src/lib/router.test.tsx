@@ -33,6 +33,11 @@ describe("router", () => {
     expect(renderHook(() => useRoute()).result.current).toBe("/history");
   });
 
+  it("recognizes the /stats route", () => {
+    act(() => navigate("/stats"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/stats");
+  });
+
   it("navigate is a no-op when already on the route", () => {
     act(() => navigate("/safe"));
     const before = window.location.hash;
@@ -79,6 +84,13 @@ describe("router", () => {
     redirectBarePath();
     expect(window.location.pathname).toBe("/");
     expect(window.location.hash).toBe("#/contact");
+  });
+
+  it("redirects the bare /stats path to /#/stats", () => {
+    window.history.replaceState(null, "", "/stats");
+    redirectBarePath();
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.hash).toBe("#/stats");
   });
 
   it("leaves other paths untouched", () => {

@@ -238,6 +238,15 @@ export function Landing() {
         >
           Privacy and Terms
         </button>
+        {/* The community half of the Stats page is public — let visitors peek
+            at what the warren is up to before signing in. */}
+        <button
+          type="button"
+          onClick={() => navigate("/stats")}
+          className="press w-full rounded-pill bg-surface py-3.5 text-base font-semibold text-label-muted"
+        >
+          Community stats
+        </button>
       </section>
 
       <div aria-hidden className="flex-1" />

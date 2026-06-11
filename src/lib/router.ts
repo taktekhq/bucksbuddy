@@ -1,22 +1,25 @@
 import { useEffect, useState } from "react";
 
 // Minimal hash router. Routes are "/", "/settings", "/safe", "/history",
-// "/legal", "/contact", "/reset". Hash-based so the static SPA needs no server
-// rewrites and the back button works.
+// "/stats", "/legal", "/contact", "/reset". Hash-based so the static SPA needs
+// no server rewrites and the back button works.
 //
 // "/" is the home/landing entry (the marketing landing for signed-out visitors,
-// the app for signed-in ones); "/history" is the full-history page; "/legal" is
-// the public privacy + terms page; "/contact" is the public contact page;
-// "/reset" is the post-recovery URL after useSession parses the tokens out of a
-// Supabase reset-password email.
+// the app for signed-in ones); "/history" is the full-history page; "/stats" is
+// the stats page (personal breakdown when signed in, community numbers for
+// everyone); "/legal" is the public privacy + terms page; "/contact" is the
+// public contact page; "/reset" is the post-recovery URL after useSession
+// parses the tokens out of a Supabase reset-password email.
 //
-// The bare paths "/privacy", "/terms" and "/contact" (no hash) are normalized
-// onto the matching hash routes at startup by redirectBarePath() below.
+// The bare paths "/privacy", "/terms", "/contact" and "/stats" (no hash) are
+// normalized onto the matching hash routes at startup by redirectBarePath()
+// below.
 export type Route =
   | "/"
   | "/settings"
   | "/safe"
   | "/history"
+  | "/stats"
   | "/legal"
   | "/contact"
   | "/reset";
@@ -31,6 +34,7 @@ function current(): Route {
     h === "/settings" ||
     h === "/safe" ||
     h === "/history" ||
+    h === "/stats" ||
     h === "/legal" ||
     h === "/contact" ||
     h === "/reset"
@@ -51,6 +55,7 @@ const BARE_PATH_REDIRECTS: Record<string, string> = {
   "/privacy": "/#/legal",
   "/terms": "/#/legal",
   "/contact": "/#/contact",
+  "/stats": "/#/stats",
 };
 
 // Called once from the entry point, before React mounts. If the page was opened

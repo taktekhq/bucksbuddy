@@ -37,6 +37,15 @@ describe("Landing", () => {
     expect(window.location.hash).toBe("#/legal");
   });
 
+  it("links to the public stats page from Community stats", async () => {
+    render(<Landing />);
+    window.location.hash = "/";
+    await userEvent.click(
+      screen.getByRole("button", { name: "Community stats" }),
+    );
+    expect(window.location.hash).toBe("#/stats");
+  });
+
   it("starts Google OAuth and shows the redirecting state", async () => {
     render(<Landing />);
     await userEvent.click(

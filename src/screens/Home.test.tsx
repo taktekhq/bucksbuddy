@@ -125,6 +125,22 @@ describe("Home", () => {
     expect(screen.queryByText("Gas")).not.toBeInTheDocument();
   });
 
+  it("opens the stats page from the hero, with the spark washed behind it", async () => {
+    storeValue = makeStoreValue({
+      transactions: [tx({ occurred_at: new Date().toISOString() })],
+    });
+    render(<Home />);
+    expect(screen.getByTestId("spark-area")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "See your stats" }));
+    expect(navigate).toHaveBeenCalledWith("/stats");
+  });
+
+  it("hides the hero spark while locked — masked zeros would chart a lie", () => {
+    storeValue = makeStoreValue({ locked: true });
+    render(<Home />);
+    expect(screen.queryByTestId("spark-area")).not.toBeInTheDocument();
+  });
+
   it("navigates to the full-history page from Show all", async () => {
     storeValue = makeStoreValue({
       transactions: [tx({ id: "old", category: "gas", occurred_at: "2020-01-01T10:00:00.000Z" })],
