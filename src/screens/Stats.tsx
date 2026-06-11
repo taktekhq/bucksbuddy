@@ -162,6 +162,10 @@ function PersonalStats() {
       ? Math.round(safeTotalCents / facts.avgPerDayCents)
       : 0;
 
+  // Everything spent that isn't a "want" is a need (see WANT_BASES).
+  const needCents = facts.spentCents - facts.wantCents;
+  const needPct = (needCents / Math.max(facts.spentCents, 1)) * 100;
+
   return (
     <>
       {/* Headline: the month so far. The daily rhythm isn't given a slot of
@@ -295,6 +299,9 @@ function PersonalStats() {
             value={count(facts.quietStreakDays, "day", "days")}
           />
           <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
+          {!masked && facts.coffeeCents > 0 && (
+            <Fact caption="Coffee tab" value={formatUsdCents(facts.coffeeCents)} />
+          )}
           {!masked && flow > 0 && (
             <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
@@ -310,6 +317,28 @@ function PersonalStats() {
               <div className="mt-1.5 flex justify-between font-numeric text-xs font-semibold tabular-nums">
                 <span className="text-income">+{formatUsdCents(facts.incomeCents)}</span>
                 <span className="text-expense">-{formatUsdCents(facts.spentCents)}</span>
+              </div>
+            </div>
+          )}
+          {!masked && facts.spentCents > 0 && (
+            <div className="col-span-2 rounded-card bg-white/10 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
+                Needs vs wants
+              </p>
+              <div className="mt-2 flex h-2 overflow-hidden rounded-pill bg-white/10">
+                <div
+                  className="h-full"
+                  style={{ width: `${needPct}%`, backgroundColor: "#32ADE6" }}
+                />
+                <div className="h-full flex-1" style={{ backgroundColor: "#F56300" }} />
+              </div>
+              <div className="mt-1.5 flex justify-between font-numeric text-xs font-semibold tabular-nums">
+                <span style={{ color: "#32ADE6" }}>
+                  Needs {formatUsdCents(needCents)}
+                </span>
+                <span className="text-carrot">
+                  Wants {formatUsdCents(facts.wantCents)}
+                </span>
               </div>
             </div>
           )}

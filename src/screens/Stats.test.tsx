@@ -62,7 +62,9 @@ function insights(overrides: Partial<MonthInsights> = {}): MonthInsights {
     noSpendDays: 7,
     quietStreakDays: 4,
     coffeeCount: 1,
+    coffeeCents: 350,
     treatCents: 950,
+    wantCents: 1200,
     primeHour: 18,
     favoriteWeekday: 5,
     weekendShare: 0.6,
@@ -137,10 +139,15 @@ describe("Stats", () => {
     expect(screen.getByText("Quiet streak")).toBeInTheDocument();
     expect(screen.getByText("4 days")).toBeInTheDocument();
     expect(screen.getByText("Coffee runs")).toBeInTheDocument();
+    expect(screen.getByText("Coffee tab")).toBeInTheDocument();
+    expect(screen.getByText("$3.50")).toBeInTheDocument();
     expect(screen.getByText("Prime time")).toBeInTheDocument();
     expect(screen.getByText("6 PM")).toBeInTheDocument();
     expect(screen.getByText("+$50.00")).toBeInTheDocument();
     expect(screen.getByText("-$20.00")).toBeInTheDocument();
+    expect(screen.getByText("Needs vs wants")).toBeInTheDocument();
+    expect(screen.getByText("Needs $8.00")).toBeInTheDocument();
+    expect(screen.getByText("Wants $12.00")).toBeInTheDocument();
   });
 
   it("shows a short safe runway in days, not months", () => {
@@ -205,7 +212,9 @@ describe("Stats", () => {
     expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
     expect(screen.queryByText("Safe runway")).not.toBeInTheDocument();
     expect(screen.queryByText("Treat yourself")).not.toBeInTheDocument();
+    expect(screen.queryByText("Coffee tab")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs vs wants")).not.toBeInTheDocument();
     expect(screen.getByText("Busiest day")).toBeInTheDocument();
     expect(screen.getByText("1 entry")).toBeInTheDocument();
     expect(screen.getByText(/Jun 5/)).toBeInTheDocument();
@@ -243,7 +252,9 @@ describe("Stats", () => {
         busiestDay: null,
         quietStreakDays: 10,
         coffeeCount: 0,
+        coffeeCents: 0,
         treatCents: 0,
+        wantCents: 0,
         primeHour: null,
         favoriteWeekday: null,
         weekendShare: 0,
@@ -261,7 +272,9 @@ describe("Stats", () => {
     expect(screen.queryByText("Favorite day")).not.toBeInTheDocument();
     expect(screen.queryByText("Weekends")).not.toBeInTheDocument();
     expect(screen.queryByText("Prime time")).not.toBeInTheDocument();
+    expect(screen.queryByText("Coffee tab")).not.toBeInTheDocument();
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs vs wants")).not.toBeInTheDocument();
   });
 
   it("greets signed-out visitors with the teaser and the public title", async () => {

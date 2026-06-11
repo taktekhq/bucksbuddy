@@ -130,6 +130,18 @@ export type DayStat = { date: string; count: number; totalCents: number };
 // "Treat yourself" categories: the want-not-need bases.
 const TREAT_BASES = new Set(["fun", "shopping", "self_care"]);
 
+// The wider "wants" lens for the needs-vs-wants split: treats plus eating
+// out, coffee, gifts and tips. Everything else spent counts as a need.
+const WANT_BASES = new Set([
+  "food",
+  "coffee",
+  "fun",
+  "shopping",
+  "self_care",
+  "gifts",
+  "tips",
+]);
+
 export type MonthInsights = {
   spentCents: number;
   incomeCents: number;
@@ -141,7 +153,9 @@ export type MonthInsights = {
   noSpendDays: number; // elapsed days with nothing spent
   quietStreakDays: number; // longest run of consecutive no-spend days
   coffeeCount: number; // ☕ entries — the fun one
+  coffeeCents: number; // …and what they cost
   treatCents: number; // fun + shopping + self care
+  wantCents: number; // the WANT_BASES share of spending; the rest is "needs"
   primeHour: number | null; // local hour (0–23) you log spending most
   favoriteWeekday: number | null; // 0 (Sun) – 6 (Sat) with the most entries
   weekendShare: number; // 0..1 of spending entries landing on Sat/Sun
@@ -159,7 +173,9 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
   let incomeCents = 0;
   let spendCount = 0;
   let coffeeCount = 0;
+  let coffeeCents = 0;
   let treatCents = 0;
+  let wantCents = 0;
   let weekendCount = 0;
   let anyMasked = false;
   let biggestExpense: Transaction | null = null;
@@ -191,8 +207,12 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
     }
     spentCents += r.amount_usd_cents;
     spendCount += 1;
-    if (base === "coffee") coffeeCount += 1;
+    if (base === "coffee") {
+      coffeeCount += 1;
+      coffeeCents += r.amount_usd_cents;
+    }
     if (TREAT_BASES.has(base)) treatCents += r.amount_usd_cents;
+    if (WANT_BASES.has(base)) wantCents += r.amount_usd_cents;
     if (!biggestExpense || r.amount_usd_cents > biggestExpense.amount_usd_cents) {
       biggestExpense = r;
     }
@@ -259,7 +279,9 @@ export function monthInsights(rows: Transaction[], now = new Date()): MonthInsig
     noSpendDays: Math.max(daysElapsed - byDay.size, 0),
     quietStreakDays,
     coffeeCount,
+    coffeeCents,
     treatCents,
+    wantCents,
     primeHour,
     favoriteWeekday,
     weekendShare: weekendCount / Math.max(spendCount, 1),

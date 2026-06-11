@@ -188,7 +188,9 @@ describe("monthInsights", () => {
       noSpendDays: 5, // 10 elapsed − 5 days with spending
       quietStreakDays: 2, // June 3–4
       coffeeCount: 4,
+      coffeeCents: 900,
       treatCents: 1300, // fun + self care
+      wantCents: 3200, // coffee + food + fun + self care; groceries stay a need
       primeHour: 9, // three of eight entries logged at 9am
       favoriteWeekday: 2, // Tuesdays (June 2 and the June 9 binge)
       weekendShare: 0.25, // 2 of 8 entries on Sat/Sun
@@ -209,7 +211,9 @@ describe("monthInsights", () => {
       noSpendDays: 10,
       quietStreakDays: 10,
       coffeeCount: 0,
+      coffeeCents: 0,
       treatCents: 0,
+      wantCents: 0,
       primeHour: null,
       favoriteWeekday: null,
       weekendShare: 0,
