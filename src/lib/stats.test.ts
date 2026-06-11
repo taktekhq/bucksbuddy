@@ -4,8 +4,9 @@ import {
   dailySpendSeries,
   isSpending,
   monthInsights,
-  smoothSeries,
   topCategories,
+  treatTransactions,
+  weekendTransactions,
 } from "@/lib/stats";
 import type { Transaction } from "@/types/db";
 
@@ -213,14 +214,28 @@ describe("monthInsights", () => {
   });
 });
 
-describe("smoothSeries", () => {
-  it("spreads an isolated spike across its neighbors", () => {
-    expect(smoothSeries([0, 0, 6, 0, 0])).toEqual([0, 2, 2, 2, 0]);
+describe("treatTransactions", () => {
+  it("returns this month's treats, newest first", () => {
+    const rows = [
+      tx({ id: "w1", category: "fun/drinks", occurred_at: at(2026, 5, 6, 20) }),
+      tx({ id: "w2", category: "self_care/spa", occurred_at: at(2026, 5, 7, 15) }),
+      tx({ id: "g", category: "groceries", occurred_at: at(2026, 5, 8) }), // not a treat
+      tx({ id: "inc", is_income: true, category: "salary", occurred_at: at(2026, 5, 6) }),
+      tx({ id: "may", category: "fun", occurred_at: at(2026, 4, 31) }),
+      tx({ id: "jul", category: "shopping", occurred_at: at(2026, 6, 1) }),
+    ];
+    expect(treatTransactions(rows, NOW).map((r) => r.id)).toEqual(["w2", "w1"]);
   });
+});
 
-  it("widens with the radius and leaves flat series alone", () => {
-    expect(smoothSeries([0, 0, 10, 0, 0], 2)).toEqual([10 / 3, 2.5, 2, 2.5, 10 / 3]);
-    expect(smoothSeries([3, 3, 3])).toEqual([3, 3, 3]);
+describe("weekendTransactions", () => {
+  it("returns this month's Sat/Sun spending, newest first", () => {
+    const rows = [
+      tx({ id: "sat", occurred_at: at(2026, 5, 6) }), // Saturday
+      tx({ id: "sun", category: "coffee", occurred_at: at(2026, 5, 7) }), // Sunday
+      tx({ id: "tue", occurred_at: at(2026, 5, 9) }), // weekday
+    ];
+    expect(weekendTransactions(rows, NOW).map((r) => r.id)).toEqual(["sun", "sat"]);
   });
 });
 
@@ -228,6 +243,8 @@ describe("defaults", () => {
   it("falls back to the real clock when `now` isn't given", () => {
     expect(dailySpendSeries([], 2)).toHaveLength(2);
     expect(topCategories([])).toEqual([]);
+    expect(treatTransactions([])).toEqual([]);
+    expect(weekendTransactions([])).toEqual([]);
     const insights = monthInsights([]);
     expect(insights.spentCents).toBe(0);
     expect(insights.biggestExpense).toBeNull();
