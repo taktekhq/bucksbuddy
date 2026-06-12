@@ -545,6 +545,80 @@ describe("StoreProvider / useStore", () => {
     expect(authMock.signOut).not.toHaveBeenCalled();
   });
 
+  it("hydrates instantly from the cached snapshot, then refreshes", async () => {
+    // A snapshot from a previous session: the app should paint it on the first
+    // frame (no loading flash) and then overwrite it with the network read.
+    localStorage.setItem(
+      "bb-cache:u1",
+      JSON.stringify({
+        v: 1,
+        transactions: [tx({ id: "cached", amount_usd_cents: 1234 })],
+        lbpPerUsd: 91000,
+        safeGoldEntries: [],
+      }),
+    );
+    const { result } = setup({
+      "transactions:select": () => ({
+        data: [tx({ id: "fresh", amount_usd_cents: 5678 })],
+        error: null,
+      }),
+    });
+    // Synchronously available before any network round-trip resolves.
+    expect(result.current.loading).toBe(false);
+    expect(result.current.transactions[0].id).toBe("cached");
+    expect(result.current.lbpPerUsd).toBe(91000);
+
+    // The background refresh replaces it with what the server returned.
+    await waitFor(() => expect(result.current.transactions[0].id).toBe("fresh"));
+    expect(result.current.transactions[0].amount_usd_cents).toBe(5678);
+  });
+
+  it("writes a snapshot after loading so the next start is instant", async () => {
+    const { result } = setup({
+      "transactions:select": () => ({
+        data: [tx({ id: "persisted" })],
+        error: null,
+      }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => {
+      const raw = localStorage.getItem("bb-cache:u1");
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw!).transactions[0].id).toBe("persisted");
+    });
+  });
+
+  it("clears the cache and never caches plaintext while locked", async () => {
+    const mk = await generateMasterKey();
+    const row = {
+      wrapped_key: await wrapMasterKey(mk, "pw"),
+      wrap_type: "passphrase",
+      verifier: await makeVerifier(mk),
+    };
+    // A stale plaintext snapshot left on a now-locked device must be dropped.
+    localStorage.setItem(
+      "bb-cache:u1",
+      JSON.stringify({ v: 1, transactions: [tx()], lbpPerUsd: 90000, safeGoldEntries: [] }),
+    );
+    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.locked).toBe(true);
+    expect(localStorage.getItem("bb-cache:u1")).toBeNull();
+  });
+
+  it("drops the cached snapshot on sign-out", async () => {
+    const { result } = setup({
+      "transactions:select": () => ({ data: [tx({ id: "x" })], error: null }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(localStorage.getItem("bb-cache:u1")).not.toBeNull());
+
+    await act(async () => {
+      await result.current.signOut();
+    });
+    expect(localStorage.getItem("bb-cache:u1")).toBeNull();
+  });
+
   it("blocks writes and key changes while locked", async () => {
     const mk = await generateMasterKey();
     const row = {

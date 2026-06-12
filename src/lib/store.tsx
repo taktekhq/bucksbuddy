@@ -10,6 +10,7 @@ import {
 } from "react";
 import { supabase } from "@/lib/supabase";
 import { navigate } from "@/lib/router";
+import { clearCache, loadCache, saveCache } from "@/lib/cache";
 import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
@@ -201,10 +202,18 @@ export function StoreProvider({
   userId: string;
   children: ReactNode;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [lbpPerUsd, setLbpPerUsd] = useState(DEFAULT_LBP_PER_USD);
-  const [safeGoldEntries, setSafeGoldEntries] = useState<SafeGoldEntry[]>([]);
+  // Hydrate from the last on-device snapshot so the first frame shows real
+  // numbers instead of zeros while the network read is in flight. `loading`
+  // only starts true when there's nothing cached to show.
+  const cached = useMemo(() => loadCache(userId), [userId]);
+  const [loading, setLoading] = useState(cached === null);
+  const [transactions, setTransactions] = useState<Transaction[]>(
+    cached?.transactions ?? [],
+  );
+  const [lbpPerUsd, setLbpPerUsd] = useState(cached?.lbpPerUsd ?? DEFAULT_LBP_PER_USD);
+  const [safeGoldEntries, setSafeGoldEntries] = useState<SafeGoldEntry[]>(
+    cached?.safeGoldEntries ?? [],
+  );
   const [e2eMode, setE2eMode] = useState<E2EMode>("default");
   const [locked, setLocked] = useState(false);
   const [passphrase, setPassphrase] = useState<string | null>(null);
@@ -245,9 +254,11 @@ export function StoreProvider({
     const key = masterKey.current;
     if (!key) {
       // Locked: we can't decrypt, so show the rows with obscured amounts rather
-      // than a blank wall.
+      // than a blank wall. Drop any cached plaintext too — this device isn't
+      // entitled to it until it's unlocked.
       setTransactions(txRows.map(maskedTransaction));
       setSafeGoldEntries(goldRows.map(maskedGold));
+      clearCache(userId);
       setLoading(false);
       return;
     }
@@ -288,6 +299,15 @@ export function StoreProvider({
       await loadData();
     })();
   }, [userId, loadData]);
+
+  // Keep the on-device snapshot in step with what's on screen, so a later cold
+  // start paints the latest data instantly. Only while unlocked and settled:
+  // `loading` skips the empty first frame, and `locked` keeps masked stand-ins
+  // (and the cleared cache) from being written back as if they were real.
+  useEffect(() => {
+    if (loading || locked) return;
+    saveCache(userId, { transactions, lbpPerUsd, safeGoldEntries });
+  }, [userId, loading, locked, transactions, lbpPerUsd, safeGoldEntries]);
 
   const unlock = useCallback(
     async (pass: string) => {
@@ -332,6 +352,7 @@ export function StoreProvider({
     // App flips back to the login screen once the session ends; reset the hash
     // so the URL doesn't stay stuck on the page they signed out from.
     clearStoredPassphrase(userId);
+    clearCache(userId);
     masterKey.current = null;
     setPassphrase(null);
     await supabase.auth.signOut();
@@ -347,6 +368,7 @@ export function StoreProvider({
     // The account is gone server-side; drop the cached secrets and end the
     // session so the app falls back to the landing page.
     clearStoredPassphrase(userId);
+    clearCache(userId);
     masterKey.current = null;
     setPassphrase(null);
     await supabase.auth.signOut();
