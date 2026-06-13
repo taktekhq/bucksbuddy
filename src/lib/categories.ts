@@ -117,6 +117,13 @@ export const EXPENSE_CATEGORIES: Category[] = [
       { id: "taxi", label: "Taxi" },
       { id: "bus", label: "Bus" },
       { id: "flight", label: "Flight" },
+      // Car ownership & upkeep: servicing, repairs (e.g. a window), washes,
+      // insurance, and registration/road tax.
+      { id: "service", label: "Service" },
+      { id: "repairs", label: "Repairs" },
+      { id: "wash", label: "Wash" },
+      { id: "insurance", label: "Insurance" },
+      { id: "registration", label: "Registration" },
     ],
   },
   // Row 3 — personal & lifestyle.
