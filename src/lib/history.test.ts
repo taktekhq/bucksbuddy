@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupByCategory } from "@/lib/history";
+import { groupByCategory, groupByDay } from "@/lib/history";
 import { netCents } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
@@ -73,5 +73,79 @@ describe("groupByCategory", () => {
     const groups = groupByCategory([tx()]);
     expect(groups).toHaveLength(1);
     expect(groups[0].count).toBe(1);
+  });
+});
+
+describe("groupByDay", () => {
+  // A fixed "now" so Today/Yesterday labels are deterministic. 15 Jun 2026 local.
+  const now = new Date(2026, 5, 15, 13, 30);
+  // Build a local-midday ISO for a given local Y/M/D so day bucketing doesn't
+  // straddle a timezone boundary in CI.
+  const at = (y: number, m: number, d: number, h = 12) =>
+    new Date(y, m - 1, d, h).toISOString();
+
+  it("splits entries into day sections, newest day first", () => {
+    const days = groupByDay(
+      [
+        tx({ id: "a", category: "gas", occurred_at: at(2026, 6, 13) }),
+        tx({ id: "b", category: "coffee", occurred_at: at(2026, 6, 15) }),
+      ],
+      now,
+    );
+    expect(days.map((d) => d.label)).toEqual(["Today", "Jun 13"]);
+  });
+
+  it("collapses only back-to-back same-category entries within a day", () => {
+    const days = groupByDay(
+      [
+        tx({ id: "a", category: "coffee", occurred_at: at(2026, 6, 15, 9) }),
+        tx({ id: "b", category: "coffee", occurred_at: at(2026, 6, 15, 10) }),
+        tx({ id: "c", category: "gas", occurred_at: at(2026, 6, 15, 11) }),
+        tx({ id: "d", category: "coffee", occurred_at: at(2026, 6, 15, 12) }),
+      ],
+      now,
+    );
+    expect(days).toHaveLength(1);
+    // Newest-first: coffee(12) alone, gas(11) alone, coffee(10,9) as a run.
+    const runs = days[0].groups;
+    expect(runs.map((g) => `${g.category}:${g.count}`)).toEqual([
+      "coffee:1",
+      "gas:1",
+      "coffee:2",
+    ]);
+    expect(runs[2].rows.map((r) => r.id)).toEqual(["b", "a"]); // DESC within run
+  });
+
+  it("keeps income and expense of the same category in separate runs", () => {
+    const days = groupByDay(
+      [
+        tx({ id: "a", category: "other", is_income: false, occurred_at: at(2026, 6, 15, 9) }),
+        tx({ id: "b", category: "other", is_income: true, occurred_at: at(2026, 6, 15, 10) }),
+      ],
+      now,
+    );
+    expect(days[0].groups).toHaveLength(2);
+  });
+
+  it("sums a signed net total per day", () => {
+    const a = tx({ id: "a", amount_usd_cents: 1000, is_income: false, occurred_at: at(2026, 6, 15, 9) });
+    const b = tx({ id: "b", amount_usd_cents: 2500, is_income: true, occurred_at: at(2026, 6, 15, 10) });
+    const days = groupByDay([a, b], now);
+    expect(days[0].totalCents).toBe(netCents([a, b])); // 2500 - 1000 = 1500
+  });
+
+  it("marks a day masked when any of its rows is obscured", () => {
+    const days = groupByDay(
+      [
+        tx({ id: "a", occurred_at: at(2026, 6, 15, 9) }),
+        tx({ id: "b", amountMask: "a8F2", occurred_at: at(2026, 6, 15, 10) }),
+      ],
+      now,
+    );
+    expect(days[0].masked).toBe(true);
+  });
+
+  it("returns no days for an empty history", () => {
+    expect(groupByDay([], now)).toEqual([]);
   });
 });

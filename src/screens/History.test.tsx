@@ -35,6 +35,7 @@ describe("History", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    localStorage.clear(); // reset the remembered grouping between tests
     storeValue = makeStoreValue();
     takePendingEdit(); // drain any leftover intent between tests
   });
@@ -43,21 +44,47 @@ describe("History", () => {
   it("shows an empty message when there's no history", () => {
     render(<History />);
     expect(screen.getByText("Nothin' here yet, Doc.")).toBeInTheDocument();
+    // No grouping toggle to show when there's nothing to group.
+    expect(screen.queryByRole("tab", { name: "Timeline" })).not.toBeInTheDocument();
   });
 
-  it("renders a stack per category and a plain row for singles", () => {
+  it("defaults to the timeline view with a day total", () => {
+    const today = new Date().toISOString();
     storeValue = makeStoreValue({
-      transactions: [
-        tx({ id: "a", category: "gas" }),
-        tx({ id: "b", category: "coffee" }),
-        tx({ id: "c", category: "coffee" }),
-      ],
+      transactions: [tx({ id: "a", category: "gas", occurred_at: today })],
     });
     render(<History />);
     expect(screen.getByText("All History")).toBeInTheDocument();
-    // Coffee has two entries → a stack; Gas has one → a plain row.
+    expect(screen.getByRole("tab", { name: "Timeline" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("Today")).toBeInTheDocument();
+    expect(screen.getByText("Gas")).toBeInTheDocument();
+  });
+
+  it("switches to per-category stacks and remembers the choice", () => {
+    storeValue = makeStoreValue({
+      transactions: [
+        tx({ id: "a", category: "gas", occurred_at: "2026-06-10T10:00:00.000Z" }),
+        tx({ id: "b", category: "coffee", occurred_at: "2026-06-12T10:00:00.000Z" }),
+        tx({ id: "c", category: "coffee", occurred_at: "2026-06-13T10:00:00.000Z" }),
+      ],
+    });
+    const { unmount } = render(<History />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "By category" }));
+    // Across-day coffee entries now merge into one stack.
     expect(screen.getByRole("button", { name: /Coffee, 2 entries/ })).toBeInTheDocument();
     expect(screen.getByText("Gas")).toBeInTheDocument();
+
+    // The preference survives a remount.
+    unmount();
+    render(<History />);
+    expect(screen.getByRole("tab", { name: "By category" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("goes back home from the back button", () => {
