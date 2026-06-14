@@ -247,11 +247,23 @@ describe("Stats", () => {
     render(<Stats signedIn />);
     expect(screen.getByText("Fun facts")).toBeInTheDocument();
     expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
-    expect(screen.queryByText("Busiest day")).not.toBeInTheDocument();
-    expect(screen.queryByText("Safe runway")).not.toBeInTheDocument();
-    expect(screen.queryByText("On pace for")).not.toBeInTheDocument();
-    expect(screen.queryByText("Treat yourself")).not.toBeInTheDocument();
-    expect(screen.queryByText("Weekend Spend")).not.toBeInTheDocument();
+
+    // Every fun-fact chip still shows even with nothing behind it — a chip with
+    // no data wears an em-dash rather than vanishing and leaving a hole.
+    expect(screen.getByText("Biggest splurge")).toBeInTheDocument();
+    expect(screen.getByText("Busiest day")).toBeInTheDocument();
+    expect(screen.getByText("Safe runway")).toBeInTheDocument();
+    expect(screen.getByText("On pace for")).toBeInTheDocument();
+    expect(screen.getByText("Treat yourself")).toBeInTheDocument();
+    expect(screen.getByText("Weekend Spend")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+
+    // The empty treat/weekend chips have no receipts behind them, so they're
+    // not tappable.
+    expect(screen.queryByRole("button", { name: /Treat yourself/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Weekend Spend/ })).not.toBeInTheDocument();
+
+    // The in-vs-out bar is a chart, not a fun fact — it stays hidden with no flow.
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
   });
 

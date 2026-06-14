@@ -110,6 +110,10 @@ function Fact({
   return <div className="rounded-card bg-white/10 px-4 py-3">{body}</div>;
 }
 
+// Stand-in for a fun fact that has no data yet — the chip still shows, it just
+// wears an em-dash instead of vanishing and leaving a hole in the grid.
+const EMPTY = "—";
+
 /** "Sun, Jun 7" from a local "YYYY-MM-DD" key (noon dodges TZ edges). */
 function dayLabel(date: string): string {
   return new Date(`${date}T12:00:00`).toLocaleDateString("en-US", {
@@ -262,57 +266,57 @@ function PersonalStats() {
       )}
 
       {/* Pairs by design: splurge|busiest, runway|forecast, treats|weekend,
-          coffee|no-spend — then the in-vs-out bar across the bottom. */}
+          coffee|no-spend — then the in-vs-out bar across the bottom. Every chip
+          always renders: a fun fact with no data yet shows an em-dash rather
+          than vanishing and leaving a hole in the grid. */}
       <section className="flex flex-col gap-2">
         <Caption>Fun facts</Caption>
         <div className="grid grid-cols-2 gap-2">
-          {facts.biggestExpense && (
-            <Fact
-              caption="Biggest splurge"
-              value={formatUsdCents(facts.biggestExpense.amount_usd_cents)}
-              sub={[
-                categoryLabel(facts.biggestExpense.category),
-                facts.biggestExpense.note,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            />
-          )}
-          {facts.busiestDay && (
-            <Fact
-              caption="Busiest day"
-              value={count(facts.busiestDay.count, "entry", "entries")}
-              sub={`${dayLabel(facts.busiestDay.date)} · ${formatUsdCents(facts.busiestDay.totalCents)}`}
-            />
-          )}
-          {runwayDays > 0 && (
-            <Fact
-              caption="Safe runway"
-              value={runwayLabel(runwayDays)}
-              sub="at this pace"
-            />
-          )}
-          {facts.forecastCents > 0 && (
-            <Fact
-              caption="On pace for"
-              value={formatUsdCents(facts.forecastCents)}
-              sub="by month's end"
-            />
-          )}
-          {facts.treatCents > 0 && (
-            <Fact
-              caption="Treat yourself"
-              value={formatUsdCents(facts.treatCents)}
-              onClick={() => navigate("/stats/treats")}
-            />
-          )}
-          {facts.weekendCents > 0 && (
-            <Fact
-              caption="Weekend Spend"
-              value={formatUsdCents(facts.weekendCents)}
-              onClick={() => navigate("/stats/weekend")}
-            />
-          )}
+          <Fact
+            caption="Biggest splurge"
+            value={
+              facts.biggestExpense
+                ? formatUsdCents(facts.biggestExpense.amount_usd_cents)
+                : EMPTY
+            }
+            sub={
+              facts.biggestExpense
+                ? [categoryLabel(facts.biggestExpense.category), facts.biggestExpense.note]
+                    .filter(Boolean)
+                    .join(" · ")
+                : undefined
+            }
+          />
+          <Fact
+            caption="Busiest day"
+            value={facts.busiestDay ? count(facts.busiestDay.count, "entry", "entries") : EMPTY}
+            sub={
+              facts.busiestDay
+                ? `${dayLabel(facts.busiestDay.date)} · ${formatUsdCents(facts.busiestDay.totalCents)}`
+                : undefined
+            }
+          />
+          <Fact
+            caption="Safe runway"
+            value={runwayDays > 0 ? runwayLabel(runwayDays) : EMPTY}
+            sub={runwayDays > 0 ? "at this pace" : undefined}
+          />
+          <Fact
+            caption="On pace for"
+            value={facts.forecastCents > 0 ? formatUsdCents(facts.forecastCents) : EMPTY}
+            sub={facts.forecastCents > 0 ? "by month's end" : undefined}
+          />
+          <Fact
+            caption="Treat yourself"
+            value={facts.treatCents > 0 ? formatUsdCents(facts.treatCents) : EMPTY}
+            // Only tappable when there are receipts behind it.
+            onClick={facts.treatCents > 0 ? () => navigate("/stats/treats") : undefined}
+          />
+          <Fact
+            caption="Weekend Spend"
+            value={facts.weekendCents > 0 ? formatUsdCents(facts.weekendCents) : EMPTY}
+            onClick={facts.weekendCents > 0 ? () => navigate("/stats/weekend") : undefined}
+          />
           <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
           <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
           {flow > 0 && (
