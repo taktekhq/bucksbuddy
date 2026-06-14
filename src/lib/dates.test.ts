@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { currentMonthRange, isToday, monthLabel } from "@/lib/dates";
+import { currentMonthRange, dayKey, dayLabel, isToday, monthLabel } from "@/lib/dates";
 
 describe("currentMonthRange", () => {
   it("returns the first of this month and the first of next month", () => {
@@ -51,5 +51,35 @@ describe("isToday", () => {
 
   it("defaults to the real current date", () => {
     expect(isToday(new Date().toISOString())).toBe(true);
+  });
+});
+
+describe("dayKey", () => {
+  it("uses the local calendar day, zero-padded", () => {
+    expect(dayKey(new Date(2026, 5, 3, 12, 0).toISOString())).toBe("2026-06-03");
+  });
+
+  it("buckets every time on a local day under the same key", () => {
+    const early = dayKey(new Date(2026, 5, 15, 0, 1).toISOString());
+    const late = dayKey(new Date(2026, 5, 15, 23, 59).toISOString());
+    expect(early).toBe("2026-06-15");
+    expect(late).toBe("2026-06-15");
+  });
+});
+
+describe("dayLabel", () => {
+  const now = new Date(2026, 5, 15, 13, 30); // 15 Jun 2026, local
+
+  it("labels the current and previous local day", () => {
+    expect(dayLabel(new Date(2026, 5, 15, 8, 0).toISOString(), now)).toBe("Today");
+    expect(dayLabel(new Date(2026, 5, 14, 8, 0).toISOString(), now)).toBe("Yesterday");
+  });
+
+  it("uses month + day for older days in the same year", () => {
+    expect(dayLabel(new Date(2026, 5, 12, 8, 0).toISOString(), now)).toBe("Jun 12");
+  });
+
+  it("includes the year for a different year", () => {
+    expect(dayLabel(new Date(2025, 11, 31, 8, 0).toISOString(), now)).toBe("Dec 31, 2025");
   });
 });
