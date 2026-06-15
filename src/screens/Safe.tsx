@@ -476,16 +476,14 @@ export function Safe() {
               const tone = m.kind === "gold" ? GOLD : m.isDeposit ? MINT : TAKE;
               const sign = m.isDeposit ? "+" : "-";
               // grams is always set on gold moves and cents on cash moves (see
-              // construction above); the `?? 0` fallbacks are defensive only.
+              // construction above), so the non-null assertions hold.
               // While locked, `mask` holds an obscured stand-in instead.
               const right =
                 m.mask != null
                   ? `${sign}${m.kind === "gold" ? m.mask : `$${m.mask}`}`
                   : m.kind === "gold"
-                    ? /* v8 ignore next */
-                      `${sign}${formatGrams(m.grams ?? 0)}`
-                    : /* v8 ignore next */
-                      `${sign}${formatUsdCents(m.cents ?? 0)}`;
+                    ? `${sign}${formatGrams(m.grams!)}`
+                    : `${sign}${formatUsdCents(m.cents!)}`;
               const Icon =
                 m.kind === "gold"
                   ? Coins
