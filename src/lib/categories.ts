@@ -182,7 +182,13 @@ export const EXPENSE_CATEGORIES: Category[] = [
       { id: "utilities", label: "Utilities" },
     ],
   },
-  { id: "rent", label: "Rent", icon: Home, color: "#5856D6" },
+  {
+    id: "rent",
+    label: "Rent",
+    icon: Home,
+    color: "#5856D6",
+    subcategories: [{ id: "airbnb", label: "Airbnb" }],
+  },
   // Row 5 — social & discretionary.
   {
     id: "fun",
