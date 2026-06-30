@@ -21,7 +21,7 @@ import { takePendingEdit } from "@/lib/editIntent";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { isToday, monthLabel } from "@/lib/dates";
 import { dailySpendSeries } from "@/lib/stats";
-import { formatSignedUsdCents, formatUsdCents } from "@/lib/money";
+import { formatUsdCents } from "@/lib/money";
 import { formatGrams } from "@/lib/gold";
 import type { Transaction } from "@/types/db";
 
@@ -32,7 +32,6 @@ export function Home() {
   const {
     transactions,
     balanceCents,
-    monthlyNetCents,
     loading,
     deleteTransaction,
     safeTotalCents,
@@ -168,26 +167,14 @@ export function Home() {
             className="press relative block w-full text-left"
           >
             {/* The headline is the running balance — it carries across months
-                instead of resetting to $0 on the 1st. The month's own net rides
-                underneath so you can still see how this month is trending.
-                Hidden while locked, where the month figure is a masked zero. */}
+                instead of resetting to $0 on the 1st. Just the month rides
+                underneath for context: a per-month net would be misleading here,
+                since a carried-over surplus or deficit isn't money earned or
+                lost this month. (Per-month spending lives on the Stats page.) */}
             <NetTotal cents={balanceCents} label="Balance" masked={locked} />
-            {!locked && (
-              <p className="mt-1 text-[13px] font-medium text-label-secondary">
-                {monthLabel()} ·{" "}
-                <span
-                  className={
-                    monthlyNetCents > 0
-                      ? "text-income"
-                      : monthlyNetCents < 0
-                        ? "text-expense"
-                        : undefined
-                  }
-                >
-                  {formatSignedUsdCents(monthlyNetCents)} this month
-                </span>
-              </p>
-            )}
+            <p className="mt-1 text-[13px] font-medium text-label-secondary">
+              {monthLabel()}
+            </p>
             {/* iOS-style disclosure hint: this number goes somewhere. */}
             <span
               aria-hidden
