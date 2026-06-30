@@ -5,7 +5,7 @@ import { makeStoreValue } from "@/test/storeValue";
 import { monthLabel } from "@/lib/dates";
 import type { Transaction } from "@/types/db";
 import type { PublicStats } from "@/lib/publicStats";
-import type { CategoryStat, DayPoint, MonthInsights } from "@/lib/stats";
+import type { CategoryStat, DayPoint, MonthInsights, MonthSpend } from "@/lib/stats";
 
 let storeValue = makeStoreValue();
 vi.mock("@/lib/store", () => ({ useStore: () => storeValue }));
@@ -21,13 +21,17 @@ vi.mock("@/lib/publicStats", () => ({
 // The aggregations are unit-tested in lib/stats.test.ts; mocking them here
 // gives each rendering branch deterministic numbers regardless of today's date.
 const dailySpendSeries = vi.fn();
+const monthSpendSeries = vi.fn();
 const topCategories = vi.fn();
 const monthInsights = vi.fn();
+const monthlySpendTotals = vi.fn();
 vi.mock("@/lib/stats", () => ({
   FETCH_CAP: 500,
   dailySpendSeries: (...a: unknown[]) => dailySpendSeries(...a),
+  monthSpendSeries: (...a: unknown[]) => monthSpendSeries(...a),
   topCategories: (...a: unknown[]) => topCategories(...a),
   monthInsights: (...a: unknown[]) => monthInsights(...a),
+  monthlySpendTotals: (...a: unknown[]) => monthlySpendTotals(...a),
 }));
 
 import { Stats } from "@/screens/Stats";
@@ -68,6 +72,13 @@ function insights(overrides: Partial<MonthInsights> = {}): MonthInsights {
   };
 }
 
+const month = (
+  offset: number,
+  totalCents: number,
+  label: string,
+  isCurrent = false,
+): MonthSpend => ({ monthKey: `k${offset}`, label, totalCents, offset, isCurrent });
+
 const CATS: CategoryStat[] = [
   { category: "food", totalCents: 1000, count: 1, share: 0.5 },
   { category: "groceries", totalCents: 700, count: 1, share: 0.35 },
@@ -91,8 +102,12 @@ describe("Stats", () => {
     // Most tests don't care about the community section: leave it counting.
     fetchPublicStats.mockReturnValue(new Promise(() => {}));
     dailySpendSeries.mockReturnValue([point("2026-06-09", 0, 0), point("2026-06-10", 2000, 3)]);
+    monthSpendSeries.mockReturnValue([point("2026-05-01", 0, 0), point("2026-05-31", 1500, 2)]);
     topCategories.mockReturnValue(CATS);
     monthInsights.mockReturnValue(insights());
+    // Most tests don't exercise the cross-month bars — leave them empty so the
+    // "Spending by month" section stays out of the way.
+    monthlySpendTotals.mockReturnValue([]);
   });
 
   it("shows the month's money picture when signed in", () => {
@@ -265,6 +280,49 @@ describe("Stats", () => {
 
     // The in-vs-out bar is a chart, not a fun fact — it stays hidden with no flow.
     expect(screen.queryByText("In vs out")).not.toBeInTheDocument();
+  });
+
+  it("charts spending by month with typical-month and last-month readouts", () => {
+    monthlySpendTotals.mockReturnValue([
+      month(-2, 3000, "Apr"),
+      month(-1, 5000, "May"),
+      month(0, 1000, "Jun", true),
+    ]);
+    render(<Stats signedIn />);
+    expect(screen.getByText("Spending by month")).toBeInTheDocument();
+    // Typical month = average of the completed months (Apr $30 + May $50) = $40.
+    expect(screen.getByText("Per month")).toBeInTheDocument();
+    expect(screen.getByText("$40.00")).toBeInTheDocument();
+    // Last month is May.
+    expect(screen.getByText("Last month")).toBeInTheDocument();
+    expect(screen.getByText("$50.00")).toBeInTheDocument();
+    // The bars are month pickers with accessible amounts.
+    expect(screen.getByRole("button", { name: "May: $50.00" })).toBeInTheDocument();
+  });
+
+  it("pages to a past month, dropping the present-tense facts", async () => {
+    // A far-past transaction makes "Previous month" reachable (the nav reads the
+    // real, unmocked dates off the store).
+    storeValue = makeStoreValue({
+      transactions: [{ occurred_at: "2000-01-01T10:00:00.000Z" } as Transaction],
+      safeTotalCents: 90000,
+    });
+    render(<Stats signedIn />);
+
+    // Current month: the forecast shows and the headline says "this month".
+    expect(screen.getByText("Spent this month")).toBeInTheDocument();
+    expect(screen.getByText("$60.00")).toBeInTheDocument(); // On pace for
+    expect(screen.getByRole("button", { name: /Treat yourself/ })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Previous month" }));
+
+    // Past month: no forecast, no "this month", and the receipt chips go inert.
+    expect(screen.queryByText("Spent this month")).not.toBeInTheDocument();
+    expect(screen.getByText("Spent")).toBeInTheDocument();
+    expect(screen.queryByText("$60.00")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Treat yourself/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("greets signed-out visitors with the teaser and the public title", async () => {

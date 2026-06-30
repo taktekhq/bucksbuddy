@@ -21,7 +21,7 @@ import { takePendingEdit } from "@/lib/editIntent";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { isToday, monthLabel } from "@/lib/dates";
 import { dailySpendSeries } from "@/lib/stats";
-import { formatUsdCents } from "@/lib/money";
+import { formatSignedUsdCents, formatUsdCents } from "@/lib/money";
 import { formatGrams } from "@/lib/gold";
 import type { Transaction } from "@/types/db";
 
@@ -31,6 +31,7 @@ const GOLD_INK = "#A16207";
 export function Home() {
   const {
     transactions,
+    balanceCents,
     monthlyNetCents,
     loading,
     deleteTransaction,
@@ -166,7 +167,27 @@ export function Home() {
             aria-label="See your stats"
             className="press relative block w-full text-left"
           >
-            <NetTotal cents={monthlyNetCents} monthLabel={monthLabel()} masked={locked} />
+            {/* The headline is the running balance — it carries across months
+                instead of resetting to $0 on the 1st. The month's own net rides
+                underneath so you can still see how this month is trending.
+                Hidden while locked, where the month figure is a masked zero. */}
+            <NetTotal cents={balanceCents} label="Balance" masked={locked} />
+            {!locked && (
+              <p className="mt-1 text-[13px] font-medium text-label-secondary">
+                {monthLabel()} ·{" "}
+                <span
+                  className={
+                    monthlyNetCents > 0
+                      ? "text-income"
+                      : monthlyNetCents < 0
+                        ? "text-expense"
+                        : undefined
+                  }
+                >
+                  {formatSignedUsdCents(monthlyNetCents)} this month
+                </span>
+              </p>
+            )}
             {/* iOS-style disclosure hint: this number goes somewhere. */}
             <span
               aria-hidden
