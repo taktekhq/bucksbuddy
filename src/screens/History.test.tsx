@@ -35,6 +35,9 @@ describe("History", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    // Pin "now" to mid-June 2026 so the month-scoped "By category" view is
+    // deterministic regardless of when the suite runs.
+    vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0));
     localStorage.clear(); // reset the remembered grouping between tests
     storeValue = makeStoreValue();
     takePendingEdit(); // drain any leftover intent between tests
@@ -85,6 +88,28 @@ describe("History", () => {
       "aria-selected",
       "true",
     );
+  });
+
+  it("scopes the category view to a month and pages between months", () => {
+    storeValue = makeStoreValue({
+      transactions: [
+        tx({ id: "jun", category: "gas", occurred_at: "2026-06-10T10:00:00.000Z" }),
+        tx({ id: "may", category: "coffee", occurred_at: "2026-05-12T10:00:00.000Z" }),
+      ],
+    });
+    render(<History />);
+    fireEvent.click(screen.getByRole("tab", { name: "By category" }));
+
+    // Defaults to the current month (June): the June gas shows, May's coffee doesn't.
+    expect(screen.getByText("June 2026")).toBeInTheDocument();
+    expect(screen.getByText("Gas")).toBeInTheDocument();
+    expect(screen.queryByText("Coffee")).not.toBeInTheDocument();
+
+    // Page back a month: now May's coffee shows and June's gas is gone.
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText("May 2026")).toBeInTheDocument();
+    expect(screen.getByText("Coffee")).toBeInTheDocument();
+    expect(screen.queryByText("Gas")).not.toBeInTheDocument();
   });
 
   it("goes back home from the back button", () => {

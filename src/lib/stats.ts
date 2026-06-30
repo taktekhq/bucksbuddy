@@ -69,6 +69,77 @@ export function dailySpendSeries(
   return series;
 }
 
+/**
+ * Dense per-day spending series for the whole calendar month containing
+ * `anchor` (day 1 → last day), oldest first, quiet days zero-filled. The
+ * 30-days-ending-today window (`dailySpendSeries`) charts the current month;
+ * this one charts a past month you've paged back to on Stats.
+ */
+export function monthSpendSeries(rows: Transaction[], anchor = new Date()): DayPoint[] {
+  const { from, to } = currentMonthRange(anchor);
+  const last = new Date(to.getTime() - 1); // last day of the month
+
+  const series: DayPoint[] = [];
+  const byDay = new Map<string, DayPoint>();
+  for (const d = new Date(from); d <= last; d.setDate(d.getDate() + 1)) {
+    const point = { date: dayKey(d), totalCents: 0, count: 0 };
+    byDay.set(point.date, point);
+    series.push(point);
+  }
+  for (const r of rows) {
+    if (!isSpending(r)) continue;
+    const point = byDay.get(dayKey(new Date(r.occurred_at)));
+    if (!point) continue; // outside this month
+    point.totalCents += r.amount_usd_cents;
+    point.count += 1;
+  }
+  return series;
+}
+
+export type MonthSpend = {
+  monthKey: string; // "2026-06", the calendar month
+  label: string; // "Jun" — short month name for the axis
+  totalCents: number; // spending only (income + Safe transfers excluded)
+  offset: number; // months back from `now` (0 = current), for paging
+  isCurrent: boolean;
+};
+
+/**
+ * Total spending per calendar month for the `months` months ending with the
+ * one containing `now`, oldest first. Drives the cross-month trend bars on
+ * Stats and the per-month average. Same `isSpending` rule as everywhere else,
+ * so income and internal Safe transfers don't count.
+ */
+export function monthlySpendTotals(
+  rows: Transaction[],
+  months = 6,
+  now = new Date(),
+): MonthSpend[] {
+  const series: MonthSpend[] = [];
+  const byKey = new Map<string, MonthSpend>();
+  for (let back = months - 1; back >= 0; back--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const entry: MonthSpend = {
+      monthKey,
+      label: d.toLocaleDateString("en-US", { month: "short" }),
+      totalCents: 0,
+      offset: back > 0 ? -back : 0, // avoid -0 for the current month
+      isCurrent: back === 0,
+    };
+    series.push(entry);
+    byKey.set(monthKey, entry);
+  }
+  for (const r of rows) {
+    if (!isSpending(r)) continue;
+    const at = new Date(r.occurred_at);
+    const monthKey = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}`;
+    const entry = byKey.get(monthKey);
+    if (entry) entry.totalCents += r.amount_usd_cents;
+  }
+  return series;
+}
+
 export type CategoryStat = {
   category: string; // base id ("food", never "food/restaurant") for label/icon/color lookups
   totalCents: number;

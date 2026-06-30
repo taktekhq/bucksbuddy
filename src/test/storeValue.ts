@@ -8,6 +8,7 @@ export function makeStoreValue(overrides: Record<string, unknown> = {}) {
     loading: false,
     transactions: [],
     lbpPerUsd: DEFAULT_LBP_PER_USD,
+    balanceCents: 0,
     monthlyNetCents: 0,
     addTransaction: vi.fn(async () => ({ error: null })),
     updateTransaction: vi.fn(async () => ({ error: null })),

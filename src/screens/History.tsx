@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { HistoryStack } from "@/components/HistoryStack";
 import { HistoryTimeline } from "@/components/HistoryTimeline";
+import { MonthSwitcher } from "@/components/ui/MonthSwitcher";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { requestEdit } from "@/lib/editIntent";
+import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
 import { groupByCategory, groupByDay } from "@/lib/history";
 import { useHistoryGrouping } from "@/lib/useHistoryGrouping";
 import type { Transaction } from "@/types/db";
@@ -26,7 +28,24 @@ export function History() {
   const { transactions, deleteTransaction } = useStore();
   const [grouping, setGrouping] = useHistoryGrouping();
   const days = useMemo(() => groupByDay(transactions), [transactions]);
-  const groups = useMemo(() => groupByCategory(transactions), [transactions]);
+
+  // The "By category" view is scoped to one month at a time, paged with the
+  // switcher (this month, last month, or further back). The timeline stays
+  // all-time. Default to the current month.
+  const [monthOffset, setMonthOffset] = useState(0);
+  const anchor = useMemo(() => monthAnchor(monthOffset), [monthOffset]);
+  const monthTx = useMemo(() => {
+    const { from, to } = currentMonthRange(anchor);
+    return transactions.filter((t) => {
+      const d = new Date(t.occurred_at);
+      return d >= from && d < to;
+    });
+  }, [transactions, anchor]);
+  const groups = useMemo(() => groupByCategory(monthTx), [monthTx]);
+  const hasOlder = useMemo(() => {
+    const { from } = currentMonthRange(anchor);
+    return transactions.some((t) => new Date(t.occurred_at) < from);
+  }, [transactions, anchor]);
 
   // Tint the status bar to match the top of the page.
   useThemeColor("#2C2C2E");
@@ -112,17 +131,32 @@ export function History() {
               onDelete={handleDelete}
             />
           ) : (
-            <ul className="flex flex-col gap-1.5">
-              {groups.map((g) => (
-                <li key={g.key}>
-                  <HistoryStack
-                    group={g}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                </li>
-              ))}
-            </ul>
+            <div className="flex flex-col gap-3">
+              <MonthSwitcher
+                label={monthLabel(anchor)}
+                onPrev={() => setMonthOffset((o) => o - 1)}
+                onNext={() => setMonthOffset((o) => Math.min(o + 1, 0))}
+                canPrev={hasOlder}
+                canNext={monthOffset < 0}
+              />
+              {groups.length === 0 ? (
+                <p className="py-10 text-center text-white/45">
+                  Nothin&apos; logged this month, Doc.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {groups.map((g) => (
+                    <li key={g.key}>
+                      <HistoryStack
+                        group={g}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </>
       )}

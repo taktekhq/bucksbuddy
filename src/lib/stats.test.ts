@@ -4,6 +4,8 @@ import {
   dailySpendSeries,
   isSpending,
   monthInsights,
+  monthlySpendTotals,
+  monthSpendSeries,
   topCategories,
   treatTransactions,
   weekendTransactions,
@@ -104,6 +106,88 @@ describe("dailySpendSeries", () => {
     expect(series.find((p) => p.date === key(2026, 5, 8))?.totalCents).toBe(
       10 * (FETCH_CAP - 1),
     );
+  });
+});
+
+describe("monthSpendSeries", () => {
+  it("covers the whole calendar month, zero-filling quiet days", () => {
+    const series = monthSpendSeries([], NOW);
+    expect(series).toHaveLength(30); // June 2026 has 30 days
+    expect(series[0].date).toBe(key(2026, 5, 1));
+    expect(series[29].date).toBe(key(2026, 5, 30));
+  });
+
+  it("buckets spending by local day, skipping income, safe and other months", () => {
+    const rows = [
+      tx({ id: "a", occurred_at: at(2026, 5, 3), amount_usd_cents: 400 }),
+      tx({ id: "b", occurred_at: at(2026, 5, 3, 18), amount_usd_cents: 100 }),
+      tx({
+        id: "c",
+        is_income: true,
+        category: "salary",
+        occurred_at: at(2026, 5, 3),
+        amount_usd_cents: 9999,
+      }),
+      tx({ id: "d", category: "safe", occurred_at: at(2026, 5, 3), amount_usd_cents: 9999 }),
+      tx({ id: "e", occurred_at: at(2026, 4, 30), amount_usd_cents: 9999 }), // prev month
+    ];
+    const series = monthSpendSeries(rows, NOW);
+    expect(series.find((p) => p.date === key(2026, 5, 3))).toEqual({
+      date: key(2026, 5, 3),
+      totalCents: 500,
+      count: 2,
+    });
+    expect(series.reduce((sum, p) => sum + p.totalCents, 0)).toBe(500);
+  });
+
+  it("charts a past month when anchored there", () => {
+    const mayAnchor = new Date(2026, 4, 31, 12);
+    const series = monthSpendSeries(
+      [tx({ occurred_at: at(2026, 4, 15), amount_usd_cents: 250 })],
+      mayAnchor,
+    );
+    expect(series).toHaveLength(31); // May has 31 days
+    expect(series.find((p) => p.date === key(2026, 4, 15))?.totalCents).toBe(250);
+  });
+});
+
+describe("monthlySpendTotals", () => {
+  it("totals spending per month oldest-first, tagging the current month", () => {
+    const rows = [
+      tx({ id: "jun1", occurred_at: at(2026, 5, 2), amount_usd_cents: 1000 }),
+      tx({ id: "jun2", occurred_at: at(2026, 5, 9), amount_usd_cents: 500 }),
+      tx({ id: "may", occurred_at: at(2026, 4, 10), amount_usd_cents: 2000 }),
+      tx({
+        id: "inc",
+        is_income: true,
+        category: "salary",
+        occurred_at: at(2026, 5, 2),
+        amount_usd_cents: 9999,
+      }),
+      tx({ id: "safe", category: "safe", occurred_at: at(2026, 5, 2), amount_usd_cents: 9999 }),
+    ];
+    const months = monthlySpendTotals(rows, 6, NOW);
+    expect(months).toHaveLength(6);
+    expect(months[months.length - 1]).toMatchObject({
+      label: "Jun",
+      offset: 0,
+      isCurrent: true,
+      totalCents: 1500,
+    });
+    expect(months[months.length - 2]).toMatchObject({
+      label: "May",
+      offset: -1,
+      isCurrent: false,
+      totalCents: 2000,
+    });
+    // Income and Safe transfers never count toward spending.
+    expect(months.reduce((sum, m) => sum + m.totalCents, 0)).toBe(3500);
+  });
+
+  it("spans the requested number of months, oldest first", () => {
+    const months = monthlySpendTotals([], 3, NOW);
+    expect(months.map((m) => m.label)).toEqual(["Apr", "May", "Jun"]);
+    expect(months.map((m) => m.offset)).toEqual([-2, -1, 0]);
   });
 });
 

@@ -3,13 +3,21 @@ import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { Carrot } from "@/components/ui/Carrot";
 import { SparkArea } from "@/components/ui/SparkArea";
 import { StatBars, type StatBarItem } from "@/components/ui/StatBars";
+import { MonthSwitcher } from "@/components/ui/MonthSwitcher";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
-import { monthLabel } from "@/lib/dates";
+import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
 import { formatUsdCents } from "@/lib/money";
-import { dailySpendSeries, monthInsights, topCategories } from "@/lib/stats";
+import {
+  dailySpendSeries,
+  monthInsights,
+  monthlySpendTotals,
+  monthSpendSeries,
+  topCategories,
+  type MonthSpend,
+} from "@/lib/stats";
 import { fetchPublicStats, type PublicStats } from "@/lib/publicStats";
 
 // The stats page — a deep indigo "observatory" you climb up to and look at
@@ -134,13 +142,103 @@ function runwayLabel(days: number): string {
   return count(days, "day", "days");
 }
 
+// The cross-month spending trend: one bar per month, tap a bar to jump the page
+// to that month. The bar for the month currently on screen wears the carrot.
+function MonthlyBars({
+  months,
+  selectedOffset,
+  onSelect,
+}: {
+  months: MonthSpend[];
+  selectedOffset: number;
+  onSelect: (offset: number) => void;
+}) {
+  const top = Math.max(...months.map((m) => m.totalCents), 1);
+  return (
+    <div className="flex items-end justify-between gap-1.5">
+      {months.map((m) => {
+        const active = m.offset === selectedOffset;
+        return (
+          <button
+            key={m.monthKey}
+            type="button"
+            onClick={() => onSelect(m.offset)}
+            aria-label={`${m.label}: ${formatUsdCents(m.totalCents)}`}
+            className="press flex flex-1 flex-col items-center gap-1.5"
+          >
+            <div className="flex h-24 w-full items-end">
+              <div
+                className="w-full rounded-t-sm transition-[height]"
+                style={{
+                  // Even an empty month keeps a faint sliver so the axis reads.
+                  height: `${Math.max((m.totalCents / top) * 100, 3)}%`,
+                  backgroundColor: active ? "#F56300" : "rgba(255,255,255,0.22)",
+                }}
+              />
+            </div>
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wide ${
+                active ? "text-carrot" : "text-white/50"
+              }`}
+            >
+              {m.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // The signed-in half. Lives in its own component so the top-level Stats never
 // touches useStore() — signed-out renders have no StoreProvider above them.
 function PersonalStats() {
   const { transactions, locked, safeTotalCents } = useStore();
-  const series = useMemo(() => dailySpendSeries(transactions, 30), [transactions]);
-  const cats = useMemo(() => topCategories(transactions), [transactions]);
-  const facts = useMemo(() => monthInsights(transactions), [transactions]);
+
+  // Which month is on screen: 0 = this month, -1 = last month, … You can page
+  // back as long as there's older data and forward only up to the present.
+  const [monthOffset, setMonthOffset] = useState(0);
+  const anchor = useMemo(() => monthAnchor(monthOffset), [monthOffset]);
+  const isCurrentMonth = monthOffset === 0;
+  const hasOlder = useMemo(() => {
+    const { from } = currentMonthRange(anchor);
+    return transactions.some((t) => new Date(t.occurred_at) < from);
+  }, [transactions, anchor]);
+
+  // The current month charts the last 30 days (its caption says so); a past
+  // month charts its own day 1 → last day instead.
+  const series = useMemo(
+    () =>
+      isCurrentMonth
+        ? dailySpendSeries(transactions, 30)
+        : monthSpendSeries(transactions, anchor),
+    [transactions, anchor, isCurrentMonth],
+  );
+  const cats = useMemo(() => topCategories(transactions, 6, anchor), [transactions, anchor]);
+  const facts = useMemo(() => monthInsights(transactions, anchor), [transactions, anchor]);
+
+  // The cross-month trend: spending per month over the last half-year. Drives
+  // both the bar chart and the "per month" / "last month" call-outs. Bounded by
+  // FETCH_CAP like everything else; older months can read low once the cap bites.
+  const monthly = useMemo(() => monthlySpendTotals(transactions, 6), [transactions]);
+  const hasMonthly = monthly.some((m) => m.totalCents > 0);
+  // "Typical month" averages the completed months that had spending — the
+  // current month is still filling up, so it would drag the figure down.
+  const completed = monthly.filter((m) => !m.isCurrent && m.totalCents > 0);
+  const avgMonthCents = completed.length
+    ? Math.round(completed.reduce((s, m) => s + m.totalCents, 0) / completed.length)
+    : 0;
+  const lastMonthCents = monthly.find((m) => m.offset === -1)?.totalCents ?? 0;
+
+  const monthNav = (
+    <MonthSwitcher
+      label={monthLabel(anchor)}
+      onPrev={() => setMonthOffset((o) => o - 1)}
+      onNext={() => setMonthOffset((o) => Math.min(o + 1, 0))}
+      canPrev={hasOlder}
+      canNext={!isCurrentMonth}
+    />
+  );
 
   const barItems = useMemo<StatBarItem[]>(() => {
     const top = Math.max(...cats.map((c) => c.totalCents), 1);
@@ -210,9 +308,14 @@ function PersonalStats() {
   const hasAny = facts.spendCount > 0 || series.some((p) => p.count > 0);
   if (!hasAny) {
     return (
-      <section className="rounded-card bg-white/10 px-5 py-10 text-center text-white/55">
-        Nothin&apos; to chart yet, Doc. Log a few entries and come back.
-      </section>
+      <>
+        {monthNav}
+        <section className="rounded-card bg-white/10 px-5 py-10 text-center text-white/55">
+          {isCurrentMonth
+            ? "Nothin' to chart yet, Doc. Log a few entries and come back."
+            : "Nothin' logged this month, Doc."}
+        </section>
+      </>
     );
   }
 
@@ -227,6 +330,7 @@ function PersonalStats() {
 
   return (
     <>
+      {monthNav}
       {/* Headline: the month so far. The daily rhythm isn't given a slot of
           its own. It fills the whole card as a backdrop and the numbers sit
           on top of it. */}
@@ -241,8 +345,10 @@ function PersonalStats() {
             lands on the same card with the same chart — only the room gets
             darker. (Keep in sync with Home.tsx.) */}
         <div className="relative flex min-h-[188px] flex-col px-5 py-5">
+          {/* The month itself is named in the switcher right above, so the
+              headline just says what the number is. */}
           <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
-            {monthLabel()}
+            {isCurrentMonth ? "Spent this month" : "Spent"}
           </p>
           <p className="mt-1 font-numeric text-4xl font-bold tabular-nums">
             {formatUsdCents(facts.spentCents)}
@@ -251,10 +357,38 @@ function PersonalStats() {
             ≈ {formatUsdCents(facts.avgPerDayCents)} a day
           </p>
           <p className="mt-auto text-right text-[11px] uppercase tracking-wide text-white/45">
-            spent per day · last 30 days
+            spent per day · {isCurrentMonth ? "last 30 days" : monthLabel(anchor)}
           </p>
         </div>
       </section>
+
+      {/* The cross-month picture: how each month's spending stacks up, a typical
+          month, and last month's damage. The bars double as a month picker —
+          tapping one pages the whole screen to that month. */}
+      {hasMonthly && (
+        <section className="flex flex-col gap-2">
+          <Caption>Spending by month</Caption>
+          <div className="rounded-card bg-white/10 p-4">
+            <MonthlyBars
+              months={monthly}
+              selectedOffset={monthOffset}
+              onSelect={(o) => setMonthOffset(o)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Fact
+              caption="Per month"
+              value={avgMonthCents > 0 ? formatUsdCents(avgMonthCents) : EMPTY}
+              sub={avgMonthCents > 0 ? "typical month" : undefined}
+            />
+            <Fact
+              caption="Last month"
+              value={lastMonthCents > 0 ? formatUsdCents(lastMonthCents) : EMPTY}
+              onClick={lastMonthCents > 0 ? () => setMonthOffset(-1) : undefined}
+            />
+          </div>
+        </section>
+      )}
 
       {barItems.length > 0 && (
         <section className="flex flex-col gap-2">
@@ -296,26 +430,42 @@ function PersonalStats() {
                 : undefined
             }
           />
+          {/* Runway and the month-end forecast are present-tense — they read
+              off the live safe and the days left in the month, so they only
+              make sense for the current month. Past months show an em-dash. */}
           <Fact
             caption="Safe runway"
-            value={runwayDays > 0 ? runwayLabel(runwayDays) : EMPTY}
-            sub={runwayDays > 0 ? "at this pace" : undefined}
+            value={isCurrentMonth && runwayDays > 0 ? runwayLabel(runwayDays) : EMPTY}
+            sub={isCurrentMonth && runwayDays > 0 ? "at this pace" : undefined}
           />
           <Fact
             caption="On pace for"
-            value={facts.forecastCents > 0 ? formatUsdCents(facts.forecastCents) : EMPTY}
-            sub={facts.forecastCents > 0 ? "by month's end" : undefined}
+            value={
+              isCurrentMonth && facts.forecastCents > 0
+                ? formatUsdCents(facts.forecastCents)
+                : EMPTY
+            }
+            sub={isCurrentMonth && facts.forecastCents > 0 ? "by month's end" : undefined}
           />
           <Fact
             caption="Treat yourself"
             value={facts.treatCents > 0 ? formatUsdCents(facts.treatCents) : EMPTY}
-            // Only tappable when there are receipts behind it.
-            onClick={facts.treatCents > 0 ? () => navigate("/stats/treats") : undefined}
+            // Only tappable when there are receipts behind it — and only for the
+            // current month, since the receipts pages always list this month.
+            onClick={
+              isCurrentMonth && facts.treatCents > 0
+                ? () => navigate("/stats/treats")
+                : undefined
+            }
           />
           <Fact
             caption="Weekend Spend"
             value={facts.weekendCents > 0 ? formatUsdCents(facts.weekendCents) : EMPTY}
-            onClick={facts.weekendCents > 0 ? () => navigate("/stats/weekend") : undefined}
+            onClick={
+              isCurrentMonth && facts.weekendCents > 0
+                ? () => navigate("/stats/weekend")
+                : undefined
+            }
           />
           <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
           <Fact caption="No-spend days" value={String(facts.noSpendDays)} />

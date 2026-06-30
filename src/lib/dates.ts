@@ -14,6 +14,18 @@ export function monthLabel(now = new Date()): string {
   return now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+/**
+ * A date that anchors the month-scoped stats for `offset` months back from
+ * `now` (0 = this month, -1 = last month, …). The current month anchors at
+ * `now` so "elapsed days" reflect the partial month; past months anchor at
+ * their last day (noon, to dodge DST/TZ edges) so the whole month counts as
+ * elapsed and the forecast/pace math sees a finished month.
+ */
+export function monthAnchor(offset: number, now = new Date()): Date {
+  if (offset === 0) return now;
+  return new Date(now.getFullYear(), now.getMonth() + offset + 1, 0, 12, 0, 0, 0);
+}
+
 /** True when an ISO timestamp falls on the same LOCAL calendar day as `now`. */
 export function isToday(iso: string, now = new Date()): boolean {
   const d = new Date(iso);

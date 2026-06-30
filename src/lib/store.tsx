@@ -46,6 +46,11 @@ type Store = {
   loading: boolean;
   transactions: Transaction[];
   lbpPerUsd: number;
+  // Running balance = all-time net of every transaction (income adds, expenses
+  // and transfers into the Safe subtract). This carries forward across months,
+  // so a new month opens at last month's standing instead of snapping to $0.
+  balanceCents: number;
+  // This month's net on its own — still handy as a "+/- this month" sub-line.
   monthlyNetCents: number;
   addTransaction: (tx: NewTransaction) => Promise<Result>;
   updateTransaction: (id: string, tx: NewTransaction) => Promise<Result>;
@@ -485,6 +490,11 @@ export function StoreProvider({
     [safeGoldEntries],
   );
 
+  // The carried-forward balance: net of everything we hold, all-time. Bounded by
+  // the same FETCH_CAP as the rest of the store — with more than FETCH_CAP rows
+  // it reflects the most recent window, exactly like the Safe total.
+  const balanceCents = useMemo(() => netCents(transactions), [transactions]);
+
   const monthlyNetCents = useMemo(() => {
     const { from, to } = currentMonthRange();
     const inMonth = transactions.filter((t) => {
@@ -521,6 +531,7 @@ export function StoreProvider({
     loading,
     transactions,
     lbpPerUsd,
+    balanceCents,
     monthlyNetCents,
     addTransaction,
     updateTransaction,

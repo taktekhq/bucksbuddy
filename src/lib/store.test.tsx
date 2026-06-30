@@ -132,6 +132,8 @@ describe("StoreProvider / useStore", () => {
     expect(result.current.lbpPerUsd).toBe(90000);
     expect(result.current.transactions).toHaveLength(3);
     expect(result.current.monthlyNetCents).toBe(3000); // 5000 in − 2000 safe out
+    // Running balance carries all-time: +5000 −2000 +500 (the 2020 withdrawal).
+    expect(result.current.balanceCents).toBe(3500);
     expect(result.current.safeTotalCents).toBe(1500); // +2000 in, −500 out
     expect(result.current.safeGoldGrams).toBe(3); // 5 deposited - 2 withdrawn
   });
