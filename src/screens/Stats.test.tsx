@@ -205,6 +205,37 @@ describe("Stats", () => {
     expect(screen.queryByText("Where it goes")).not.toBeInTheDocument();
   });
 
+  it("shows a quiet-month message for a past month with nothing logged", async () => {
+    dailySpendSeries.mockReturnValue([point("2026-06-09", 0, 0), point("2026-06-10", 0, 0)]);
+    monthSpendSeries.mockReturnValue([point("2026-05-01", 0, 0), point("2026-05-31", 0, 0)]);
+    topCategories.mockReturnValue([]);
+    monthInsights.mockReturnValue(
+      insights({ spentCents: 0, incomeCents: 0, spendCount: 0, biggestExpense: null, busiestDay: null }),
+    );
+    storeValue = makeStoreValue({
+      transactions: [{ occurred_at: "2000-01-01T10:00:00.000Z" } as Transaction],
+    });
+    render(<Stats signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText(/Nothin' logged this month, Doc\./)).toBeInTheDocument();
+  });
+
+  it("shows an em-dash for per-month and last-month when neither has spending", () => {
+    monthlySpendTotals.mockReturnValue([
+      month(-2, 0, "Apr"),
+      month(-1, 0, "May"),
+      month(0, 1000, "Jun", true),
+    ]);
+    render(<Stats signedIn />);
+    expect(screen.getByText("Spending by month")).toBeInTheDocument();
+    expect(screen.getByText("Per month")).toBeInTheDocument();
+    expect(screen.getByText("Last month")).toBeInTheDocument();
+    // Neither chip has anything behind it, so both wear an em-dash and the
+    // "Last month" chip isn't tappable.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByRole("button", { name: /Last month/ })).not.toBeInTheDocument();
+  });
+
   it("veils personal stats in the user's own ciphertext while locked", async () => {
     const maskedTx = (id: string, amountMask?: string) =>
       ({ id, amountMask }) as unknown as Transaction;
@@ -298,6 +329,38 @@ describe("Stats", () => {
     expect(screen.getByText("$50.00")).toBeInTheDocument();
     // The bars are month pickers with accessible amounts.
     expect(screen.getByRole("button", { name: "May: $50.00" })).toBeInTheDocument();
+  });
+
+  it("pages the whole screen to a month by tapping its bar, and back with Next", async () => {
+    monthlySpendTotals.mockReturnValue([
+      month(-2, 3000, "Apr"),
+      month(-1, 5000, "May"),
+      month(0, 1000, "Jun", true),
+    ]);
+    render(<Stats signedIn />);
+
+    expect(screen.getByText("Spent this month")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "May: $50.00" }));
+    // Tapping a bar pages straight there, bypassing the prev/next constraints.
+    expect(screen.queryByText("Spent this month")).not.toBeInTheDocument();
+    expect(screen.getByText("Spent")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText("Spent this month")).toBeInTheDocument();
+    // Capped at the present: Next stays disabled once back on the current month.
+    expect(screen.getByRole("button", { name: "Next month" })).toBeDisabled();
+  });
+
+  it("jumps to last month from the Last month fact chip", async () => {
+    monthlySpendTotals.mockReturnValue([
+      month(-2, 3000, "Apr"),
+      month(-1, 5000, "May"),
+      month(0, 1000, "Jun", true),
+    ]);
+    render(<Stats signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: /Last month/ }));
+    expect(screen.queryByText("Spent this month")).not.toBeInTheDocument();
+    expect(screen.getByText("Spent")).toBeInTheDocument();
   });
 
   it("pages to a past month, dropping the present-tense facts", async () => {

@@ -165,6 +165,9 @@ describe("monthlySpendTotals", () => {
         amount_usd_cents: 9999,
       }),
       tx({ id: "safe", category: "safe", occurred_at: at(2026, 5, 2), amount_usd_cents: 9999 }),
+      // Older than the 6-month window: falls outside every bucket, so it's
+      // dropped rather than crashing on a missing map entry.
+      tx({ id: "ancient", occurred_at: at(2025, 0, 1), amount_usd_cents: 9999 }),
     ];
     const months = monthlySpendTotals(rows, 6, NOW);
     expect(months).toHaveLength(6);
