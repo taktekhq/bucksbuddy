@@ -110,6 +110,22 @@ describe("History", () => {
     expect(screen.getByText("May 2026")).toBeInTheDocument();
     expect(screen.getByText("Coffee")).toBeInTheDocument();
     expect(screen.queryByText("Gas")).not.toBeInTheDocument();
+
+    // Page forward again: back to June, and capped at the present.
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText("June 2026")).toBeInTheDocument();
+    expect(screen.getByText("Gas")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next month" })).toBeDisabled();
+  });
+
+  it("shows an empty message in the category view for a quiet month", () => {
+    storeValue = makeStoreValue({
+      transactions: [tx({ id: "may", occurred_at: "2026-05-12T10:00:00.000Z" })],
+    });
+    render(<History />);
+    fireEvent.click(screen.getByRole("tab", { name: "By category" }));
+    expect(screen.getByText("June 2026")).toBeInTheDocument();
+    expect(screen.getByText("Nothin' logged this month, Doc.")).toBeInTheDocument();
   });
 
   it("goes back home from the back button", () => {
