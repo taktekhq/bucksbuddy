@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
+import posthog from "@/lib/posthog";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
@@ -175,6 +176,13 @@ export function Safe() {
     if (saveError) {
       setError(saveError);
       return;
+    }
+    if (isGold) {
+      posthog.capture(isDeposit ? "safe_gold_deposited" : "safe_gold_withdrawn");
+    } else {
+      posthog.capture(isDeposit ? "safe_cash_deposited" : "safe_cash_withdrawn", {
+        currency,
+      });
     }
     setDisplay("");
     setNote("");

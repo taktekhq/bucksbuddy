@@ -4,6 +4,7 @@ import { registerSW } from "virtual:pwa-register";
 import { Analytics } from "@vercel/analytics/react";
 import App from "@/App";
 import { redirectBarePath } from "@/lib/router";
+import "@/lib/posthog";
 import "./index.css";
 
 // Map bare marketing paths (/privacy, /terms, /contact) onto their hash routes

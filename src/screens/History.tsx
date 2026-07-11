@@ -10,6 +10,7 @@ import { requestEdit } from "@/lib/editIntent";
 import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
 import { groupByCategory, groupByDay } from "@/lib/history";
 import { useHistoryGrouping } from "@/lib/useHistoryGrouping";
+import posthog from "@/lib/posthog";
 import type { Transaction } from "@/types/db";
 
 // The full history in its own page — a deep, neutral-charcoal "rabbit hole"
@@ -58,6 +59,10 @@ export function History() {
   async function handleDelete(tx: Transaction) {
     if (window.confirm("Delete this entry?")) {
       await deleteTransaction(tx.id);
+      posthog.capture("transaction_deleted", {
+        category: tx.category,
+        is_income: tx.is_income,
+      });
     }
   }
 

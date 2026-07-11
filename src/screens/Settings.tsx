@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabase";
 import { navigate } from "@/lib/router";
 import { transactionsToCsv } from "@/lib/csv";
 import { useStore } from "@/lib/store";
+import posthog from "@/lib/posthog";
 
 export function Settings() {
   const [email, setEmail] = useState("");
@@ -38,6 +39,7 @@ export function Settings() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    posthog.capture("csv_exported", { row_count: transactions.length });
   }
 
   return (
@@ -124,11 +126,11 @@ function DeleteAccountCard() {
     setBusy(true);
     setErr(null);
     const { error } = await deleteAccount();
-    // On success the session ends and App swaps to the landing page, so there's
-    // nothing to reset here. On failure, surface it and let them try again.
     if (error) {
       setBusy(false);
       setErr(error);
+    } else {
+      posthog.capture("account_deleted");
     }
   }
 
@@ -210,6 +212,7 @@ function EncryptionCard() {
     const { error } = locked ? await unlock(pass) : await enableEncryption(pass);
     setBusy(false);
     if (error) setErr(error);
+    else if (!locked && !on) posthog.capture("encryption_enabled");
   }
 
   async function turnOff() {
@@ -218,6 +221,7 @@ function EncryptionCard() {
     const { error } = await disableEncryption();
     setBusy(false);
     if (error) setErr(error);
+    else posthog.capture("encryption_disabled");
   }
 
   // A saved-and-unlocked passphrase is the only state we mask (with the eye);

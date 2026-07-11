@@ -17,6 +17,7 @@ import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
+import posthog from "@/lib/posthog";
 import { takePendingEdit } from "@/lib/editIntent";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { isToday, monthLabel } from "@/lib/dates";
@@ -79,6 +80,10 @@ export function Home() {
   async function handleDelete(tx: Transaction) {
     if (window.confirm("Delete this entry?")) {
       await deleteTransaction(tx.id);
+      posthog.capture("transaction_deleted", {
+        category: tx.category,
+        is_income: tx.is_income,
+      });
     }
   }
 

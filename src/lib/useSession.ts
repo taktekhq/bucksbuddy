@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import posthog from "@/lib/posthog";
 
 // Pull implicit-flow recovery tokens out of the URL hash. Supabase dashboard
 // "send password reset" emails always use this format (access_token +
@@ -52,17 +53,23 @@ export function useSession() {
     } else {
       supabase.auth.getSession().then(({ data }) => {
         setSession(data.session);
+        if (data.session) {
+          posthog.identify(data.session.user.id, { email: data.session.user.email });
+        }
         setReady(true);
       });
     }
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
-      // PASSWORD_RECOVERY is the SDK's own signal — fires when it auto-detects
-      // a recovery callback (e.g. PKCE-style ?code= reset links). Cover that
-      // case too, so this works whether the email uses implicit or PKCE.
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
-      else if (event === "SIGNED_OUT") setRecoveryMode(false);
+      else if (event === "SIGNED_OUT") {
+        setRecoveryMode(false);
+        posthog.reset();
+      } else if (event === "SIGNED_IN" && s) {
+        posthog.identify(s.user.id, { email: s.user.email });
+        posthog.capture("signed_in");
+      }
     });
 
     return () => sub.subscription.unsubscribe();

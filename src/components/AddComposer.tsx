@@ -5,6 +5,7 @@ import { useStore } from "@/lib/store";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
 import { formatUsdCents } from "@/lib/money";
+import posthog from "@/lib/posthog";
 import type { Transaction } from "@/types/db";
 
 const INCOME_COLOR = "#34C759";
@@ -106,8 +107,20 @@ export function AddComposer({
       setError(saveError);
       return;
     }
-    if (editing) onClearEdit();
+    if (editing) {
+      posthog.capture("transaction_updated", {
+        category,
+        is_income: isIncome,
+        currency,
+      });
+      onClearEdit();
+    }
     else {
+      posthog.capture("transaction_added", {
+        category,
+        is_income: isIncome,
+        currency,
+      });
       setDisplay("");
       setCategory(null);
       setNote("");
