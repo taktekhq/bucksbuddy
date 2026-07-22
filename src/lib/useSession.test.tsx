@@ -17,6 +17,7 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 import { useSession } from "@/lib/useSession";
+import posthog from "@/lib/posthog";
 
 describe("useSession", () => {
   beforeEach(() => {
@@ -60,6 +61,24 @@ describe("useSession", () => {
 
     unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not identify with PostHog when SIGNED_IN carries no session", async () => {
+    // Supabase types allow a null session on any event; identifying would
+    // then crash on s.user, so the handler must skip analytics entirely.
+    const identify = vi.spyOn(posthog, "identify");
+    let listener: (event: string, s: unknown) => void = () => {};
+    onAuthStateChange.mockImplementation((cb: typeof listener) => {
+      listener = cb;
+      return { data: { subscription: { unsubscribe } } };
+    });
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    act(() => listener("SIGNED_IN", null));
+    expect(result.current.session).toBeNull();
+    expect(identify).not.toHaveBeenCalled();
   });
 
   it("flips recoveryMode on PASSWORD_RECOVERY and clears it on SIGNED_OUT", async () => {

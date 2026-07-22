@@ -175,6 +175,17 @@ describe("Safe", () => {
     );
   });
 
+  it("saves a gold withdrawal", async () => {
+    render(<Safe />);
+    await userEvent.click(screen.getByRole("button", { name: /Gold/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Take out/ }));
+    await userEvent.type(screen.getByLabelText("Grams"), "2");
+    await userEvent.click(screen.getByRole("button", { name: /Take 2 g out/ }));
+    expect(storeValue.addSafeGoldEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ is_deposit: false, grams: 2 }),
+    );
+  });
+
   it("clamps cash amounts to two decimals", async () => {
     render(<Safe />);
     const amount = screen.getByLabelText("Amount") as HTMLInputElement;
