@@ -1,0 +1,14 @@
+{
+  "name": "@bucksbuddy/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./crypto": "./src/crypto.ts",
+    "./crypto-vectors": "./src/crypto-vectors.ts"
+  },
+  "devDependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@noble/hashes": "^2.4.0"
+  }
+}

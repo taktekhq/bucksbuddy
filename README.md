@@ -128,6 +128,27 @@ cp .env.example .env.local   # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KE
 npm run dev                  # http://localhost:5173
 ```
 
+### Expo development build (in progress)
+
+The native shell lives in `apps/mobile` and targets Expo SDK 57. It uses a
+custom development client because BucksBuddy's native encryption layer—and the
+future on-device LLM runtime—require native modules.
+
+```bash
+cp apps/mobile/.env.example apps/mobile/.env
+# Fill in EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY
+npm install
+npm run mobile:ios           # or npm run mobile:android
+```
+
+The current parity probe signs in and reads transaction metadata from Supabase.
+Encrypted values intentionally appear as `••••` until native AES-GCM/PBKDF2 has
+passed the checked-in web compatibility vectors. After signing in, use **Run
+crypto compatibility gate** to validate the native provider and capture the
+PBKDF2 timing on the device. See
+[`docs/EXPO_MIGRATION.md`](docs/EXPO_MIGRATION.md) for the gates and remaining
+screen order.
+
 Production build / preview:
 
 ```bash

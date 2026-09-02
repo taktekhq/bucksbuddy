@@ -29,6 +29,10 @@ jobs:
       - run: npm ci
       # Type-check + production build must succeed.
       - run: npm run build
+      - run: npm run core:typecheck
+      # The Expo shell is intentionally bundled separately from the frozen web
+      # oracle. Keep its SDK and React Native types honest on every change.
+      - run: npm run mobile:typecheck
       # Enforces the 100% coverage thresholds from vitest.config.ts.
       - run: npm run coverage
 

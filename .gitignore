@@ -1,8 +1,13 @@
 # dependencies
 /node_modules
+apps/*/node_modules
 
 # build output
 /dist
+apps/mobile/.expo
+apps/mobile/dist
+apps/mobile/ios
+apps/mobile/android
 
 # test coverage
 /coverage
@@ -17,6 +22,7 @@
 .env
 .env.local
 .env*.local
+apps/mobile/.env
 
 # misc
 .DS_Store

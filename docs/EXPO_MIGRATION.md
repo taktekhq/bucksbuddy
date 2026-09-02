@@ -1,8 +1,13 @@
 # Taking BucksBuddy native (Expo) — plan & validation strategy
 
-> Status: **proposal**. Nothing here is implemented yet. The point of writing it
-> down first is that the *sequence* matters more than any individual step: done
-> in the right order, every stage is guarded by tests that already exist. Done
+> Status: **in progress**. The SDK 57 development-client shell, native Supabase
+> session persistence, and the encrypted transaction-list parity probe are in
+> `apps/mobile`. Crypto is now the first extracted shared-core module and the
+> native vector/benchmark screen is wired; amounts stay obscured until that
+> gate passes on real devices. The point
+> of writing the sequence down is that it matters more than any individual
+> step: done in the right order, every stage is guarded by tests that already
+> exist. Done
 > as a big-bang rewrite, we throw away the only oracle we have.
 
 ## Why we're doing this
@@ -137,6 +142,39 @@ purpose. If cross-platform decryption doesn't work, we need to know in week two,
 not week eight.
 
 *Rough size: 3–5 days, most of it auth and native build setup.*
+
+#### Implemented so far
+
+- Expo SDK 57 + Expo Router under `apps/mobile`.
+- Custom development-client and EAS development/simulator profiles.
+- iOS and Android application identifiers plus the `bucksbuddy://` deep-link
+  scheme.
+- Supabase auth persistence over AsyncStorage with URL session detection off.
+- Email/password sign-in and a real, refreshable transaction metadata query.
+- A deliberate encrypted-value mask. The mobile shell does not attempt to
+  interpret ciphertext before Validator #4 is wired to native crypto.
+- A shared `@bucksbuddy/core/crypto` implementation with an injected provider,
+  used by both Vite/WebCrypto and Expo/react-native-quick-crypto.
+- A native `/crypto-check` route that opens the frozen default/passphrase
+  browser envelopes, validates the verifier and native round-trip, and measures
+  PBKDF2 at 600,000 iterations.
+- The noble referee from Validator #4: `packages/core/src/crypto-noble.ts`
+  reimplements the envelope format in pure JS (`@noble/ciphers` +
+  `@noble/hashes`), and a three-way vector test asserts it agrees with
+  WebCrypto on the frozen envelopes and on fresh round trips in both
+  directions. Runs on every push, alongside WebCrypto's own suite.
+- Coverage fixed to actually gate `packages/core`: extracting `crypto.ts` had
+  quietly dropped it out of `vitest.config.ts`'s coverage `include` (scoped to
+  `src/**`), so it stopped being measured by the 100% gate and was only
+  still watched by nightly mutation testing. Now included explicitly.
+
+The remaining Phase 1 work is executing and recording the crypto-check gate on
+real iOS and low-end Android hardware, and wiring Google OAuth/password-recovery
+deep linking. The on-device run is currently blocked on tooling, not code: this
+Mac's Xcode 26.3 (Swift 6.2.4) hits a known Expo SDK 57 / `expo-modules-jsi`
+Swift-C++ interop compile failure ([expo/expo#46242](https://github.com/expo/expo/issues/46242));
+Expo's maintainers say SDK 56/57 need Xcode 26.4+ (Swift 6.3). Needs an Xcode
+upgrade before the gate can run for real.
 
 ### Phase 2 — Port the screens
 

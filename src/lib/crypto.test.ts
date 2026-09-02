@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_PASSPHRASE,
   checkVerifier,
+  configureCryptoPort,
   decryptString,
   encryptString,
   generateMasterKey,
@@ -9,8 +10,29 @@ import {
   unwrapMasterKey,
   wrapMasterKey,
 } from "@/lib/crypto";
+import { CRYPTO_COMPATIBILITY_VECTORS as VECTORS } from "@bucksbuddy/core/crypto-vectors";
 
 describe("crypto", () => {
+  it("supports an explicitly injected WebCrypto provider", async () => {
+    configureCryptoPort(globalThis.crypto);
+    try {
+      await expect(generateMasterKey()).resolves.toBeDefined();
+    } finally {
+      configureCryptoPort(null);
+    }
+  });
+
+  it("fails clearly when a provider has no subtle crypto implementation", () => {
+    configureCryptoPort({} as Crypto);
+    try {
+      expect(() => generateMasterKey()).toThrow(
+        "A WebCrypto-compatible provider is required",
+      );
+    } finally {
+      configureCryptoPort(null);
+    }
+  });
+
   it("round-trips a (unicode) string through encrypt/decrypt", async () => {
     const key = await generateMasterKey();
     const blob = await encryptString(key, "héllo, 🥕 $1,234.50");
@@ -68,27 +90,16 @@ describe("crypto", () => {
 //
 // They are also the seed of the web/native compatibility vectors the Expo port
 // needs: a second implementation must decrypt exactly these bytes.
-const VECTORS = {
-  wrappedDefault:
-    "v1.iaIMBwjX2SAto+xWa6sNeg==.bLiokF12kIDlCbdL.cg0wVhs4dLIU2qYUJOaWOMUAt/3KYDfEAVqCm3H0mHQrDpLtaMBfpFZPUOJWKVb/",
-  wrappedPass:
-    "v1.uCSP82HzLbp+tbY4Lo6cZQ==.DuSEW2jhCkKqNccc.+aLeosiwyn4gZQHW8oxo1ooRyhxdGV/aFBcJZ3m88xU6TaXywp/CpyP71DAJqInW",
-  verifier: "VjDRaJSUt/w3pqmw.TGjx2xGSN6ydpbsZDOPVB5SIHbIirGXDomBJpuybTT+4",
-  amount: "fMm1fT5T+welo1Ye.1U41d6Cau6ujeWVTHa8mbZ+Kha0=",
-  note: "nAU6PMRx9Y27kMjj.GtEPw0jIq1eBwLW1RyEyeEyH/kYDAdNOHfhGkF6MYw==",
-  passphrase: "correct horse battery staple",
-};
-
 describe("stored-format compatibility", () => {
   it("opens a vault wrapped under the shipped default passphrase", async () => {
     const key = await unwrapMasterKey(VECTORS.wrappedDefault, DEFAULT_PASSPHRASE);
-    expect(await decryptString(key, VECTORS.amount)).toBe("1250");
-    expect(await decryptString(key, VECTORS.note)).toBe('café, "quoted"');
+    expect(await decryptString(key, VECTORS.amount)).toBe(VECTORS.expectedAmount);
+    expect(await decryptString(key, VECTORS.note)).toBe(VECTORS.expectedNote);
   });
 
   it("opens the same vault under a user passphrase", async () => {
     const key = await unwrapMasterKey(VECTORS.wrappedPass, VECTORS.passphrase);
-    expect(await decryptString(key, VECTORS.amount)).toBe("1250");
+    expect(await decryptString(key, VECTORS.amount)).toBe(VECTORS.expectedAmount);
   });
 
   it("still recognises a verifier written by an earlier build", async () => {
@@ -107,6 +118,6 @@ describe("stored-format compatibility", () => {
     const key = await unwrapMasterKey(VECTORS.wrappedDefault, DEFAULT_PASSPHRASE);
     const rewrapped = await wrapMasterKey(key, "a new passphrase");
     const reopened = await unwrapMasterKey(rewrapped, "a new passphrase");
-    expect(await decryptString(reopened, VECTORS.amount)).toBe("1250");
+    expect(await decryptString(reopened, VECTORS.amount)).toBe(VECTORS.expectedAmount);
   });
 });

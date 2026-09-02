@@ -1,7 +1,11 @@
 {
-  "name": "bucksbuddy",
+  "name": "@bucksbuddy/web",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +14,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "mutation": "stryker run"
+    "mutation": "stryker run",
+    "mobile": "npm --workspace @bucksbuddy/mobile run start",
+    "mobile:ios": "npm --workspace @bucksbuddy/mobile run ios",
+    "mobile:android": "npm --workspace @bucksbuddy/mobile run android",
+    "mobile:typecheck": "npm --workspace @bucksbuddy/mobile run typecheck",
+    "core:typecheck": "tsc -p packages/core/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

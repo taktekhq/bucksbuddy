@@ -14,7 +14,7 @@
   "coverageAnalysis": "perTest",
   "mutate": [
     "src/lib/cache.ts",
-    "src/lib/crypto.ts",
+    "packages/core/src/crypto.ts",
     "src/lib/csv.ts",
     "src/lib/currency.ts",
     "src/lib/dates.ts",
