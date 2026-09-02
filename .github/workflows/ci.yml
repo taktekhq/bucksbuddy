@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Nightly, so the mutation score can't rot unnoticed between releases.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
@@ -27,3 +31,30 @@ jobs:
       - run: npm run build
       # Enforces the 100% coverage thresholds from vitest.config.ts.
       - run: npm run coverage
+
+  mutation:
+    name: Mutation score (Stryker)
+    # Coverage is pinned at 100% and so cannot move, which makes it blind to a
+    # refactor that keeps every line executed while weakening the assertions
+    # around it. The mutation score is the signal that can still move, and it
+    # matters most while the core is being extracted for the Expo port.
+    #
+    # It takes minutes rather than seconds, so it runs nightly and on demand
+    # rather than on every push — but it is not optional, or the score rots.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'mutation')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # stryker.conf.json breaks the build below a 100% score.
+      - run: npm run mutation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          retention-days: 14

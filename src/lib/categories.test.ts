@@ -117,10 +117,11 @@ describe("the safe category", () => {
 });
 
 describe("id lookup precedence and missing subcategories", () => {
-  // "family" and "other" are top-level in BOTH lists; the expense list is
-  // registered first, so it wins. Without that guard the income entry would
-  // silently replace it.
-  it("keeps the expense entry when an id appears in both lists", () => {
+  // "family" and "other" are top-level in BOTH lists. The two definitions are
+  // currently identical, so which one wins is unobservable — this pins that
+  // they agree, which is the property the duplication relies on. If they ever
+  // diverge, the registration guard decides, and this test starts to bite.
+  it("resolves an id that appears in both lists, consistently", () => {
     const fromExpense = EXPENSE_CATEGORIES.find((c) => c.id === "other")!;
     expect(categoryIcon("other")).toBe(fromExpense.icon);
     expect(categoryColor("other")).toBe(fromExpense.color);

@@ -311,26 +311,57 @@ concretely, so it doesn't ambush us in Phase 2:
   should be commented with *why*. An honest 100% with three justified ignores
   beats a dishonest 92%.
 
-### 9. Mutation testing
+### 9. Mutation testing — done, at 100%
 
 100% coverage proves every line *ran*. It does not prove any assertion would
-notice if the line were wrong — and this is a money app, where "the test executed
+notice the line being wrong — and this is a money app, where "the test executed
 `netCents` and asserted nothing useful" is exactly the failure we can't afford.
-Mutation testing closes that gap: flip `+` to `-`, `>` to `>=`, drop a branch,
-and see whether the suite screams.
 
-**Stryker** (`@stryker-mutator/core` + `vitest-runner` + `typescript-checker`),
-targeted at `packages/core`. Not the UI — mutating JSX produces mostly-equivalent
-mutants and enormous runtimes for very little signal. The money math is where
-this pays.
+**Stryker is now in place across the thirteen pure-core modules and scores
+100%**, enforced by a break threshold and run nightly (plus on demand, and on
+any PR labelled `mutation`). The starting score was 74.95%. Coverage was 100%
+before and after — none of the tests written to get there added a covered line,
+which is the whole point.
 
-Sequencing matters: **baseline the mutation score on `main` before the core
-extraction**, so we can prove the port didn't weaken the suite. A refactor that
-holds 100% coverage while quietly dropping the mutation score is exactly the kind
-of silent regression this migration needs to catch.
+Three things worth carrying into the port:
 
-Set the threshold at whatever the baseline turns out to be, then ratchet upward.
-Don't pick a number in advance and then argue with reality.
+- **The gaps were fixture coincidences, not untested paths.** Assertions that
+  passed for the wrong reason: a `coffeeCount: 4` that held under an inverted
+  condition because the fixture happened to be half coffee; a forecast that
+  couldn't tell June's 30 days from April's; month-edge behaviour never probed
+  because every fixture sat at noon. None of these are visible in review.
+- **`crypto`'s gaps were all stored-format contracts** — the version tag, the
+  default passphrase, the verifier plaintext. Round-trip tests structurally
+  cannot catch them, because they re-encrypt with whatever the constant
+  currently says. Golden envelopes are now checked in as data, and they are the
+  first of the web/native vectors Validator #4 needs.
+- **The Supabase mock discarded every builder argument**, so tests could see
+  *that* an update happened but not that it wrote the right column or filtered
+  on the right user. It now records them. This matters directly for the port:
+  the native store issues these same queries.
+
+**Do not point Stryker at data.** `categories.ts` is 288 lines that are mostly a
+static table of 67 category definitions, and it alone produced 211 of the
+original 256 survivors — all `StringLiteral`/`ObjectLiteral` mutants on labels
+and colours. Killing those would mean duplicating the table in a test file: a
+change-detector that protects against no defect and doubles the cost of adding
+a category. The file is mutated from line 239, where the table ends and the
+lookup logic begins. That exclusion is also what makes it affordable — the run
+went from **41 minutes to about 5**.
+
+Twenty-three mutants are genuinely equivalent and suppressed **individually with
+reasons**, never blanket-disabled. A 100% score is only as honest as those
+comments, so each was checked rather than argued — several differentially,
+running mutated against original over a randomized corpus. The recurring
+categories: module-level `Intl` constants Stryker can never activate (it flips
+mutants per-test, but modules evaluate once at import); comparisons that
+coincide at zero; and guards made redundant by a surrounding `try/catch` that
+returns the same value.
+
+When Phase 0 extracts `packages/core`, `store.tsx`'s logic becomes pure and
+should join the mutated set. React glue — `router`, the hooks — should not:
+mutating JSX yields mostly-equivalent mutants and long runtimes for little
+signal.
 
 ### 10. CI shape
 
@@ -341,7 +372,7 @@ Don't pick a number in advance and then argue with reality.
 | `packages/core` on Hermes | every push |
 | crypto vectors, three-way | every push |
 | `apps/mobile` jest-expo — 100% coverage | every push |
-| Stryker mutation run on `packages/core` | nightly + `mutation` label |
+| Stryker mutation run on `packages/core` (100% gate) | nightly + `mutation` label + dispatch |
 | EAS build + Maestro | nightly + `e2e` label |
 
 Mutation runs are minutes, not seconds, so they don't belong on every push. But
@@ -372,7 +403,7 @@ they must be non-optional on a schedule, or the score quietly rots.
 | | |
 |---|---|
 | **Coverage** | Stays at **100%**, core and mobile shell alike. No relaxation. |
-| **Mutation testing** | Yes — Stryker on `packages/core`, baselined on `main` before the port. |
+| **Mutation testing** | Yes — Stryker on the pure core, **at 100%** and gated. Done before the port, so the port has a baseline to preserve. |
 | **The web app** | **Kept and frozen.** Serves as the parity oracle during the migration; its long-term fate is a Phase 4 question. |
 | **Platform order** | **iOS first, then Android** — but see below. |
 | **On-device LLM** | Out of scope for now. Architecture keeps the door open. |

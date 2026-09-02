@@ -238,6 +238,10 @@ export const SAFE_CATEGORY: Category = {
 
 const byId = new Map<string, Category>();
 for (const c of [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES, SAFE_CATEGORY]) {
+  // Stryker disable next-line ConditionalExpression : equivalent today — the
+  // ids appearing in both lists ("family", "other") have identical definitions,
+  // so first-wins and last-wins are indistinguishable. The guard stays as the
+  // deliberate rule for if they ever diverge.
   if (!byId.has(c.id)) byId.set(c.id, c);
 }
 

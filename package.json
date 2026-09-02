@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "mutation": "stryker run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

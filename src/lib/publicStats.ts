@@ -25,6 +25,12 @@ function toCount(v: unknown): number | null {
 export async function fetchPublicStats(): Promise<PublicStats | null> {
   try {
     const { data, error } = await supabase.rpc("public_stats");
+    // Stryker disable next-line ConditionalExpression : the `data == null` and
+    // `typeof data !== "object"` arms are equivalent in isolation — a null
+    // payload throws on the property read below and lands in the catch, and a
+    // primitive one reads as undefined and fails toCount. Both return null
+    // regardless. They are kept as the explicit, cheap rejection. (The `error`
+    // arm is not redundant and is asserted.)
     if (error || data == null || typeof data !== "object") return null;
     const blob = data as Record<string, unknown>;
 
@@ -37,7 +43,11 @@ export async function fetchPublicStats(): Promise<PublicStats | null> {
 
     const topCategories: PublicCategoryCount[] = [];
     for (const entry of Array.isArray(blob.top_categories) ? blob.top_categories : []) {
+      // Stryker disable next-line OptionalChaining : equivalent — a null entry
+      // without the chain throws into the catch, which returns null, exactly as
+      // the type check below does. The chain keeps the rejection explicit.
       const category = (entry as Record<string, unknown> | null)?.category;
+      // Stryker disable next-line OptionalChaining : equivalent, as above.
       const count = toCount((entry as Record<string, unknown> | null)?.count);
       if (typeof category !== "string" || count === null) return null;
       topCategories.push({ category, count });
