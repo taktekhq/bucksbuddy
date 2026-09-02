@@ -337,6 +337,91 @@ describe("monthInsights", () => {
   });
 });
 
+// --- boundary, ordering and tie-break specs -------------------------------
+// These pin behaviour that the fixtures above cover but never distinguish:
+// entries exactly on a month edge, the category sort and its tiebreak, and
+// which row wins when two are equal.
+
+describe("dailySpendSeries edges", () => {
+  it("includes today when `now` falls exactly on midnight", () => {
+    // With a mid-afternoon `now` the final day is inside the window either
+    // way; at exactly midnight, only an inclusive bound keeps it.
+    const midnight = new Date(2026, 5, 10, 0, 0, 0, 0);
+    expect(dailySpendSeries([], 2, midnight)).toHaveLength(2);
+  });
+
+  it("clamps the window to the oldest row, wherever it sits in the array", () => {
+    // At the fetch cap the window starts at the oldest row rather than the
+    // full `days` back. The oldest is deliberately NOT last in the array.
+    const rows = [
+      tx({ id: "oldest", occurred_at: at(2026, 5, 5) }),
+      ...Array.from({ length: FETCH_CAP - 1 }, (_, i) =>
+        tx({ id: `r${i}`, occurred_at: at(2026, 5, 9) }),
+      ),
+    ];
+    // June 5 → June 10 inclusive is six days; the naive 30-day window is longer.
+    expect(dailySpendSeries(rows, 30, NOW)).toHaveLength(6);
+  });
+});
+
+describe("topCategories ordering", () => {
+  const rows = [
+    // Insertion order is deliberately the reverse of the expected order, so an
+    // unsorted or wrongly-sorted result cannot coincide with the right one.
+    tx({ id: "c1", category: "coffee", amount_usd_cents: 300, occurred_at: at(2026, 5, 2) }),
+    tx({ id: "c2", category: "coffee", amount_usd_cents: 200, occurred_at: at(2026, 5, 3) }),
+    tx({ id: "f1", category: "fun", amount_usd_cents: 100, occurred_at: at(2026, 5, 2) }),
+    tx({ id: "f2", category: "fun", amount_usd_cents: 100, occurred_at: at(2026, 5, 3) }),
+    tx({ id: "f3", category: "fun", amount_usd_cents: 100, occurred_at: at(2026, 5, 4) }),
+    tx({ id: "f4", category: "fun", amount_usd_cents: 100, occurred_at: at(2026, 5, 5) }),
+    tx({ id: "f5", category: "fun", amount_usd_cents: 100, occurred_at: at(2026, 5, 6) }),
+    tx({ id: "g1", category: "groceries", amount_usd_cents: 1000, occurred_at: at(2026, 5, 2) }),
+  ];
+
+  it("sorts by spend, then breaks ties on entry count", () => {
+    // groceries 1000c; coffee and fun tie at 500c, so the busier one (fun, 5
+    // entries) comes first.
+    expect(topCategories(rows, 6, NOW).map((c) => c.category)).toEqual([
+      "groceries",
+      "fun",
+      "coffee",
+    ]);
+  });
+
+  it("counts an entry at exactly midnight on the 1st, and not next month's", () => {
+    const edge = [
+      tx({ id: "in", category: "fun", amount_usd_cents: 500, occurred_at: at(2026, 5, 1, 0) }),
+      tx({ id: "out", category: "coffee", amount_usd_cents: 900, occurred_at: at(2026, 6, 1, 0) }),
+    ];
+    expect(topCategories(edge, 6, NOW).map((c) => c.category)).toEqual(["fun"]);
+  });
+});
+
+describe("monthInsights tie-breaks", () => {
+  it("keeps the first of two equally large expenses", () => {
+    const first = tx({ id: "first", amount_usd_cents: 900, occurred_at: at(2026, 5, 2) });
+    const second = tx({ id: "second", amount_usd_cents: 900, occurred_at: at(2026, 5, 3) });
+    expect(monthInsights([first, second], NOW).biggestExpense?.id).toBe("first");
+  });
+
+  it("keeps the first of two equally busy days", () => {
+    const rows = [
+      tx({ id: "a1", occurred_at: at(2026, 5, 2, 9) }),
+      tx({ id: "a2", occurred_at: at(2026, 5, 2, 10) }),
+      tx({ id: "b1", occurred_at: at(2026, 5, 3, 9) }),
+      tx({ id: "b2", occurred_at: at(2026, 5, 3, 10) }),
+    ];
+    expect(monthInsights(rows, NOW).busiestDay?.date).toBe(key(2026, 5, 2));
+  });
+
+  it("counts shopping as a treat, alongside fun and self care", () => {
+    const rows = [
+      tx({ id: "s", category: "shopping/clothes", amount_usd_cents: 600, occurred_at: at(2026, 5, 2) }),
+    ];
+    expect(monthInsights(rows, NOW).treatCents).toBe(600);
+  });
+});
+
 describe("treatTransactions", () => {
   it("returns this month's treats, newest first", () => {
     const rows = [
@@ -348,6 +433,16 @@ describe("treatTransactions", () => {
       tx({ id: "jul", category: "shopping", occurred_at: at(2026, 6, 1) }),
     ];
     expect(treatTransactions(rows, NOW).map((r) => r.id)).toEqual(["w2", "w1"]);
+  });
+
+  // The fixtures above sit at noon, so neither edge of the half-open month
+  // range is ever probed exactly.
+  it("takes an entry at exactly midnight on the 1st, but not next month's", () => {
+    const rows = [
+      tx({ id: "first", category: "fun", occurred_at: at(2026, 5, 1, 0) }),
+      tx({ id: "next", category: "fun", occurred_at: at(2026, 6, 1, 0) }),
+    ];
+    expect(treatTransactions(rows, NOW).map((r) => r.id)).toEqual(["first"]);
   });
 });
 

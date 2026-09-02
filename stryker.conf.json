@@ -2,16 +2,39 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "packageManager": "npm",
   "testRunner": "vitest",
-  "vitest": { "configFile": "vitest.config.ts" },
-  "reporters": ["html", "clear-text", "progress"],
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "reporters": [
+    "json",
+    "html",
+    "clear-text",
+    "progress"
+  ],
   "coverageAnalysis": "perTest",
   "mutate": [
-    "src/lib/money.ts",
+    "src/lib/cache.ts",
+    "src/lib/categories.ts",
+    "src/lib/crypto.ts",
+    "src/lib/csv.ts",
+    "src/lib/currency.ts",
     "src/lib/dates.ts",
+    "src/lib/e2e.ts",
+    "src/lib/editIntent.ts",
     "src/lib/gold.ts",
     "src/lib/history.ts",
+    "src/lib/money.ts",
+    "src/lib/publicStats.ts",
     "src/lib/stats.ts"
   ],
   "concurrency": 4,
-  "timeoutMS": 20000
+  "timeoutMS": 20000,
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "thresholds": {
+    "high": 100,
+    "low": 100,
+    "break": 100
+  }
 }

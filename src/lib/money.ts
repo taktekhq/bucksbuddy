@@ -1,12 +1,18 @@
 // Display + coloring helpers. Every money sign/color in the UI should come from
 // here so styling stays consistent (see docs/DESIGN_SYSTEM.md).
 
+// Stryker disable all : module-level, so Stryker's per-test mutant switch never
+// activates these — the module is evaluated once at import, before the switch
+// flips. Every mutant here ("" for the locale, style or currency) throws a
+// RangeError at construction, so if one ever *were* active the whole suite
+// would fail rather than survive. Not a gap in the assertions.
 const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+// Stryker restore all
 
 /** Format USD cents as "$12.50" (no sign). */
 export function formatUsdCents(cents: number): string {

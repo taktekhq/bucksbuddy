@@ -94,6 +94,8 @@ export function groupByDay(rows: Transaction[], now = new Date()): TimelineDay[]
         key: dkey,
         label: dayLabel(r.occurred_at, now),
         totalCents: 0,
+        // Stryker disable next-line BooleanLiteral : equivalent — every day is
+        // reassigned in the finalize pass below, so the seed is never read.
         masked: false,
         groups: [],
       };
@@ -112,6 +114,8 @@ export function groupByDay(rows: Transaction[], now = new Date()): TimelineDay[]
         rows: [r],
         count: 0, // filled below, once the run is complete
         totalCents: 0,
+        // Stryker disable next-line BooleanLiteral : equivalent — as above,
+        // every group is reassigned in the finalize pass.
         masked: false,
         latestAt: r.occurred_at, // run's first (newest) row
       });

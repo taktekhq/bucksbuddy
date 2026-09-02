@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { currentMonthRange, dayKey, dayLabel, isToday, monthLabel } from "@/lib/dates";
+import { currentMonthRange, monthAnchor, dayKey, dayLabel, isToday, monthLabel } from "@/lib/dates";
 
 describe("currentMonthRange", () => {
   it("returns the first of this month and the first of next month", () => {
@@ -28,6 +28,25 @@ describe("monthLabel", () => {
 
   it("defaults to the real current date", () => {
     expect(typeof monthLabel()).toBe("string");
+  });
+});
+
+describe("monthAnchor", () => {
+  // Covered incidentally by the Stats screen, but never asserted directly —
+  // so nothing pinned the "this month anchors at `now` itself" rule.
+  const NOW = new Date(2026, 5, 10, 15, 30);
+
+  it("returns `now` itself for the current month", () => {
+    expect(monthAnchor(0, NOW)).toBe(NOW);
+  });
+
+  it("anchors a past month at its last day, at noon", () => {
+    // May 2026 has 31 days; noon dodges DST and timezone edges.
+    expect(monthAnchor(-1, NOW)).toEqual(new Date(2026, 4, 31, 12));
+  });
+
+  it("anchors a future month the same way", () => {
+    expect(monthAnchor(1, NOW)).toEqual(new Date(2026, 6, 31, 12));
   });
 });
 

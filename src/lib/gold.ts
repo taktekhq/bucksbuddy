@@ -4,10 +4,15 @@
 
 const TROY_OUNCE_IN_GRAMS = 31.1034768;
 
+// Stryker disable all : module-level (see the note in money.ts). The
+// ObjectLiteral mutant is separately equivalent: {} formats identically here,
+// because these options restate Intl's own decimal defaults. They stay for
+// intent, and to pin the behaviour if those defaults ever move.
 const gramsFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 3,
 });
+// Stryker restore all
 
 /** "5 g", "2.5 g", "0.125 g". */
 export function formatGrams(grams: number): string {
@@ -28,6 +33,9 @@ export async function fetchGoldUsdPerGram(): Promise<number | null> {
     clearTimeout(timeout);
     if (!res.ok) return null;
     const data = (await res.json()) as { price?: number };
+    // Stryker disable next-line OptionalChaining : equivalent — a null body
+    // gives NaN here and returns null below, while `data.price` would throw and
+    // return null from the catch. Same output, so no test can separate them.
     const perOunce = Number(data?.price);
     if (!Number.isFinite(perOunce) || perOunce <= 0) return null;
     return perOunce / TROY_OUNCE_IN_GRAMS;

@@ -145,6 +145,33 @@ describe("groupByDay", () => {
     expect(days[0].masked).toBe(true);
   });
 
+  // The test above puts both rows in one group, so "any group is masked" and
+  // "every group is masked" agree. Two groups, one masked, tells them apart.
+  it("marks a day masked when only one of its groups is obscured", () => {
+    const days = groupByDay(
+      [
+        tx({ id: "a", category: "groceries", occurred_at: at(2026, 6, 15, 9) }),
+        tx({ id: "b", category: "coffee", amountMask: "a8F2", occurred_at: at(2026, 6, 15, 10) }),
+      ],
+      now,
+    );
+    expect(days[0].groups).toHaveLength(2);
+    expect(days[0].groups.map((g) => g.masked)).toEqual([true, false]); // newest run first
+    expect(days[0].masked).toBe(true);
+  });
+
+  it("leaves a day and its groups unmasked when nothing is obscured", () => {
+    const days = groupByDay(
+      [
+        tx({ id: "a", category: "groceries", occurred_at: at(2026, 6, 15, 9) }),
+        tx({ id: "b", category: "coffee", occurred_at: at(2026, 6, 15, 10) }),
+      ],
+      now,
+    );
+    expect(days[0].groups.every((g) => g.masked)).toBe(false);
+    expect(days[0].masked).toBe(false);
+  });
+
   it("returns no days for an empty history", () => {
     expect(groupByDay([], now)).toEqual([]);
   });

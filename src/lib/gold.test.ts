@@ -32,8 +32,37 @@ describe("fetchGoldUsdPerGram", () => {
   });
 
   it("returns null on a non-ok response", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })));
+    // The body is deliberately *valid*: if the ok check were skipped we would
+    // parse a usable price, so only the status check can produce the null.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, json: async () => ({ price: 3110.34768 }) })),
+    );
     expect(await fetchGoldUsdPerGram()).toBeNull();
+  });
+
+  it("calls the keyless XAU endpoint with an abort signal", () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ price: 1 }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchGoldUsdPerGram().then(() => {
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [
+        string,
+        { signal: AbortSignal },
+      ];
+      expect(url).toBe("https://api.gold-api.com/price/XAU");
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    });
+  });
+
+  it("clears its abort timer once the request settles", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ price: 3110.34768 }) })),
+    );
+    await fetchGoldUsdPerGram();
+    // A leaked timer would fire an abort long after we are done with it.
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("returns null when the price is missing or non-positive", async () => {

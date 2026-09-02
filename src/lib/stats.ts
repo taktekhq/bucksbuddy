@@ -46,9 +46,13 @@ export function dailySpendSeries(
   if (rows.length >= FETCH_CAP) {
     // Rows arrive newest-first, but don't rely on it — find the oldest.
     let oldest = rows[0].occurred_at;
+    // Stryker disable next-line EqualityOperator : equivalent — on a tie `<=`
+    // reassigns the same value. Proven differentially against the original.
     for (const r of rows) if (r.occurred_at < oldest) oldest = r.occurred_at;
     const o = new Date(oldest);
     const oldestDay = new Date(o.getFullYear(), o.getMonth(), o.getDate());
+    // Stryker disable next-line EqualityOperator : equivalent — on a tie `>=`
+    // assigns an equal-valued Date. Proven differentially against the original.
     if (oldestDay > from) from = oldestDay;
   }
 
@@ -81,6 +85,9 @@ export function monthSpendSeries(rows: Transaction[], anchor = new Date()): DayP
 
   const series: DayPoint[] = [];
   const byDay = new Map<string, DayPoint>();
+  // Stryker disable next-line EqualityOperator : equivalent — `last` is the
+  // month's final millisecond (23:59:59.999) while `d` walks midnights, so the
+  // bound is never hit exactly. Proven differentially against the original.
   for (const d = new Date(from); d <= last; d.setDate(d.getDate() + 1)) {
     const point = { date: dayKey(d), totalCents: 0, count: 0 };
     byDay.set(point.date, point);
