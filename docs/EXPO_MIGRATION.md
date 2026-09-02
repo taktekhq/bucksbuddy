@@ -108,8 +108,8 @@ already have. If it goes badly we've learned that cheaply, on web, with an
 instant rollback. Everything after it gets easier.
 
 Also in Phase 0, before any code moves: **build the golden-fixture corpus**
-(see Validators #3). Do this against `main` so the fixtures capture today's
-behaviour, not the behaviour of a half-migrated core.
+(see Validators #3 — done, against `main`, so the fixtures capture today's
+behaviour rather than a half-migrated core's).
 
 *Rough size: 2–3 days.*
 
@@ -262,16 +262,37 @@ versions differ between V8 and Hermes, and they disagree on things like whether
 code review, passes a smoke test, and then breaks a string assertion — or worse,
 silently changes what the user reads — six weeks later.
 
-### 3. Golden fixtures (characterization tests)
+### 3. Golden fixtures (characterization tests) — done
 
-Before any code moves, generate a synthetic corpus — a few hundred transactions
-spanning multiple months, both directions, USD and LBP at several rates, safe
-transfers, gold entries, subcategories, and the nasty edges (month boundaries,
-DST, LBP rounding, empty months, a single-entry month). Run every core function
-over it and freeze the outputs as JSON.
+`src/lib/__fixtures__/corpus.ts` generates a deterministic 314-transaction /
+31-gold-entry corpus (seeded PRNG, no `Math.random`) spanning all twelve
+months of 2026, both directions, USD and LBP at five rates, Safe transfers in
+both directions, real parent/sub category pairings (including two ids —
+`family`, `other` — that exist in both the income and expense lists), and a
+run of deliberately hand-placed edges: entries sitting on the exact
+millisecond a month opens and closes, the 2026 US DST spring-forward and
+fall-back instants, a month with zero transactions, a month with exactly one
+(pinned as a spend, not left to the PRNG — an income-only single entry would
+never exercise the n=1 forecast division it exists to test), and rows where
+`is_income` disagrees with what the category name would suggest, which
+`isSpending` must not care about.
 
-Then any port that changes a number fails loudly. Cheap to build, and it covers
-the combinations hand-written tests never think of.
+`golden.test.ts` runs every pure function in `src/lib` over that corpus from
+eight named reference dates and freezes the results to a checked-in
+`golden.json` (`UPDATE_GOLDEN=1 npx vitest run .../golden.test.ts` to
+regenerate after a deliberate behaviour change — read the diff the way you'd
+read a schema migration, since every changed number is a claim the old one
+was wrong). It runs as part of the existing `npm run coverage`/CI job; no
+separate CI entry was needed.
+
+One finding worth carrying forward: the corpus bakes in *absolute* local
+calendar dates (`new Date(2026, 2, 8, 2, 30)`, deliberately — the DST and
+month-boundary edges only exist as absolute instants), which makes the frozen
+`golden.json` timezone-dependent in a way the rest of the suite isn't — the
+existing tests are written to use dates relative to a fixture `now`, so they
+pass identically in any timezone. Pinned `TZ: "UTC"` in `vitest.config.ts`
+(matching the CI runner's default) rather than leave it to whatever machine
+happens to run the tests.
 
 ### 4. Cross-platform crypto vectors — non-negotiable
 
