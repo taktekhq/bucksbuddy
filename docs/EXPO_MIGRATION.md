@@ -7,14 +7,45 @@
 
 ## Why we're doing this
 
-The goal isn't "be an app instead of a PWA." The goal is **shipping a small LLM
-on-device** so the app can talk about your money without your money leaving the
-phone. That's not possible in a browser tab, and it's the one requirement that
-should drive every technical decision below — it rules out Expo Go, it sets a
-RAM/storage budget, and it decides how the app is distributed.
+**Scope right now: the Expo port and nothing else.** Get BucksBuddy running as a
+real native app on iOS and Android, at behavioural parity with the web app.
 
-The nice side effects (Face ID, notifications, the App Store, real gestures) are
-real, but they're not the reason. Keep that straight when the plan gets long.
+The longer-term motivation is shipping a small LLM on-device, so the app can
+talk about your money without your money leaving the phone — impossible in a
+browser tab. That's deliberately **not** in this plan. But it's why we're going
+native rather than polishing the PWA, and it's why we build on a **custom dev
+client with native modules available** rather than constraining ourselves to
+what a sandbox runtime allows. The architecture below keeps that door open
+without paying for it now.
+
+The nearer-term wins are real too: Face ID on the encryption vault, notifications,
+the App Store, proper gestures.
+
+### Expo Go: considered, rejected
+
+Worth recording since it came up. With the LLM deferred, Expo Go was genuinely
+viable — the only native module we'd need is crypto, and `@noble/ciphers` +
+`@noble/hashes` cover AES-GCM and PBKDF2 in pure JS. Measured on V8: noble's
+AES-GCM output is **byte-identical to WebCrypto**, and PBKDF2 at 600k iterations
+costs 734 ms pure-JS vs 106 ms native (6.9x).
+
+We're not taking it, because:
+
+- Hermes is meaningfully slower than V8 on tight numeric loops, so that 734 ms is
+  realistically 3-4 s on a good phone and worse on low-end Android — and
+  `loadVault` runs PBKDF2 on **every cold start** for default-tier users, not
+  just on unlock. That's a multi-second launch freeze for every user.
+- Expo Go is a development convenience, not a distribution channel. We need EAS
+  builds and store accounts to reach users regardless, so it only ever saved us
+  dev-loop time, not release work.
+- Designing around "no native modules" would be a constraint we'd have to undo
+  the moment the LLM lands.
+
+So: **custom dev client from day one.** Contributors need an EAS build; that's
+accepted cost.
+
+The noble finding isn't wasted, though — see Validator #4, where it earns its
+keep as an independent third implementation.
 
 ## What we're starting from
 
@@ -80,9 +111,8 @@ behaviour, not the behaviour of a half-migrated core.
 ### Phase 1 — Expo skeleton that can read real data
 
 Expo SDK with `expo-router`, NativeWind for the Tailwind classes, and a
-**custom dev client** — Expo Go is out from day one, because both
-`react-native-quick-crypto` and the on-device LLM runtime need native modules.
-Budget for that: EAS builds, an Apple Developer account, a Play console.
+**custom dev client** (see the Expo Go note above). Budget for that: EAS builds,
+an Apple Developer account, a Play console.
 
 The work here is auth and crypto, not screens:
 
@@ -92,7 +122,14 @@ The work here is auth and crypto, not screens:
   password-recovery flow that `useSession` currently parses out of the URL hash.
 - `CryptoPort` backed by `react-native-quick-crypto` (JSI; it supports
   `subtle.importKey`/`deriveBits` for PBKDF2 and AES-GCM encrypt/decrypt, which
-  is exactly the surface `lib/crypto.ts` uses).
+  is exactly the surface `lib/crypto.ts` uses). Native speed means the cold-start
+  PBKDF2 stays in web territory (~100 ms) rather than seconds.
+
+**Do the PBKDF2 benchmark on a real low-end Android in this phase**, before any
+screens exist. It's twenty minutes of work and it either confirms the choice or
+tells us to cache the unwrapped master key in `expo-secure-store` (which would
+also be a security upgrade — web currently caches the passphrase itself in
+`localStorage` in the clear).
 
 Exit gate for this phase is one screen — a plain list of transactions —
 plus the crypto vectors from Validators #4 passing on a real device. Boring on
@@ -138,42 +175,34 @@ Then: notifications, share-sheet capture, maybe a widget.
 
 *Rough size: ~1 week for the biometric vault, the rest optional.*
 
-### Phase 4 — The LLM
+### Phase 4 — Decide the web's fate
 
-This is its own project and it starts only once parity is signed off. The
-decisions that matter:
+Deferred deliberately. **You've chosen to keep the web app, frozen**, which is
+the right call for the migration: it can't be the oracle if we're also rewriting
+it. The open question is only what happens *after* native ships — keep the Vite
+PWA on the shared core (two UIs, one brain, which the marketing pages want
+anyway), or collapse it onto Expo web via react-native-web. Not a decision for
+now.
 
-- **Runtime.** `react-native-executorch` (Software Mansion, Meta's ExecuTorch
-  underneath) is the well-supported Expo-friendly option; `llama.rn` /
-  llama.cpp+GGUF is the alternative with the bigger community. Prototype both
-  behind one interface before committing.
-- **Delivery.** Download the weights on first launch, don't bundle them. A
-  bundled multi-GB model wrecks the install size, and most users won't turn the
-  feature on. Bundling also drags model updates through App Store review.
-- **The hard rule: the model never does arithmetic.** It reads and it phrases;
-  every number it says comes from a `packages/core` function call. This is a
-  money app — an LLM that hallucinates a balance is worse than no feature. It
-  also means the LLM feature inherits the 100%-covered core as its source of
-  truth, and we can test it by asserting *which tool it called*, not by grading
-  its prose.
-- Budget for RAM ceilings on low-end Android, and for App Store review of a
-  finance app that ships a model.
+### Out of scope: the LLM
 
-*Rough size: 2–4 weeks, highly uncertain.*
+Explicitly deferred. Recording the two constraints that must survive into
+whatever we build now, so we don't have to undo anything later:
 
-### Phase 5 — Decide the web's fate
+- **Delivery**: weights get downloaded on first launch, never bundled. Keeps
+  install size sane and model updates out of App Store review.
+- **The hard rule**: the model never does arithmetic. It reads and it phrases;
+  every number it says comes from a `packages/core` call. This is a money app —
+  an LLM that hallucinates a balance is worse than no feature. It also means the
+  feature inherits the 100%-covered, mutation-tested core as its source of truth.
 
-Deferred deliberately. Either keep the Vite PWA on the shared core (two UIs, one
-brain — fine, since the marketing pages need to be real web anyway), or collapse
-it onto Expo web via react-native-web. **Don't decide this now.** During the
-migration the frozen web app is doing important work as the oracle, and it can't
-do that if we're also rewriting it.
+Neither constrains the port. Both are why we're on a dev client.
 
 ---
 
 ## Validators: proving nothing broke
 
-This is the part that actually determines whether the migration is safe. Nine
+This is the part that actually determines whether the migration is safe. Ten
 things, roughly in order of value per unit of effort.
 
 ### 1. Freeze the web app as the oracle
@@ -217,13 +246,21 @@ notes, gold grams — generated by the current web build. Both runtimes must
 decrypt all of them, and ciphertext written by either must round-trip through
 the other. This runs in CI on every commit that touches crypto.
 
+**Three implementations, not two.** `@noble/ciphers` is pure JS and runs
+anywhere, and it has been measured byte-identical to WebCrypto's AES-GCM
+output. So the vector suite asserts agreement between *three* independent
+implementations — WebCrypto (web), `react-native-quick-crypto` (native), and
+noble (the referee that runs in both). When two disagree, the third says which
+one is wrong. Noble costs us one devDependency and no shipped bytes.
+
 Two things to measure early while we're in there:
 
-- **PBKDF2 at 600,000 iterations on a low-end Android.** If that's a multi-second
-  unlock, it's a UX problem. Good news: the envelope is already version-tagged
-  (`v1.<salt>.<iv>.<ct>`), so the parameters *can* change without a data
-  migration. Bad news: changing them splits compatibility across devices, so
-  measure before deciding, not after.
+- **PBKDF2 at 600,000 iterations on a low-end Android.** Native crypto should
+  keep this ~100 ms, but confirm it — `loadVault` runs it on every cold start,
+  not just on unlock, so a regression here is a launch-time freeze for every
+  user. The envelope is already version-tagged (`v1.<salt>.<iv>.<ct>`), so the
+  parameters *can* change without a data migration — but changing them splits
+  compatibility across devices, so measure before deciding, not after.
 - That `react-native-quick-crypto`'s AES-GCM output is byte-identical to
   WebCrypto's, not merely "also valid AES-GCM."
 
@@ -254,50 +291,111 @@ gold, and the CSV export byte-for-byte. Script it so it's one command.
 If those agree across two implementations reading one database, the port is
 correct in the way users care about.
 
-### 8. Coverage gates — one honest number per package
+### 8. Coverage stays at 100% — everywhere
 
-Keep **100% on `packages/core`**, where it's meaningful and already true. Do
-*not* extend it to `apps/mobile`: chasing 100% through gesture handlers and
-native module mocks produces test theatre, not safety. Propose ~90% lines on the
-mobile shell.
+**Settled: 100%, core and mobile shell alike.** No relaxation.
 
-**This is a decision that needs a human call**, since the current 100% gate is a
-deliberate project value and I'd be relaxing it. Flagging rather than assuming.
+I'd flagged this as worth relaxing for the native UI; the call is to hold the
+line, so the plan absorbs the cost rather than arguing with it. What that means
+concretely, so it doesn't ambush us in Phase 2:
 
-### 9. CI shape
+- Native module mocks have to be real work, not stubs — `expo-secure-store`,
+  `expo-file-system`, `expo-local-authentication`, `Alert`. Budget for a proper
+  `apps/mobile/test/mocks` layer early in Phase 1, before there are screens
+  fighting us.
+- Gesture and animation branches (`SwipeToDelete`, the Reanimated paths) are the
+  expensive ones. `@testing-library/react-native` can drive gesture handlers, but
+  the tests are fiddly. Port `SwipeToDelete` early as the canary — if 100% is
+  going to hurt anywhere, it hurts there, and better to learn it in week two.
+- `/* c8 ignore */` on genuinely unreachable native branches is acceptable and
+  should be commented with *why*. An honest 100% with three justified ignores
+  beats a dishonest 92%.
+
+### 9. Mutation testing
+
+100% coverage proves every line *ran*. It does not prove any assertion would
+notice if the line were wrong — and this is a money app, where "the test executed
+`netCents` and asserted nothing useful" is exactly the failure we can't afford.
+Mutation testing closes that gap: flip `+` to `-`, `>` to `>=`, drop a branch,
+and see whether the suite screams.
+
+**Stryker** (`@stryker-mutator/core` + `vitest-runner` + `typescript-checker`),
+targeted at `packages/core`. Not the UI — mutating JSX produces mostly-equivalent
+mutants and enormous runtimes for very little signal. The money math is where
+this pays.
+
+Sequencing matters: **baseline the mutation score on `main` before the core
+extraction**, so we can prove the port didn't weaken the suite. A refactor that
+holds 100% coverage while quietly dropping the mutation score is exactly the kind
+of silent regression this migration needs to catch.
+
+Set the threshold at whatever the baseline turns out to be, then ratchet upward.
+Don't pick a number in advance and then argue with reality.
+
+### 10. CI shape
 
 | Job | Trigger |
 |---|---|
 | `apps/web` build + 100% coverage (existing, untouched) | every push |
-| `packages/core` on Node | every push |
+| `packages/core` on Node — 100% coverage | every push |
 | `packages/core` on Hermes | every push |
-| crypto compatibility vectors | every push |
-| `apps/mobile` jest-expo | every push |
+| crypto vectors, three-way | every push |
+| `apps/mobile` jest-expo — 100% coverage | every push |
+| Stryker mutation run on `packages/core` | nightly + `mutation` label |
 | EAS build + Maestro | nightly + `e2e` label |
+
+Mutation runs are minutes, not seconds, so they don't belong on every push. But
+they must be non-optional on a schedule, or the score quietly rots.
 
 ---
 
-## Risks and open questions
+## Risks
 
 **Technical**
 
 - Cross-platform `_enc` compatibility — highest severity, mitigated by #4.
 - Hermes `Intl` divergence across 12 call sites — mitigated by #2 and #3.
-- PBKDF2 600k on low-end hardware — measure in Phase 1.
-- `window.confirm` → `Alert.alert` changes three delete flows from sync to
+- PBKDF2 600k on low-end hardware — measure in Phase 1, on device.
+- Holding 100% through gesture and native-module branches — mitigated by
+  building the mock layer first and porting `SwipeToDelete` as the canary.
+- `window.confirm` → `Alert.alert` turns three delete flows from sync to
   callback-async. Small, but it's a real behaviour change in a destructive path.
 
 **Process / cost**
 
-- Expo Go is unavailable to us, so every contributor needs a dev build. Real
-  friction, worth accepting for the LLM.
+- Every contributor needs an EAS dev build. Accepted.
 - Apple Developer ($99/yr) + Play Console ($25 one-off), plus App Store review
   latency on a finance app.
-- The 100% coverage gate can't survive contact with native UI as written.
 
-**Needs a decision from you**
+## Decisions (settled)
 
-1. Relax the coverage gate for the mobile shell? (recommend: yes, 100% core / 90% shell)
-2. Does the web app stay after native ships, or fold into Expo web? (recommend: defer to Phase 5)
-3. Are we shipping to both stores at once, or iOS first? (recommend: iOS first — it's the "iPhone-first" app already)
-4. LLM weights downloaded on first run, or bundled? (recommend: downloaded)
+| | |
+|---|---|
+| **Coverage** | Stays at **100%**, core and mobile shell alike. No relaxation. |
+| **Mutation testing** | Yes — Stryker on `packages/core`, baselined on `main` before the port. |
+| **The web app** | **Kept and frozen.** Serves as the parity oracle during the migration; its long-term fate is a Phase 4 question. |
+| **Platform order** | **iOS first, then Android** — but see below. |
+| **On-device LLM** | Out of scope for now. Architecture keeps the door open. |
+| **Expo Go** | Not used. Custom dev client from day one. |
+
+### A note on "iOS first"
+
+You're right that it's a strange question for an Expo app, and the answer is that
+it barely matters: one codebase, one Metro bundle, `eas build --platform all`.
+There's no meaningful "port to Android" step after iOS.
+
+Where the order *does* matter is narrower than it sounds:
+
+- **Store submission.** Two review queues, two sets of metadata and screenshots,
+  two rejection risks. Serialising them means the first rejection doesn't stall
+  both.
+- **Device QA.** Real divergence lives in safe-area insets, keyboard avoidance,
+  the back button, date/`Intl` formatting under Android's Hermes ICU, and the
+  Keychain-vs-Keystore behaviour of `expo-secure-store`. That's a QA pass, not a
+  development phase.
+
+Since you have users on both, the practical shape is: **develop both from day
+one** (CI builds and tests both throughout — Android bugs found in week two are
+cheap, in week ten they're not), **submit iOS first.** Android trails by a
+release, not by a phase. The "iPhone-first" framing in the design system is about
+layout priorities, not about Android being second-class.
