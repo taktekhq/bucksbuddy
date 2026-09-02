@@ -299,6 +299,42 @@ describe("monthInsights", () => {
     const masked = monthInsights([tx({ amount_usd_cents: 0, amountMask: "ab" })], NOW);
     expect(masked.anyMasked).toBe(true);
   });
+
+  // The fixtures above all sit at noon, so nothing ever lands on a month
+  // boundary. An entry stamped exactly 00:00:00 on the 1st is real though —
+  // backdated and imported rows default to midnight — and the range check is
+  // half-open (`at < from || at >= to`), so it belongs to the month it opens.
+  it("includes an entry at exactly midnight on the 1st", () => {
+    const rows = [tx({ amount_usd_cents: 500, occurred_at: at(2026, 5, 1, 0) })];
+    expect(monthInsights(rows, NOW).spentCents).toBe(500);
+  });
+
+  it("excludes an entry at exactly midnight on the 1st of next month", () => {
+    const rows = [tx({ amount_usd_cents: 500, occurred_at: at(2026, 6, 1, 0) })];
+    expect(monthInsights(rows, NOW).spentCents).toBe(0);
+  });
+
+  // June is 30 days and so is April, so a June `now` can't tell "this month's
+  // length" apart from a neighbouring month's. February can: 28 days, against
+  // December's 31.
+  it("forecasts on this month's length, not a neighbouring month's", () => {
+    const FEB = new Date(2026, 1, 10, 15);
+    const rows = [tx({ amount_usd_cents: 1000, occurred_at: at(2026, 1, 5) })];
+    // 1000c over 10 elapsed days, carried across February's 28.
+    expect(monthInsights(rows, FEB).forecastCents).toBe(2800);
+  });
+
+  // The fixture above happens to hold 4 coffees among 8 spending entries, so
+  // counting *non*-coffee would give the same 4. Count an uneven set instead.
+  it("counts only coffee, on a set where the inverse would differ", () => {
+    const rows = [
+      tx({ id: "c1", category: "coffee", occurred_at: at(2026, 5, 2) }),
+      tx({ id: "g1", category: "groceries", occurred_at: at(2026, 5, 3) }),
+      tx({ id: "g2", category: "groceries", occurred_at: at(2026, 5, 4) }),
+      tx({ id: "g3", category: "groceries", occurred_at: at(2026, 5, 5) }),
+    ];
+    expect(monthInsights(rows, NOW).coffeeCount).toBe(1);
+  });
 });
 
 describe("treatTransactions", () => {

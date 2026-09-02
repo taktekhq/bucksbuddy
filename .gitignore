@@ -24,3 +24,7 @@
 npm-debug.log*
 .vercel
 *.tsbuildinfo
+
+# mutation testing reports
+/reports
+/.stryker-tmp
