@@ -1,8 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { type CryptoDiagnostics, runCryptoDiagnostics } from "@/lib/nativeCrypto";
+
+// A single, greppable line for whatever drives this screen without a human
+// tapping the button — a CI step that deep-links to bucksbuddy://crypto-check
+// on a booted simulator and reads the device log, or a script doing the same
+// against a physical device. Deliberately plain text, not JSON: `simctl log
+// stream --predicate` matches on message content, and a stable prefix is all
+// that's needed.
+function logResult(passed: boolean, detail: string): void {
+  console.log(`[crypto-check] CRYPTO_CHECK_RESULT=${passed ? "PASS" : "FAIL"} ${detail}`);
+}
 
 type State =
   | { status: "idle" }
@@ -36,18 +46,26 @@ export default function CryptoCheckScreen() {
         result.passphraseVector &&
         result.verifierVector &&
         result.nativeRoundTrip;
+      logResult(passed, JSON.stringify(result));
       setState(
         passed
           ? { status: "passed", result }
           : { status: "failed", message: "A compatibility assertion failed." },
       );
     } catch (error) {
-      setState({
-        status: "failed",
-        message: error instanceof Error ? error.message : "Unknown native crypto error",
-      });
+      const message = error instanceof Error ? error.message : "Unknown native crypto error";
+      logResult(false, message);
+      setState({ status: "failed", message });
     }
   }
+
+  // Runs itself once on mount so a script driving the screen (a CI step
+  // deep-linking to this route on a booted simulator, say) doesn't also have
+  // to simulate a tap — it can just launch, wait for the log line above, and
+  // read the verdict. The button stays for manual re-runs.
+  useEffect(() => {
+    void run();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
