@@ -2,12 +2,21 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoginScreen } from "@/screens/LoginScreen";
+import { ResetScreen } from "@/screens/ResetScreen";
 import { TransactionsScreen } from "@/screens/TransactionsScreen";
 import { configurationError } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 
 export default function IndexScreen() {
-  const { loading, session } = useSession();
+  const { loading, session, recoveryMode } = useSession();
+
+  // Password recovery wins over everything else: the user opened a reset
+  // link from email, useSession exchanged its tokens for a session, and they
+  // need to set a new password before doing anything else (see
+  // src/App.tsx's web equivalent).
+  if (recoveryMode) {
+    return <ResetScreen />;
+  }
 
   if (configurationError) {
     return (

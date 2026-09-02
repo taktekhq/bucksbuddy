@@ -167,14 +167,27 @@ not week eight.
   quietly dropped it out of `vitest.config.ts`'s coverage `include` (scoped to
   `src/**`), so it stopped being measured by the 100% gate and was only
   still watched by nightly mutation testing. Now included explicitly.
+- Google OAuth and password-recovery deep linking, mirroring web's flows
+  (`src/screens/Landing.tsx`, `src/screens/Reset.tsx`) on the same
+  `bucksbuddy://` scheme: `oauth.ts` opens Google's authorize URL via
+  `expo-web-browser`'s `openAuthSessionAsync` (Supabase's own
+  `signInWithOAuth` browser redirect is web-only) and hands the returned
+  `bucksbuddy://auth-callback#access_token=...` fragment to `setSession`;
+  `useSession.ts` listens for the same fragment shape arriving as a cold- or
+  warm-start deep link at `bucksbuddy://reset#...&type=recovery` and flips
+  `recoveryMode`, which locks the app on `ResetScreen` exactly like web's
+  `App.tsx` does for `Reset`. **Needs a one-time Supabase dashboard change**
+  before it can work on a real build: add `bucksbuddy://auth-callback` and
+  `bucksbuddy://reset` to Auth > URL Configuration > Redirect URLs.
 
-The remaining Phase 1 work is executing and recording the crypto-check gate on
-real iOS and low-end Android hardware, and wiring Google OAuth/password-recovery
-deep linking. The on-device run is currently blocked on tooling, not code: this
-Mac's Xcode 26.3 (Swift 6.2.4) hits a known Expo SDK 57 / `expo-modules-jsi`
-Swift-C++ interop compile failure ([expo/expo#46242](https://github.com/expo/expo/issues/46242));
-Expo's maintainers say SDK 56/57 need Xcode 26.4+ (Swift 6.3). Needs an Xcode
-upgrade before the gate can run for real.
+The remaining Phase 1 work is executing and recording the crypto-check gate,
+and the OAuth/recovery flows above, on real iOS and low-end Android hardware —
+all of it is currently unverified beyond typecheck, since it's blocked on
+tooling, not code: this Mac's Xcode 26.3 (Swift 6.2.4) hits a known Expo SDK 57
+/ `expo-modules-jsi` Swift-C++ interop compile failure
+([expo/expo#46242](https://github.com/expo/expo/issues/46242)); Expo's
+maintainers say SDK 56/57 need Xcode 26.4+ (Swift 6.3). Needs an Xcode upgrade
+before any of this can run for real.
 
 ### Phase 2 — Port the screens
 
