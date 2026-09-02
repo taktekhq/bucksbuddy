@@ -48,3 +48,11 @@ describe("parseAmountString", () => {
     expect(parseAmountString("-5")).toBe(0);
   });
 });
+
+describe("toUsdCents rate handling", () => {
+  it("uses the supplied LBP rate rather than the default", () => {
+    // 89,500 LBP at double the default rate is half a dollar, not a whole one.
+    expect(toUsdCents(89_500, "LBP", 179_000)).toBe(50);
+    expect(toUsdCents(89_500, "LBP", DEFAULT_LBP_PER_USD)).toBe(100);
+  });
+});

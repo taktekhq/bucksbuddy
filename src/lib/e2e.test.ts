@@ -171,3 +171,75 @@ describe("e2e vault", () => {
     expect(loadStoredPassphrase("u9")).toBeNull();
   });
 });
+
+// --- the database contract --------------------------------------------------
+// The queries above are asserted only by table and operation, which cannot tell
+// a correct update from one that writes the wrong column or filters on the
+// wrong user. These pin the arguments themselves.
+describe("e2e_keys query shape", () => {
+  const only = (op: string) =>
+    mock.calls.filter((c) => c.table === "e2e_keys" && c.op === op);
+
+  it("reads the vault columns for one user", async () => {
+    const { row } = await keyRow(DEFAULT_PASSPHRASE, "default");
+    set({ "e2e_keys:select": () => ({ data: row }) });
+    await loadVault("u1");
+    const [call] = only("select");
+    expect(call.args.select[0][0]).toBe("wrapped_key, wrap_type, verifier");
+    expect(call.args.eq[0]).toEqual(["user_id", "u1"]);
+  });
+
+  it("bootstraps a missing vault without clobbering a concurrent writer", async () => {
+    set({ "e2e_keys:select": () => ({ data: null }) });
+    await loadVault("u1");
+    const [call] = only("upsert");
+    const [payload, options] = call.args.upsert[0] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(payload.user_id).toBe("u1");
+    expect(payload.wrap_type).toBe("default");
+    expect(typeof payload.wrapped_key).toBe("string");
+    expect(typeof payload.verifier).toBe("string");
+    // Losing either of these turns the race from "first writer wins" into a
+    // silent overwrite of someone's passphrase-wrapped key.
+    expect(options).toEqual({ onConflict: "user_id", ignoreDuplicates: true });
+  });
+
+  it("re-wraps under the user's passphrase, for that user only", async () => {
+    const mk = await generateMasterKey();
+    set();
+    await enablePassphrase("u1", mk, "my passphrase");
+    const [call] = only("update");
+    const [patch] = call.args.update[0] as [Record<string, unknown>];
+    expect(patch.wrap_type).toBe("passphrase");
+    expect(await decryptString(
+      await (await import("@/lib/crypto")).unwrapMasterKey(
+        patch.wrapped_key as string,
+        "my passphrase",
+      ),
+      await encryptString(mk, "ok"),
+    )).toBe("ok");
+    expect(call.args.eq[0]).toEqual(["user_id", "u1"]);
+  });
+
+  it("re-wraps back under the default passphrase, for that user only", async () => {
+    const mk = await generateMasterKey();
+    set();
+    await disablePassphrase("u1", mk);
+    const [call] = only("update");
+    const [patch] = call.args.update[0] as [Record<string, unknown>];
+    expect(patch.wrap_type).toBe("default");
+    expect(call.args.eq[0]).toEqual(["user_id", "u1"]);
+  });
+});
+
+describe("note encryption", () => {
+  it("leaves an absent note as null rather than encrypting the word", async () => {
+    const mk = await generateMasterKey();
+    expect((await encryptTxValues(mk, { ...SAMPLE, note: null })).note_enc).toBeNull();
+    expect((await encryptTxValues(mk, { ...SAMPLE })).note_enc).toBeNull();
+    expect((await encryptGoldValues(mk, { grams: 1, note: null })).note_enc).toBeNull();
+    expect((await encryptGoldValues(mk, { grams: 1 })).note_enc).toBeNull();
+  });
+});

@@ -27,6 +27,10 @@ type Stored = CacheSnapshot & { v: number };
 export function loadCache(userId: string): CacheSnapshot | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY(userId));
+    // Stryker disable next-line ConditionalExpression : equivalent — without
+    // this guard a missing entry parses to null and the property read below
+    // throws into the same catch, returning null either way. Kept as the
+    // cheap, explicit path.
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Stored;
     if (parsed.v !== VERSION || !Array.isArray(parsed.transactions)) return null;

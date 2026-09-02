@@ -58,3 +58,28 @@ describe("transactionsToCsv", () => {
     expect(csv).toContain("LBP");
   });
 });
+
+describe("csv format contract", () => {
+  // The export is consumed by outside accounting tools, so the header row and
+  // the quoting rule are an external contract, not an implementation detail.
+  it("emits the exact header row", () => {
+    expect(transactionsToCsv([]).split("\n")[0]).toBe(
+      "date,type,category,subcategory,original_amount,original_currency," +
+        "rate_used_lbp_per_usd,amount_usd,note",
+    );
+  });
+
+  it("quotes only values containing a comma, quote or newline", () => {
+    const plain = transactionsToCsv([tx({ note: "lunch" })]).split("\n")[1];
+    expect(plain).toContain(",lunch");
+    expect(plain).not.toContain('"lunch"');
+
+    const risky = transactionsToCsv([tx({ note: 'a,b "c"' })]).split("\n")[1];
+    expect(risky).toContain('"a,b ""c"""');
+  });
+
+  it("leaves the subcategory field empty when there is no subcategory", () => {
+    const row = transactionsToCsv([tx({ category: "groceries" })]).split("\n")[1];
+    expect(row.split(",")[3]).toBe("");
+  });
+});

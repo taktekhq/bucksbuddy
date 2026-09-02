@@ -9,30 +9,46 @@ export type Handler = () => QueryResult | Promise<QueryResult>;
 //
 // Ops are inferred from which mutating method was called: insert/update/delete,
 // defaulting to "select" for plain reads.
+// A recorded query: which table, which operation, and the arguments each
+// builder method was called with. The arguments matter — column lists, filter
+// keys and payload fields are the contract with the database, and a test that
+// only checks "an update happened" would pass against an update of the wrong
+// column, or one filtered on the wrong user.
+export type RecordedCall = {
+  table: string;
+  op: string;
+  args: Record<string, unknown[][]>;
+};
+
 export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
-  const calls: { table: string; op: string }[] = [];
+  const calls: RecordedCall[] = [];
 
   function from(table: string) {
     let op = "select";
+    const args: Record<string, unknown[][]> = {};
+    const record = (name: string, callArgs: unknown[]) => {
+      (args[name] ??= []).push(callArgs);
+      return builder;
+    };
     const builder: Record<string, unknown> = {
-      select: () => builder,
-      insert: () => {
+      select: (...a: unknown[]) => record("select", a),
+      insert: (...a: unknown[]) => {
         op = "insert";
-        return builder;
+        return record("insert", a);
       },
-      upsert: () => {
+      upsert: (...a: unknown[]) => {
         op = "upsert";
-        return builder;
+        return record("upsert", a);
       },
-      update: () => {
+      update: (...a: unknown[]) => {
         op = "update";
-        return builder;
+        return record("update", a);
       },
-      delete: () => {
+      delete: (...a: unknown[]) => {
         op = "delete";
-        return builder;
+        return record("delete", a);
       },
-      eq: () => builder,
+      eq: (...a: unknown[]) => record("eq", a),
       order: () => builder,
       limit: () => builder,
       single: () => builder,
@@ -41,7 +57,7 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
         resolve: (v: QueryResult) => unknown,
         reject?: (e: unknown) => unknown,
       ) => {
-        calls.push({ table, op });
+        calls.push({ table, op, args });
         const key = `${table}:${op}`;
         const handler = handlers[key] ?? handlers[table];
         const result = handler ? handler() : { data: null, error: null };

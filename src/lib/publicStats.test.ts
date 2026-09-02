@@ -96,3 +96,61 @@ describe("fetchPublicStats", () => {
     expect(await fetchPublicStats()).toBeNull();
   });
 });
+
+describe("fetchPublicStats guard clauses", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Each arm of `if (error || data == null || typeof data !== "object")` needs
+  // its own failing shape, or one arm covers for the others.
+  it("returns null when the rpc reports an error", async () => {
+    rpc.mockResolvedValue({ data: payload(), error: { message: "boom" } });
+    expect(await fetchPublicStats()).toBeNull();
+  });
+
+  it("returns null when the payload is null", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    expect(await fetchPublicStats()).toBeNull();
+  });
+
+  it("returns null when the payload is not an object", async () => {
+    rpc.mockResolvedValue({ data: 42, error: null });
+    expect(await fetchPublicStats()).toBeNull();
+  });
+
+  it("returns null for a null entry in top_categories", async () => {
+    rpc.mockResolvedValue({
+      data: { ...payload(), top_categories: [null] },
+      error: null,
+    });
+    expect(await fetchPublicStats()).toBeNull();
+  });
+
+  it("returns null when an entry's count is missing", async () => {
+    rpc.mockResolvedValue({
+      data: { ...payload(), top_categories: [{ category: "food" }] },
+      error: null,
+    });
+    expect(await fetchPublicStats()).toBeNull();
+  });
+
+  // toCount admits zero — a brand-new deployment legitimately has none.
+  it("accepts a zero count rather than treating it as junk", async () => {
+    rpc.mockResolvedValue({
+      data: {
+        users: 0,
+        transactions: 0,
+        encrypted_users: 0,
+        top_categories: [{ category: "food", count: 0 }],
+      },
+      error: null,
+    });
+    expect(await fetchPublicStats()).toEqual({
+      users: 0,
+      transactions: 0,
+      encryptedUsers: 0,
+      topCategories: [{ category: "food", count: 0 }],
+    });
+  });
+});

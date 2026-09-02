@@ -115,3 +115,23 @@ describe("the safe category", () => {
     expect(categoryLabel("safe")).toBe("Safe");
   });
 });
+
+describe("id lookup precedence and missing subcategories", () => {
+  // "family" and "other" are top-level in BOTH lists; the expense list is
+  // registered first, so it wins. Without that guard the income entry would
+  // silently replace it.
+  it("keeps the expense entry when an id appears in both lists", () => {
+    const fromExpense = EXPENSE_CATEGORIES.find((c) => c.id === "other")!;
+    expect(categoryIcon("other")).toBe(fromExpense.icon);
+    expect(categoryColor("other")).toBe(fromExpense.color);
+    expect(categoryLabel("family")).toBe(
+      EXPENSE_CATEGORIES.find((c) => c.id === "family")!.label,
+    );
+  });
+
+  it("falls back to the sub id for an unknown parent or a parent with no subs", () => {
+    expect(subcategoryLabel("nope", "whatever")).toBe("whatever");
+    // "gas" is a real category that carries no subcategory list.
+    expect(subcategoryLabel("gas", "whatever")).toBe("whatever");
+  });
+});

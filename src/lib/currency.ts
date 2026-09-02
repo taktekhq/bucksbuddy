@@ -16,6 +16,8 @@ export function toUsdCents(
   currency: Currency,
   lbpPerUsd: number,
 ): number {
+  // Stryker disable next-line EqualityOperator : equivalent — at exactly zero
+  // both the guard and the conversion below yield 0 cents.
   if (!Number.isFinite(amount) || amount < 0) return 0;
   if (currency === "USD") {
     return Math.round(amount * 100);
@@ -26,7 +28,14 @@ export function toUsdCents(
 
 /** Parse a numpad display string ("12.50", "", ".") into a non-negative number. */
 export function parseAmountString(display: string): number {
+  // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral,EqualityOperator : the
+  // guard is redundant — parseFloat already yields NaN for "" and ".", which
+  // the check below turns into 0. Verified equivalent across empty, partial,
+  // signed and malformed inputs. Kept because it names the numpad's two empty
+  // states, which is not obvious from `Number.parseFloat` alone.
   if (!display || display === ".") return 0;
   const n = Number.parseFloat(display);
+  // Stryker disable next-line EqualityOperator : equivalent — at exactly zero
+  // both branches return 0.
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }

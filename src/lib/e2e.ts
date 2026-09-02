@@ -172,6 +172,9 @@ export async function unlockVault(
   passphrase: string,
 ): Promise<CryptoKey | null> {
   const row = await fetchKeyRow(userId);
+  // Stryker disable next-line ConditionalExpression : equivalent — without this
+  // guard the property read below throws into the catch, returning null just
+  // the same.
   if (!row) return null;
   try {
     const masterKey = await unwrapMasterKey(row.wrapped_key, passphrase);

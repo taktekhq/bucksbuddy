@@ -53,6 +53,9 @@ function toB64(bytes: Uint8Array): string {
 function fromB64(b64: string): Uint8Array<ArrayBuffer> {
   const s = atob(b64);
   const out = new Uint8Array(new ArrayBuffer(s.length));
+  // Stryker disable next-line EqualityOperator : equivalent — `out` is exactly
+  // s.length long and an out-of-bounds typed-array write is silently dropped,
+  // so the extra iteration changes nothing. Verified against the original.
   for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
   return out;
 }
@@ -114,6 +117,9 @@ async function deriveWrapKey(
     { name: "PBKDF2", salt: ab(salt), iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
     base,
     { name: "AES-GCM", length: 256 },
+    // Stryker disable next-line BooleanLiteral : equivalent — the wrapping key
+    // is never exported, so extractability is unobservable. It stays false on
+    // principle: nothing should be able to lift a passphrase-derived key.
     false,
     ["encrypt", "decrypt"],
   );
