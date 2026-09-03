@@ -188,28 +188,14 @@ tooling, not code: this Mac's Xcode 26.3 (Swift 6.2.4) hits a known Expo SDK 57
 ([expo/expo#46242](https://github.com/expo/expo/issues/46242)); Expo's
 maintainers say SDK 56/57 need Xcode 26.4+ (Swift 6.3).
 
-**Unblocked in CI rather than waiting on a local Xcode upgrade.** GitHub's
-`macos-26` hosted runner ships Xcode 26.6 by default (26.4.1 also installed,
-which is what the job pins to explicitly — a documented floor, not whatever the
-image's default happens to be that month), comfortably past the 26.4 floor. The
-`mobile-ios-build` CI job (`.github/workflows/ci.yml`) prebuilds the native iOS
-project and runs a real `xcodebuild build` against the simulator SDK under that
-toolchain.
-
-Scoped deliberately narrow, and flagged as such: it proves the native project
-*compiles* — the literal thing blocked locally — not that the crypto vectors
-pass on a running simulator. Going further (boot a simulator, deep-link to
-`/crypto-check`, which now auto-runs on mount and logs a greppable
-`CRYPTO_CHECK_RESULT=PASS|FAIL` line, read the result back via `simctl log
-stream`) is the obvious next increment and the screen is already prepared for
-it, but wiring the log-reading script was left undone rather than shipped
-unverified: there's no macOS runner available to iterate against in the session
-that wrote it, and a scripted `simctl` dance neither author nor reviewer can
-watch fail is worse than an honest gap. The build job itself is standard,
-well-trodden Expo/Xcode CI shape, but is *also* unverified against a real
-runner — it's gated to `workflow_dispatch` and PRs labelled `ios-build` rather
-than running on every push, specifically so it doesn't burn macOS minutes
-repeatedly until someone has watched it go green once.
+**Resolution: upgrade the local Xcode, not a CI workaround.** A CI job that
+only builds for the Simulator can't install anything on a physical iPhone
+anyway, and the crypto-check gate specifically needs to run on real hardware —
+so a macOS runner was solving the wrong problem. Upgrading Xcode locally to
+26.4+ and running `expo run:ios --device` directly is the simpler, more
+direct path to actually getting a build onto the phone. (A `mobile-ios-build`
+CI job and an auto-running `/crypto-check` screen were built and then removed
+once this became clear — worth knowing if either turns up in old branches.)
 
 ### Phase 2 — Port the screens
 
