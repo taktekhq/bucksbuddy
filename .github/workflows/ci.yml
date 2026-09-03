@@ -6,6 +6,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    # Lets any branch (e.g. a feature branch adding a new job) be run
+    # manually from the Actions tab or API — GitHub only shows the "Run
+    # workflow" button, or accepts a dispatch call, when this trigger exists
+    # in the workflow file on the DEFAULT branch, regardless of which ref you
+    # actually pick to run.
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
