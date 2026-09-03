@@ -62,3 +62,61 @@ jobs:
           name: mutation-report
           path: reports/mutation/
           retention-days: 14
+
+  mobile-android-crypto-check:
+    name: Mobile Android crypto gate
+    # Android needs no Xcode/macOS at all, so this runs on a plain ubuntu
+    # runner (KVM is available there for the emulator) — no toolchain-version
+    # blocker like iOS's, and no macOS-runner cost or uncertainty either.
+    #
+    # This closes the one leg Validator #4's automated suite can't reach on
+    # its own (packages/core/src/crypto-vectors.test.ts, which only runs
+    # WebCrypto vs. the pure-JS noble referee, both in Node): whether
+    # react-native-quick-crypto itself, actually running on a device, agrees
+    # with the frozen envelopes. Boots an emulator, builds and installs a
+    # debug APK, deep-links straight into bucksbuddy://crypto-check (which
+    # auto-runs on mount), and reads the verdict back from logcat.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install workspace dependencies
+        working-directory: .
+        run: npm ci
+      - name: Prebuild the native Android project
+        run: npx expo prebuild --platform android
+      - name: Build the debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon
+      - name: Boot an emulator, install, launch, and read the result
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            apk=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+            echo "installing $apk"
+            adb wait-for-device
+            adb install -r "$apk"
+            adb logcat -c
+            adb shell am start -a android.intent.action.VIEW -d "bucksbuddy://crypto-check"
+            # PBKDF2 at 600k iterations plus JS-bundle startup needs real time.
+            for i in $(seq 1 30); do
+              adb logcat -d | grep -q "CRYPTO_CHECK_RESULT" && break
+              sleep 2
+            done
+            adb logcat -d | grep "CRYPTO_CHECK_RESULT" | tee /tmp/crypto-check.log
+            grep -q "CRYPTO_CHECK_RESULT=PASS" /tmp/crypto-check.log

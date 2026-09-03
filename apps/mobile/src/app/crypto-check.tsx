@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { type CryptoDiagnostics, runCryptoDiagnostics } from "@/lib/nativeCrypto";
+
+// A single, greppable line CI reads back via `adb logcat` after deep-linking
+// to this screen on a booted emulator — see the mobile-android-crypto-check
+// job in .github/workflows/ci.yml. Plain text, not JSON: logcat matches on
+// message content, and a stable prefix is all that's needed.
+function logResult(passed: boolean, detail: string): void {
+  console.log(`CRYPTO_CHECK_RESULT=${passed ? "PASS" : "FAIL"} ${detail}`);
+}
 
 type State =
   | { status: "idle" }
@@ -36,18 +44,25 @@ export default function CryptoCheckScreen() {
         result.passphraseVector &&
         result.verifierVector &&
         result.nativeRoundTrip;
+      logResult(passed, JSON.stringify(result));
       setState(
         passed
           ? { status: "passed", result }
           : { status: "failed", message: "A compatibility assertion failed." },
       );
     } catch (error) {
-      setState({
-        status: "failed",
-        message: error instanceof Error ? error.message : "Unknown native crypto error",
-      });
+      const message = error instanceof Error ? error.message : "Unknown native crypto error";
+      logResult(false, message);
+      setState({ status: "failed", message });
     }
   }
+
+  // Runs itself once on mount so CI can deep-link to this route on a booted
+  // emulator and just read the logcat verdict — no simulated tap needed. The
+  // button stays for manual re-runs.
+  useEffect(() => {
+    void run();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>

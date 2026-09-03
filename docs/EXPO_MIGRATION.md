@@ -188,14 +188,36 @@ tooling, not code: this Mac's Xcode 26.3 (Swift 6.2.4) hits a known Expo SDK 57
 ([expo/expo#46242](https://github.com/expo/expo/issues/46242)); Expo's
 maintainers say SDK 56/57 need Xcode 26.4+ (Swift 6.3).
 
-**Resolution: upgrade the local Xcode, not a CI workaround.** A CI job that
-only builds for the Simulator can't install anything on a physical iPhone
-anyway, and the crypto-check gate specifically needs to run on real hardware —
-so a macOS runner was solving the wrong problem. Upgrading Xcode locally to
-26.4+ and running `expo run:ios --device` directly is the simpler, more
-direct path to actually getting a build onto the phone. (A `mobile-ios-build`
-CI job and an auto-running `/crypto-check` screen were built and then removed
-once this became clear — worth knowing if either turns up in old branches.)
+**Resolution for iOS: upgrade the local Xcode, not a CI workaround.** A CI job
+that only builds for the Simulator can't install anything on a physical
+iPhone anyway, and the crypto-check gate specifically needs to run on real
+hardware — so a macOS runner was solving the wrong problem there. Upgrading
+Xcode locally to 26.4+ and running `expo run:ios --device` directly is the
+simpler, more direct path to actually getting a build onto the phone. (A
+`mobile-ios-build` CI job was built and then removed once this became clear —
+worth knowing if it turns up in old branches.)
+
+**Resolution for Android: CI, for real this time.** Unlike iOS, nothing about
+Android needs Apple's toolchain or a physical device to get a first
+correctness signal — a plain `ubuntu-latest` runner has KVM for the emulator,
+no macOS-runner cost or version uncertainty. The `mobile-android-crypto-check`
+job (`.github/workflows/ci.yml`) builds a debug APK, boots an emulator,
+deep-links straight into `/crypto-check` — which auto-runs on mount and logs a
+greppable `CRYPTO_CHECK_RESULT=PASS|FAIL` line — and asserts the result from
+`adb logcat`. This is the piece Validator #4's automated suite structurally
+can't reach on its own: `crypto-vectors.test.ts` only ever runs WebCrypto
+against the pure-JS noble referee, both in Node, since `react-native-quick-crypto`
+is a native module that needs a real RN runtime. This job is where that third
+leg actually gets exercised.
+
+Still unverified end-to-end by whoever wrote it — no KVM and no route to
+`dl.google.com` (blocked by this session's egress policy) in the sandbox that
+authored it, so, like the iOS job before it, it's reasoned from a
+well-documented, widely-used GitHub Action rather than dry-run. Runs by
+default on every push/PR rather than gated behind a label, since ubuntu
+runners are cheap — but note it only fires on `pull_request` events or
+`workflow_dispatch`; the workflow's `push` trigger is scoped to `main`, so a
+direct push to a feature branch with no open PR won't trigger it on its own.
 
 ### Phase 2 — Port the screens
 
