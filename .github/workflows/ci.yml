@@ -97,6 +97,13 @@ jobs:
       - name: Install workspace dependencies
         working-directory: .
         run: npm ci
+      - name: Write Supabase config
+        env:
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          echo "EXPO_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> .env
+          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" >> .env
       - name: Prebuild the native Android project
         run: npx expo prebuild --platform android
       - name: Build the debug APK
@@ -109,7 +116,13 @@ jobs:
           profile: pixel_7
           disable-animations: true
           script: |
-            set -euo pipefail
+            # android-emulator-runner executes this via /bin/sh (dash on the
+            # ubuntu-latest runner), which has no `pipefail` option — `set -o
+            # pipefail` hard-fails with "Illegal option" before anything else
+            # runs. Nothing here depends on a pipe's exit status anyway (the
+            # `find | head` below is read via command substitution, and the
+            # final check greps a file directly), so plain `-eu` is enough.
+            set -eu
             apk=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
             echo "installing $apk"
             adb wait-for-device

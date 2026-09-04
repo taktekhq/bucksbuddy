@@ -219,6 +219,58 @@ runners are cheap — but note it only fires on `pull_request` events or
 `workflow_dispatch`; the workflow's `push` trigger is scoped to `main`, so a
 direct push to a feature branch with no open PR won't trigger it on its own.
 
+**Update: run for real, bug found and fixed.** The job did hit exactly the
+kind of thing an unverified action invites: `android-emulator-runner` executes
+its `script` via `/bin/sh` (dash on `ubuntu-latest`), which has no `pipefail`
+option, so `set -euo pipefail` failed immediately with "Illegal option" before
+the emulator was ever touched. Nothing in the script depends on a pipe's exit
+status, so `set -eu` fixes it with no behavior change. The job now also writes
+`apps/mobile/.env` from `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY`
+secrets before prebuild, matching local dev, even though `/crypto-check` itself
+never touches Supabase — the rest of the bundled JS does, and a fully-configured
+build is one less variable versus a stubbed one.
+
+iOS's exit gate also finally ran for real, once the local Xcode upgrade
+happened after all (26 wasn't enough — see the sidebar below): both the
+crypto-check vectors and Google sign-in passed on physical hardware. Getting
+there needed one more unplanned fix, on top of everything above — see the
+iOS 27 sidebar.
+
+#### Sidebar: iOS 27's UIScene requirement broke the freshly-built dev client
+
+Xcode 27 (paired with iOS 27) turned a long-standing deprecation warning into
+a hard launch-time trap: apps built against the iOS 27 SDK now crash
+immediately (`EXC_BREAKPOINT` / `SIGTRAP`, inside
+`UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`) unless they
+declare `UIApplicationSceneManifest` in Info.plist and adopt the UIKit scene
+life cycle. Expo's SDK 57 template doesn't yet — `AppDelegate.swift` still
+creates the `UIWindow` directly in `application(_:didFinishLaunchingWithOptions:)`,
+the legacy pattern. Already filed upstream
+([expo/expo#46663](https://github.com/expo/expo/issues/46663),
+[#46664](https://github.com/expo/expo/issues/46664)) and fixed on Expo's
+`main` branch ([expo/expo#46733](https://github.com/expo/expo/pull/46733)) —
+adding `ExpoAppSceneDelegate.swift` and `ExpoReactNativeFactoryProvider.swift`
+to the `expo` package — but not yet in a published release as of SDK 57.0.20.
+
+Stopgap applied locally: those two files vendored into
+`node_modules/expo/ios/AppDelegates/` (picked up automatically by the `Expo`
+podspec's `ios/**/*.swift` glob — needs a `pod install` to be discovered,
+which needs CocoaPods installed at all: this Mac's fresh Xcode 27 reinstall
+had none, `brew install cocoapods` was the fix), plus `AppDelegate.swift`
+conforming to `ExpoReactNativeFactoryProvider` instead of creating the window
+itself, plus the `UIApplicationSceneManifest` key in `Info.plist` pointing at
+`EXExpoAppSceneDelegate`. **Not yet committed** — it lives only in the
+git-ignored `apps/mobile/ios/` and in `node_modules`, so it needs to be made
+durable (committed generated-file edit, or better, an Expo config plugin so
+it survives a future `expo prebuild --clean`) before this is safe to rely on
+from a fresh clone or CI. Drop the whole stopgap once `expo` publishes a SDK
+57.x release containing #46733.
+
+A second, unrelated snag on the same run: a stale `ios/.xcode.env.local`
+(git-ignored, machine-local) pointed `NODE_BINARY` at an old system Node
+(v19.4.0) that predates `util.parseEnv`, which `@expo/env` now calls — fixed
+by pointing it at the project's actual Node (v22.23.2, per `.nvmrc`).
+
 ### Phase 2 — Port the screens
 
 Order by risk, riskiest first, so surprises land while there's still schedule:
