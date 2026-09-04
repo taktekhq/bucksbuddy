@@ -1,4 +1,4 @@
-import type { Category } from "@/lib/categories";
+import { resolveCategoryIcon, type Category } from "@/lib/categories";
 
 type Props = {
   categories: Category[];
@@ -14,7 +14,7 @@ export function CategoryGrid({ categories, selected, onSelect }: Props) {
     <div className="grid grid-cols-3 gap-2.5">
       {categories.map((c) => {
         const active = c.id === selected;
-        const Icon = c.icon;
+        const Icon = resolveCategoryIcon(c.icon);
         const fg = active ? "#FFFFFF" : c.color;
         const hasSubs = (c.subcategories?.length ?? 0) > 0;
         return (

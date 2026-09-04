@@ -5,7 +5,12 @@
   "type": "module",
   "exports": {
     "./crypto": "./src/crypto.ts",
-    "./crypto-vectors": "./src/crypto-vectors.ts"
+    "./crypto-vectors": "./src/crypto-vectors.ts",
+    "./money": "./src/money.ts",
+    "./dates": "./src/dates.ts",
+    "./gold": "./src/gold.ts",
+    "./currency": "./src/currency.ts",
+    "./categories": "./src/categories.ts"
   },
   "devDependencies": {
     "@noble/ciphers": "^2.4.0",

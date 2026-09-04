@@ -31,7 +31,8 @@
           "imageWidth": 128
         }
       ],
-      "./plugins/withIOS27SceneLifecycle.js"
+      "./plugins/withIOS27SceneLifecycle.js",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

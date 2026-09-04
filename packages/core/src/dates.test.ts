@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { currentMonthRange, monthAnchor, dayKey, dayLabel, isToday, monthLabel } from "@/lib/dates";
+import { currentMonthRange, monthAnchor, dayKey, dayLabel, isToday, monthLabel } from "./dates.js";
 
 describe("currentMonthRange", () => {
   it("returns the first of this month and the first of next month", () => {

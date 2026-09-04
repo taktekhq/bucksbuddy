@@ -3,7 +3,7 @@ import {
   DEFAULT_LBP_PER_USD,
   parseAmountString,
   toUsdCents,
-} from "@/lib/currency";
+} from "./currency.js";
 
 describe("toUsdCents", () => {
   it("converts USD to integer cents with rounding", () => {
