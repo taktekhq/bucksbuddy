@@ -10,7 +10,11 @@
     "./dates": "./src/dates.ts",
     "./gold": "./src/gold.ts",
     "./currency": "./src/currency.ts",
-    "./categories": "./src/categories.ts"
+    "./categories": "./src/categories.ts",
+    "./types": "./src/types.ts",
+    "./stats": "./src/stats.ts",
+    "./history": "./src/history.ts",
+    "./csv": "./src/csv.ts"
   },
   "devDependencies": {
     "@noble/ciphers": "^2.4.0",

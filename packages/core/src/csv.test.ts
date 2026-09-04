@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { transactionsToCsv } from "@/lib/csv";
-import type { Transaction } from "@/types/db";
+import { transactionsToCsv } from "./csv.js";
+import type { Transaction } from "./types.js";
 
 function tx(overrides: Partial<Transaction> = {}): Transaction {
   return {
