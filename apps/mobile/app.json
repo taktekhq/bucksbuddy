@@ -30,7 +30,8 @@
           "image": "./assets/icon.png",
           "imageWidth": 128
         }
-      ]
+      ],
+      "./plugins/withIOS27SceneLifecycle.js"
     ],
     "experiments": {
       "typedRoutes": true,
