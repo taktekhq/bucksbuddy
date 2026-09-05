@@ -12,12 +12,15 @@ jest.mock("expo-linking", () => ({
 
 const mockSignInWithOAuth = jest.fn();
 const mockExchangeCodeForSession = jest.fn();
+const mockSignInWithIdToken = jest.fn();
 jest.mock("@/lib/supabase", () => ({
   supabase: {
     auth: {
       signInWithOAuth: (...args: unknown[]) => (mockSignInWithOAuth as (...a: unknown[]) => unknown)(...args),
       exchangeCodeForSession: (...args: unknown[]) =>
         mockExchangeCodeForSession(...args),
+      signInWithIdToken: (...args: unknown[]) =>
+        (mockSignInWithIdToken as (...a: unknown[]) => unknown)(...args),
     },
   },
 }));
@@ -120,5 +123,79 @@ describe("signInWithGoogle", () => {
       error: { message: "invalid grant" },
     });
     expect(await signInWithGoogle()).toEqual({ error: "invalid grant" });
+  });
+});
+
+// Sign in with Apple. Nothing round-trips through a browser here: iOS returns
+// an identity token and Supabase exchanges it, so the surface to cover is the
+// availability gate and what each failure reports back.
+import * as AppleAuthentication from "expo-apple-authentication";
+import { Platform } from "react-native";
+import { isAppleSignInAvailable, signInWithApple } from "@/lib/oauth";
+
+const asMock = (f: unknown) => f as jest.Mock;
+
+function onPlatform(os: string, run: () => Promise<void>) {
+  const original = Platform.OS;
+  Object.defineProperty(Platform, "OS", { value: os, configurable: true });
+  return run().finally(() => {
+    Object.defineProperty(Platform, "OS", { value: original, configurable: true });
+  });
+}
+
+describe("isAppleSignInAvailable", () => {
+  it("is false off iOS, without even asking the OS", async () => {
+    asMock(AppleAuthentication.isAvailableAsync).mockResolvedValue(true);
+    await onPlatform("android", async () => {
+      expect(await isAppleSignInAvailable()).toBe(false);
+    });
+    expect(AppleAuthentication.isAvailableAsync).not.toHaveBeenCalled();
+  });
+
+  it("asks the OS on iOS", async () => {
+    asMock(AppleAuthentication.isAvailableAsync).mockResolvedValue(true);
+    await onPlatform("ios", async () => {
+      expect(await isAppleSignInAvailable()).toBe(true);
+    });
+  });
+
+  it("is false when the OS check itself throws", async () => {
+    asMock(AppleAuthentication.isAvailableAsync).mockRejectedValue(new Error("no entitlement"));
+    await onPlatform("ios", async () => {
+      expect(await isAppleSignInAvailable()).toBe(false);
+    });
+  });
+});
+
+describe("signInWithApple", () => {
+  it("exchanges Apple's identity token for a session", async () => {
+    asMock(AppleAuthentication.signInAsync).mockResolvedValue({ identityToken: "tok" });
+    mockSignInWithIdToken.mockResolvedValue({ error: null });
+    expect(await signInWithApple()).toEqual({ error: null });
+    expect(mockSignInWithIdToken).toHaveBeenCalledWith({ provider: "apple", token: "tok" });
+  });
+
+  it("reports a Supabase failure", async () => {
+    asMock(AppleAuthentication.signInAsync).mockResolvedValue({ identityToken: "tok" });
+    mockSignInWithIdToken.mockResolvedValue({ error: { message: "bad audience" } });
+    expect(await signInWithApple()).toEqual({ error: "bad audience" });
+  });
+
+  it("reports a credential with no token rather than calling Supabase", async () => {
+    asMock(AppleAuthentication.signInAsync).mockResolvedValue({ identityToken: null });
+    expect(await signInWithApple()).toEqual({
+      error: "Apple didn't return a sign-in token.",
+    });
+    expect(mockSignInWithIdToken).not.toHaveBeenCalled();
+  });
+
+  it("treats a cancelled sheet as a non-event, like dismissing the Google browser", async () => {
+    asMock(AppleAuthentication.signInAsync).mockRejectedValue({ code: "ERR_REQUEST_CANCELED" });
+    expect(await signInWithApple()).toEqual({ error: null });
+  });
+
+  it("reports any other failure", async () => {
+    asMock(AppleAuthentication.signInAsync).mockRejectedValue(new Error("boom"));
+    expect(await signInWithApple()).toEqual({ error: "Couldn't sign in with Apple." });
   });
 });

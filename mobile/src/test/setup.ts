@@ -40,6 +40,18 @@ jest.mock("react-native-reanimated", () =>
   require("react-native-reanimated/mock"),
 );
 
+// --- Sign in with Apple --------------------------------------------------
+// iOS-only and entitlement-gated, so it never runs in a test environment.
+// Default to unavailable; the Landing suite overrides it to cover the button.
+jest.mock("expo-apple-authentication", () => ({
+  isAvailableAsync: jest.fn(async () => false),
+  signInAsync: jest.fn(),
+  AppleAuthenticationButton: "AppleAuthenticationButton",
+  AppleAuthenticationButtonType: { CONTINUE: 2 },
+  AppleAuthenticationButtonStyle: { BLACK: 0 },
+  AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
+}));
+
 // --- expo modules used for side effects ----------------------------------
 jest.mock("expo-linear-gradient", () => ({ LinearGradient: "LinearGradient" }));
 jest.mock("expo-web-browser", () => ({

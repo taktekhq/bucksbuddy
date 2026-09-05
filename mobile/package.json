@@ -11,6 +11,7 @@
     "@supabase/supabase-js": "^2.115.0",
     "babel-preset-expo": "^57.0.10",
     "expo": "~57.0.20",
+    "expo-apple-authentication": "~57.0.1",
     "expo-application": "~57.0.2",
     "expo-device": "~57.0.1",
     "expo-file-system": "~57.0.6",

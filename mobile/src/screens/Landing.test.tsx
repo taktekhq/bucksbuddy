@@ -2,7 +2,7 @@
 // both from the port rather than the test: Google sign-in goes through
 // `@/lib/oauth` (an auth session, not a page redirect), and the hash-router
 // assertions become `navigate` calls.
-import { render, screen, fireEvent } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 
 // Rendering a whole screen (and the modules it drags in) can outrun jest's
 // 5s default on a cold, loaded machine — see TESTING.md.
@@ -16,8 +16,14 @@ const mockNavigate = jest.fn();
 jest.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => (mockNavigate as (...x: unknown[]) => unknown)(...a) }));
 
 const mockSignInWithGoogle = jest.fn(async () => ({ error: null as string | null }));
+const mockAppleAvailable = jest.fn(async () => false);
+const mockSignInWithApple = jest.fn(async () => ({ error: null as string | null }));
 jest.mock("@/lib/oauth", () => ({
   signInWithGoogle: (...a: unknown[]) => (mockSignInWithGoogle as (...x: unknown[]) => unknown)(...a),
+  isAppleSignInAvailable: (...a: unknown[]) =>
+    (mockAppleAvailable as (...x: unknown[]) => unknown)(...a),
+  signInWithApple: (...a: unknown[]) =>
+    (mockSignInWithApple as (...x: unknown[]) => unknown)(...a),
 }));
 
 const mockSignInWithPassword = jest.fn(
@@ -166,5 +172,50 @@ describe("Landing", () => {
     // path the `if (loading) return` guard exists for.
     await fireEvent(screen.getByPlaceholderText("Password"), "submitEditing");
     expect(mockSignInWithPassword).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Sign in with Apple. Apple's guideline 4.8 makes it mandatory alongside
+// Google, and its own component is the only styling they permit — so the test
+// looks for that component rather than a label of ours.
+describe("Sign in with Apple", () => {
+  const appleButton = () => screen.queryAllByTestId("apple-sign-in");
+
+  // One test parks an unresolved promise on the mock; reset the answer so the
+  // next test doesn't inherit it.
+  beforeEach(() => {
+    mockAppleAvailable.mockResolvedValue(false);
+    mockSignInWithApple.mockResolvedValue({ error: null });
+  });
+
+  it("is hidden where the platform can't offer it", async () => {
+    mockAppleAvailable.mockResolvedValue(false);
+    await render(<Landing />);
+    expect(appleButton()).toHaveLength(0);
+  });
+
+  it("appears above Google once iOS confirms it", async () => {
+    mockAppleAvailable.mockResolvedValue(true);
+    await render(<Landing />);
+    await waitFor(() => expect(appleButton()).toHaveLength(1));
+  });
+
+  it("signs in when pressed", async () => {
+    mockAppleAvailable.mockResolvedValue(true);
+    await render(<Landing />);
+    await waitFor(() => expect(appleButton()).toHaveLength(1));
+    await act(async () => appleButton()[0].props.onPress());
+    expect(mockSignInWithApple).toHaveBeenCalled();
+    expect(screen.queryByText("Couldn't sign in with Apple.")).toBeNull();
+  });
+
+  it("surfaces a failure without leaving the button stuck", async () => {
+    mockAppleAvailable.mockResolvedValue(true);
+    mockSignInWithApple.mockResolvedValue({ error: "Couldn't sign in with Apple." });
+    await render(<Landing />);
+    await waitFor(() => expect(appleButton()).toHaveLength(1));
+    await act(async () => appleButton()[0].props.onPress());
+    expect(screen.getByText("Couldn't sign in with Apple.")).toBeTruthy();
+    expect(screen.getByText("Continue with Google")).toBeTruthy();
   });
 });

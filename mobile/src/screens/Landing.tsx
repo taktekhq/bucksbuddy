@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { Keyboard, Text, TextInput, View } from "react-native";
 import { Input } from "@/components/ui/Input";
 import { ArrowDownUp, ArrowLeft, Lock, Vault } from "lucide-react-native";
@@ -8,7 +9,11 @@ import { GoogleIcon } from "@/components/ui/GoogleIcon";
 import { Press } from "@/components/ui/Press";
 import { Screen } from "@/components/ui/Screen";
 import { navigate } from "@/lib/router";
-import { signInWithGoogle as openGoogleSignIn } from "@/lib/oauth";
+import {
+  isAppleSignInAvailable,
+  signInWithApple as startAppleSignIn,
+  signInWithGoogle as openGoogleSignIn,
+} from "@/lib/oauth";
 import { supabase } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
 
@@ -51,6 +56,15 @@ export function Landing() {
   // Disables the button and shows "Redirecting…" while we leave for Google
   // (or "Signing in…" during a password sign-in).
   const [loading, setLoading] = useState(false);
+  // iOS only, and only once the OS confirms it. Hidden everywhere else rather
+  // than shown as a button that cannot work.
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  useEffect(() => {
+    // No unmount guard: since React 18, setting state on an unmounted
+    // component is a no-op rather than a warning, so the answer arriving late
+    // is harmless.
+    void isAppleSignInAvailable().then(setAppleAvailable);
+  }, []);
   const [error, setError] = useState<string | null>(null);
 
   // Hidden password sign-in: count carrot taps, then swap in the form. The count
@@ -88,6 +102,14 @@ export function Landing() {
     // page redirect, if the auth sheet was dismissed, so loading is always
     // released.
     if (oauthError) setError(oauthError);
+    setLoading(false);
+  }
+
+  async function signInWithApple() {
+    setLoading(true);
+    setError(null);
+    const { error: appleError } = await startAppleSignIn();
+    if (appleError) setError(appleError);
     setLoading(false);
   }
 
@@ -228,6 +250,21 @@ export function Landing() {
       {/* Primary call-to-action. */}
       <View className="mt-9 flex flex-col items-center gap-3">
         <Text className="text-sm text-label-secondary">Free. No ads. 🥕</Text>
+        {/* Apple requires its own button component and styling, and that it
+            sit at least as prominently as any other sign-in option — hence
+            above Google, at the same width. */}
+        {appleAvailable && (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+            cornerRadius={9999}
+            // Apple's button draws a native view with no text of its own, so
+            // there is nothing semantic to query it by.
+            testID="apple-sign-in"
+            style={{ width: "100%", height: 52 }}
+            onPress={() => void signInWithApple()}
+          />
+        )}
         {/* Custom (carrot) Google button. Per Google's custom-button rules this
             is allowed as long as the official four-colour "G" sits on a
             contrasting background — hence the white chip — the font is a clean

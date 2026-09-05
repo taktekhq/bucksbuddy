@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { supabase } from "@/lib/supabase";
@@ -38,4 +40,52 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
 
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   return { error: exchangeError?.message ?? null };
+}
+
+// Sign in with Apple. Apple's guideline 4.8 requires it wherever another
+// third-party sign-in is offered, and this app offers Google.
+//
+// Unlike Google, this never opens a browser: iOS presents the sheet natively
+// and hands back an identity token, which Supabase exchanges for a session
+// directly. Nothing round-trips through a redirect URL, so no extra
+// allow-listing is needed for it.
+//
+// Two caveats worth knowing:
+//   • iOS only. `isAvailableAsync()` is false on Android and on older iOS, so
+//     the button is hidden rather than shown broken.
+//   • It needs the Apple entitlement, which Expo Go does not carry. The button
+//     appears there but sign-in fails until a dev build.
+export async function isAppleSignInAvailable(): Promise<boolean> {
+  if (Platform.OS !== "ios") return false;
+  try {
+    return await AppleAuthentication.isAvailableAsync();
+  } catch {
+    return false;
+  }
+}
+
+export async function signInWithApple(): Promise<{ error: string | null }> {
+  try {
+    const credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+    if (!credential.identityToken) {
+      return { error: "Apple didn't return a sign-in token." };
+    }
+    const { error } = await supabase.auth.signInWithIdToken({
+      provider: "apple",
+      token: credential.identityToken,
+    });
+    return { error: error?.message ?? null };
+  } catch (e) {
+    // Cancelling the sheet is not an error worth showing, same as dismissing
+    // the Google browser.
+    if ((e as { code?: string }).code === "ERR_REQUEST_CANCELED") {
+      return { error: null };
+    }
+    return { error: "Couldn't sign in with Apple." };
+  }
 }
