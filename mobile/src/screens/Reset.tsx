@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Keyboard, Text, TextInput, View } from "react-native";
+import { Input } from "@/components/ui/Input";
 import { Carrot } from "@/components/ui/Carrot";
 import { Press } from "@/components/ui/Press";
 import { Screen } from "@/components/ui/Screen";
@@ -84,7 +85,7 @@ export function Reset() {
       {/* The web's <form onSubmit>: no element here — the submit button and the
           confirm field's return key both call the handler. */}
       <View className="mt-8 flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card">
-        <TextInput
+        <Input
           secureTextEntry
           autoComplete="new-password"
           textContentType="newPassword"
@@ -94,9 +95,9 @@ export function Reset() {
           value={password}
           onChangeText={setPassword}
           placeholder="New password"
-          className="rounded-pill bg-grouped px-4 py-3.5 text-lg text-label placeholder:text-label-muted"
+          className="rounded-pill bg-grouped px-4 py-3.5 text-[18px] text-label placeholder:text-label-muted"
         />
-        <TextInput
+        <Input
           ref={confirmRef}
           secureTextEntry
           autoComplete="new-password"
@@ -106,7 +107,7 @@ export function Reset() {
           onChangeText={setConfirm}
           onSubmitEditing={submit}
           placeholder="Confirm password"
-          className="rounded-pill bg-grouped px-4 py-3.5 text-lg text-label placeholder:text-label-muted"
+          className="rounded-pill bg-grouped px-4 py-3.5 text-[18px] text-label placeholder:text-label-muted"
         />
         <Press
           onPress={submit}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Text, TextInput, View } from "react-native";
+import { Input } from "@/components/ui/Input";
 import {
   ChevronLeft,
   Download,
@@ -208,7 +209,7 @@ function DeleteAccountCard() {
 // `outline-none` is browser-only and dropped (PORTING.md §4); everything else
 // comes over as-is.
 const inputClass =
-  "w-full rounded-pill border border-separator bg-surface px-4 py-3 text-base text-label transition focus:border-carrot/40 placeholder:text-label-secondary";
+  "w-full rounded-pill border border-separator bg-surface px-4 py-3 text-[16px] text-label transition focus:border-carrot/40 placeholder:text-label-secondary";
 
 // The encryption card — a prominent on/off card (styled like the Safe balance
 // card), with the passphrase shown in plain text so it's easy to read, change,
@@ -307,7 +308,7 @@ function EncryptionCard() {
             return key and the button below both call the handler. */}
         <View className="flex flex-col gap-2">
           <View className="relative">
-            <TextInput
+            <Input
               secureTextEntry={saved && !reveal}
               autoComplete="off"
               autoCapitalize="none"

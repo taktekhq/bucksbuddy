@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Text, TextInput, View } from "react-native";
+import { Input } from "@/components/ui/Input";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -431,14 +432,14 @@ export function Safe() {
                 {isGold ? "g" : SYMBOL[currency]}
               </Text>
             </View>
-            <TextInput
+            <Input
               keyboardType="decimal-pad"
               value={groupInt(display)}
               onChangeText={(t) => setDisplay(isGold ? sanitizeGrams(t) : sanitizeAmount(t))}
               placeholder={isGold ? "0" : "0.00"}
               accessibilityLabel={isGold ? "Grams" : "Amount"}
               selectionColor={isGold ? GOLD : MINT}
-              className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-white placeholder:text-white/35"
+              className="min-w-0 flex-1 bg-transparent font-numeric text-[30px] font-bold tabular-nums text-white placeholder:text-white/35"
             />
             {isGold ? (
               <Text className="shrink-0 px-2 py-1 text-sm font-bold text-white/60">grams</Text>
@@ -466,14 +467,14 @@ export function Safe() {
           {/* Note (optional). */}
           <View className="flex flex-row items-center gap-3 rounded-card border border-white/15 bg-black/15 px-4 py-3">
             <StickyNote size={20} strokeWidth={2} color={WHITE_45} />
-            <TextInput
+            <Input
               value={note}
               onChangeText={setNote}
               placeholder="Add a note (optional)"
               accessibilityLabel="Note"
               maxLength={140}
               selectionColor={GOLD}
-              className="min-w-0 flex-1 bg-transparent text-base text-white placeholder:text-white/35"
+              className="min-w-0 flex-1 bg-transparent text-[16px] text-white placeholder:text-white/35"
             />
           </View>
 

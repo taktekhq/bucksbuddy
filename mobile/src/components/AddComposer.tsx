@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Text, TextInput, View } from "react-native";
+import { Input } from "@/components/ui/Input";
 import { ChevronRight, StickyNote, Tag } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
 import { CategorySheet } from "@/components/ui/CategorySheet";
@@ -150,14 +151,14 @@ export function AddComposer({
         <View className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-base font-bold text-carrot">
           <Text className="text-base font-bold text-carrot">{SYMBOL[currency]}</Text>
         </View>
-        <TextInput
+        <Input
           keyboardType="decimal-pad"
           value={groupInt(display)}
           onChangeText={(t) => setDisplay(sanitizeAmount(t))}
           placeholder="0.00"
           placeholderTextColor={colors.labelSecondary}
           accessibilityLabel="Amount"
-          className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-label placeholder:text-label-secondary"
+          className="min-w-0 flex-1 bg-transparent font-numeric text-[30px] font-bold tabular-nums text-label placeholder:text-label-secondary"
         />
         <Press
           onPress={() => setCurrency((c) => (c === "USD" ? "LBP" : "USD"))}
@@ -222,14 +223,14 @@ export function AddComposer({
       {category && (
         <View className="flex flex-row items-center gap-3 rounded-card border border-separator px-4 py-3">
           <StickyNote size={20} strokeWidth={2} color={colors.labelSecondary} />
-          <TextInput
+          <Input
             value={note}
             onChangeText={setNote}
             placeholder="Add a note (optional)"
             placeholderTextColor={colors.labelSecondary}
             accessibilityLabel="Note"
             maxLength={140}
-            className="min-w-0 flex-1 bg-transparent text-base text-label placeholder:text-label-secondary"
+            className="min-w-0 flex-1 bg-transparent text-[16px] text-label placeholder:text-label-secondary"
           />
         </View>
       )}

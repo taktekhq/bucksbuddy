@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Keyboard, Text, TextInput, View } from "react-native";
+import { Input } from "@/components/ui/Input";
 import { ArrowDownUp, ArrowLeft, Lock, Vault } from "lucide-react-native";
 import { Carrot } from "@/components/ui/Carrot";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -128,7 +129,7 @@ export function Landing() {
         {/* The web's <form onSubmit>: no element here — the submit button and
             the password field's return key both call the handler. */}
         <View className="mt-8 flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card">
-          <TextInput
+          <Input
             ref={emailRef}
             inputMode="email"
             keyboardType="email-address"
@@ -142,9 +143,9 @@ export function Landing() {
             value={email}
             onChangeText={setEmail}
             placeholder="Email"
-            className="rounded-pill bg-grouped px-4 py-3.5 text-lg text-label placeholder:text-label-muted"
+            className="rounded-pill bg-grouped px-4 py-3.5 text-[18px] text-label placeholder:text-label-muted"
           />
-          <TextInput
+          <Input
             ref={passwordRef}
             secureTextEntry
             autoComplete="current-password"
@@ -154,7 +155,7 @@ export function Landing() {
             onChangeText={setPassword}
             onSubmitEditing={signInWithPassword}
             placeholder="Password"
-            className="rounded-pill bg-grouped px-4 py-3.5 text-lg text-label placeholder:text-label-muted"
+            className="rounded-pill bg-grouped px-4 py-3.5 text-[18px] text-label placeholder:text-label-muted"
           />
           <Press
             onPress={signInWithPassword}
