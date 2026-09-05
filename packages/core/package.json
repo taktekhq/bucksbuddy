@@ -19,7 +19,8 @@
     "./storagePort": "./src/storagePort.ts",
     "./cache": "./src/cache.ts",
     "./e2e": "./src/e2e.ts",
-    "./store": "./src/store.tsx"
+    "./store": "./src/store.tsx",
+    "./editIntent": "./src/editIntent.ts"
   },
   "devDependencies": {
     "@noble/ciphers": "^2.4.0",

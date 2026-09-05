@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Banknote, ChevronRight, Coins, Eye, EyeOff, Lock, Settings, Vault } from "lucide-react-native";
 
 import { NetTotal } from "@/components/ui/NetTotal";
@@ -11,6 +11,7 @@ import { Carrot } from "@/components/ui/Carrot";
 import { AddComposer } from "@/components/AddComposer";
 import { HistoryList } from "@/components/HistoryList";
 import { useStore } from "@/lib/store";
+import { takePendingEdit } from "@bucksbuddy/core/editIntent";
 import { isToday, monthLabel } from "@bucksbuddy/core/dates";
 import { dailySpendSeries } from "@bucksbuddy/core/stats";
 import { formatUsdCents } from "@bucksbuddy/core/money";
@@ -20,17 +21,29 @@ import type { Transaction } from "@bucksbuddy/core/types";
 // Amber/gold that reads on the light card (the metal, but legible).
 const GOLD_INK = "#A16207";
 
-// Mirrors src/screens/Home.tsx. Not ported: the cross-screen "edit intent"
-// (jumping here from the not-yet-built History screen with a transaction
-// pre-selected) and analytics (posthog isn't wired up on mobile).
-// navigate("/safe")/("/settings")/("/stats") point at routes that don't
-// exist yet either — those are the next screens in Phase 2's order.
+// Mirrors src/screens/Home.tsx. Analytics isn't wired up on mobile yet
+// (posthog), so it's omitted rather than faked. navigate("/settings")/("/stats")
+// point at not-yet-built placeholder routes — next in Phase 2's order.
 export function HomeScreen() {
   const { transactions, balanceCents, loading, deleteTransaction, safeTotalCents, safeGoldGrams, locked } =
     useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
 
-  // The full history lives on its own "/history" page; the page itself only
+  // Editing a row on the History screen stashes the target id (editIntent.ts)
+  // and pops back here — router.back() returns to this same still-mounted
+  // instance rather than remounting it, so a plain mount effect wouldn't
+  // fire again. useFocusEffect does, covering both the first mount and every
+  // return trip.
+  useFocusEffect(
+    useCallback(() => {
+      const pendingId = takePendingEdit();
+      if (!pendingId) return;
+      const tx = transactions.find((t) => t.id === pendingId);
+      if (tx) setEditing(tx);
+    }, [transactions]),
+  );
+
+  // The full history lives on its own "/history" screen; this screen only
   // lists today's entries so it doesn't grow without bound.
   const todays = transactions.filter((t) => isToday(t.occurred_at));
 

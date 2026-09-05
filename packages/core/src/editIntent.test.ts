@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { requestEdit, takePendingEdit } from "@/lib/editIntent";
+import { requestEdit, takePendingEdit } from "./editIntent";
 
 describe("editIntent", () => {
   it("hands back the requested id once, then clears it", () => {

@@ -1,5 +1,5 @@
-import { ComingSoonScreen } from "@/screens/ComingSoonScreen";
+import { HistoryScreen } from "@/screens/HistoryScreen";
 
 export default function HistoryRoute() {
-  return <ComingSoonScreen title="History" />;
+  return <HistoryScreen />;
 }
