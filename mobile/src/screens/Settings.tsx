@@ -208,7 +208,7 @@ function DeleteAccountCard() {
 // `outline-none` is browser-only and dropped (PORTING.md §4); everything else
 // comes over as-is.
 const inputClass =
-  "w-full rounded-pill border border-separator bg-surface px-4 py-3 text-base text-label ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary";
+  "w-full rounded-pill border border-separator bg-surface px-4 py-3 text-base text-label transition focus:border-carrot/40 placeholder:text-label-secondary";
 
 // The encryption card — a prominent on/off card (styled like the Safe balance
 // card), with the passphrase shown in plain text so it's easy to read, change,
@@ -268,7 +268,7 @@ function EncryptionCard() {
       <SectionHeader>Encryption</SectionHeader>
       <View
         className={`flex flex-col gap-3 rounded-card p-4 shadow-card ${
-          on ? "bg-income/20 ring-1 ring-income/40" : "bg-surface"
+          on ? "bg-income/20 border border-income/40" : "bg-surface"
         }`}
       >
         <View className="flex flex-row items-center gap-3">

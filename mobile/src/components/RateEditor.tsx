@@ -41,7 +41,7 @@ export function RateEditor() {
               onBlur={() => void commit()}
               accessibilityLabel="LBP per $1"
               selectionColor={colors.carrot}
-              className="w-28 rounded-lg border border-separator px-3 py-2 text-right text-base tabular-nums text-label ring-carrot/40 transition focus:ring-2"
+              className="w-28 rounded-lg border border-separator px-3 py-2 text-right text-base tabular-nums text-label transition focus:border-carrot/40"
             />
           </View>
         </View>

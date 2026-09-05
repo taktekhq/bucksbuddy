@@ -96,14 +96,14 @@ export const HistoryStack = memo(function HistoryStack({
           next list item. */}
       <View
         aria-hidden
-        className="absolute inset-x-0 bottom-3 top-0 translate-y-3 scale-x-[0.90] rounded-card bg-[#2E2E30] ring-1 ring-inset ring-white/5"
+        className="absolute inset-x-0 bottom-3 top-0 translate-y-3 scale-x-[0.90] rounded-card bg-[#2E2E30] border border-white/5"
       />
       <View
         aria-hidden
-        className="absolute inset-x-0 bottom-3 top-0 translate-y-1.5 scale-x-[0.95] rounded-card bg-[#343436] ring-1 ring-inset ring-white/5"
+        className="absolute inset-x-0 bottom-3 top-0 translate-y-1.5 scale-x-[0.95] rounded-card bg-[#343436] border border-white/5"
       />
       {/* Front card. */}
-      <View className="relative flex flex-row items-center gap-3 rounded-card bg-[#3A3A3C] px-4 py-3.5 ring-1 ring-inset ring-white/5">
+      <View className="relative flex flex-row items-center gap-3 rounded-card bg-[#3A3A3C] px-4 py-3.5 border border-white/5">
         <View
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill"
           style={{ backgroundColor: `${color}33` }}

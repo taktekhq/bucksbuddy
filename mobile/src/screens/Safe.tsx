@@ -273,7 +273,7 @@ export function Safe() {
       {/* TOTALS — cash and gold in one vault card. */}
       <View>
         {/* backdrop-blur isn't supported on native (PORTING.md §4) — dropped. */}
-        <View className="rounded-card bg-white/[0.06] px-5 py-6 ring-1 ring-white/10">
+        <View className="rounded-card bg-white/[0.06] px-5 py-6 border border-white/10">
           <View className="flex flex-row items-center gap-2 text-[13px] font-medium uppercase tracking-wide text-white/55">
             <Vault size={16} strokeWidth={2} color={WHITE_55} />
             <Text className="text-[13px] font-medium uppercase tracking-wide text-white/55">
@@ -335,7 +335,7 @@ export function Safe() {
         <Text className="px-2 font-display text-sm font-semibold uppercase tracking-wide text-white/55">
           Move money
         </Text>
-        <View className="flex flex-col gap-3 rounded-card bg-white/[0.06] p-4 ring-1 ring-white/10">
+        <View className="flex flex-col gap-3 rounded-card bg-white/[0.06] p-4 border border-white/10">
           {/* Cash / Gold asset selector. */}
           {/* `grid grid-cols-2` → `flex-row` + `flex-1` on each half: React
               Native has no CSS grid (PORTING.md §4). Same for the toggle below. */}
@@ -532,7 +532,7 @@ export function Safe() {
                   <SwipeToDelete
                     onDelete={() => void m.onDelete()}
                     deleteColor="#E0463C"
-                    className="flex flex-row items-center gap-3 bg-[#163E2F] px-4 py-3.5 ring-1 ring-inset ring-white/10"
+                    className="flex flex-row items-center gap-3 bg-[#163E2F] px-4 py-3.5 border border-white/10"
                   >
                     <View className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-white/10">
                       <Icon size={20} strokeWidth={2} color={tone} />

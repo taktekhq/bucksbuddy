@@ -67,7 +67,7 @@ export const SwipeRow = memo(function SwipeRow({
   // so iOS has an opaque body to cast `shadow-card` from.
   const tone = dark
     ? {
-        card: "bg-[#3A3A3C] ring-1 ring-inset ring-white/5",
+        card: "bg-[#3A3A3C] border border-white/5",
         shell: "bg-[#3A3A3C]",
         label: "text-white",
         meta: "text-white/55",
