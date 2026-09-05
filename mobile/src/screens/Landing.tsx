@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { Keyboard, StyleSheet, Text, TextInput, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from "react-native-reanimated";
 import { ArrowDownUp, ArrowLeft, Lock, Vault } from "lucide-react-native";
 import { Carrot } from "@/components/ui/Carrot";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -63,6 +63,8 @@ export function Landing() {
   // lives in a ref since it shouldn't re-render on its own — only crossing the
   // threshold flips showEmail.
   const taps = useRef(0);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
   const [showEmail, setShowEmail] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -75,6 +77,7 @@ export function Landing() {
   }
 
   function backToLanding() {
+    Keyboard.dismiss();
     taps.current = 0;
     setShowEmail(false);
     setError(null);
@@ -95,8 +98,12 @@ export function Landing() {
   }
 
   async function signInWithPassword() {
-    // The web form's `required` inputs: an empty field never submits.
-    if (!email.trim() || !password) return;
+    // The web form's `required` inputs: an empty field never submits; the
+    // disabled submit button also blocks a second Enter mid-flight.
+    if (loading) return;
+    if (!email.trim()) return emailRef.current?.focus();
+    if (!password) return passwordRef.current?.focus();
+    Keyboard.dismiss();
     setLoading(true);
     setError(null);
 
@@ -115,6 +122,7 @@ export function Landing() {
   // each root is full-bleed, so the outgoing page fades out over the incoming
   // one without either shifting.
   return (
+    <LayoutAnimationConfig skipEntering>
     <View style={styles.root}>
       {showEmail ? (
         // The hidden email/password sign-in — a separate flow shown in place of
@@ -125,7 +133,7 @@ export function Landing() {
           entering={FadeIn.duration(motion.pop)}
           exiting={FadeOut.duration(motion.pop)}
         >
-          <Screen center paddingX={space(6)} gap={0}>
+          <Screen center paddingX={space(6)} paddingTop={0} paddingBottom={0} gap={0}>
             <View style={styles.centered}>
               <Carrot size={60} />
               <Text style={styles.emailH1}>Bucks{"\n"}Buddy</Text>
@@ -141,6 +149,9 @@ export function Landing() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                ref={emailRef}
                 value={email}
                 onChangeText={setEmail}
                 placeholder="Email"
@@ -152,6 +163,7 @@ export function Landing() {
                 autoComplete="current-password"
                 textContentType="password"
                 returnKeyType="go"
+                ref={passwordRef}
                 value={password}
                 onChangeText={setPassword}
                 onSubmitEditing={signInWithPassword}
@@ -253,6 +265,7 @@ export function Landing() {
         </Animated.View>
       )}
     </View>
+    </LayoutAnimationConfig>
   );
 }
 

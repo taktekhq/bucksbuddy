@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-  rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: white(0.05) },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: white(0.05) },
   // h-8 w-8 shrink-0 rounded-full, tinted `${color}26`
   badge: {
     width: 32,

@@ -7,18 +7,15 @@ import {
   useState,
   type ComponentType,
   type ReactNode,
+  type Ref,
 } from "react";
 import {
   Alert,
-  FlatList,
-  Platform,
   SectionList,
   StyleSheet,
   Text,
   View,
-  type FlatListProps,
   type LayoutChangeEvent,
-  type ListRenderItem,
   type SectionListProps,
   type SectionListRenderItem,
   type StyleProp,
@@ -59,8 +56,8 @@ import type { Transaction } from "@/types/db";
 // Two ways to read it, switchable from the header (remembered across sessions):
 // a day-by-day Timeline (the default) or the old all-time By-category stacks.
 //
-// Both views virtualize (PORTING.md §5): the Timeline is a SectionList whose
-// sections are the days, By category a FlatList of stacks; the nav bar, the
+// Both views share one virtualized SectionList (PORTING.md §5): the Timeline's
+// sections are the days, By category is a single headerless section; the nav bar, the
 // segmented control (and the month switcher) ride along as the list header.
 const RABBIT_HOLE: Gradient = {
   colors: ["#2C2C2E", "#232325", "#1C1C1E"],
@@ -68,15 +65,16 @@ const RABBIT_HOLE: Gradient = {
   floor: "#1C1C1E",
 };
 
-// Reanimated's own Animated.FlatList reserves `CellRendererComponent` for
-// itself, so wrap the plain lists: the same UI-thread `onScroll`, our cells.
+// Reanimated's own Animated.SectionList reserves `CellRendererComponent` for
+// itself, so wrap the plain list: the same UI-thread `onScroll`, our cells.
 type AnimatedListProps<P> = Omit<P, "onScroll"> & { onScroll?: ScrollHandlerProcessed };
-const AnimatedFlatList = Animated.createAnimatedComponent(
-  FlatList,
-) as unknown as ComponentType<AnimatedListProps<FlatListProps<HistoryGroup>>>;
 const AnimatedSectionList = Animated.createAnimatedComponent(
   SectionList,
-) as unknown as ComponentType<AnimatedListProps<SectionListProps<HistoryGroup, TimelineSection>>>;
+) as unknown as ComponentType<
+  AnimatedListProps<SectionListProps<HistoryGroup, TimelineSection>> & {
+    ref?: Ref<SectionList<HistoryGroup, TimelineSection>>;
+  }
+>;
 
 const TABS = [
   ["timeline", "Timeline"],
@@ -87,7 +85,7 @@ const goHome = () => navigate("/");
 
 export function History() {
   const { transactions, deleteTransaction } = useStore();
-  const [grouping, setGrouping] = useHistoryGrouping();
+  const [grouping, setGrouping, hydrated] = useHistoryGrouping();
   const days = useMemo(() => groupByDay(transactions), [transactions]);
   const sections = useMemo(() => toSections(days), [days]);
   const insets = useSafeAreaInsets();
@@ -171,9 +169,31 @@ export function History() {
     [withCellAnimation],
   );
 
-  const renderDayGroup = useCallback<SectionListRenderItem<HistoryGroup, TimelineSection>>(
-    ({ item, index, section }) => {
-      const key = `${section.key}:${index}`;
+  // One list for both views, so the header (and its sliding segment) stays
+  // mounted across a switch and only the data changes. By category rides in a
+  // single headerless section. Until the saved preference is read, no rows:
+  // the right view is the first one that paints.
+  const listRef = useRef<SectionList<HistoryGroup, TimelineSection>>(null);
+  const isTimeline = grouping === "timeline";
+  const listSections = useMemo<TimelineSection[]>(() => {
+    if (!hydrated || transactions.length === 0) return [];
+    if (isTimeline) return sections;
+    if (groups.length === 0) return [];
+    return [
+      { key: MONTH_SECTION, label: "", totalCents: 0, masked: false, groups, data: groups, first: true },
+    ];
+  }, [hydrated, transactions.length, isTimeline, sections, groups]);
+
+  // Switching views replaces the content wholesale: start it from the top and
+  // keep the gradient aligned with it.
+  useEffect(() => {
+    listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: false });
+    scrollY.value = 0;
+  }, [grouping, scrollY]);
+
+  const renderGroup = useCallback<SectionListRenderItem<HistoryGroup, TimelineSection>>(
+    ({ item }) => {
+      const key = stackKey(item);
       return (
         <HistoryStack
           group={item}
@@ -187,37 +207,8 @@ export function History() {
     },
     [openKeys, openStack, handleEdit, handleDelete],
   );
-  const renderGroup = useCallback<ListRenderItem<HistoryGroup>>(
-    ({ item }) => (
-      <HistoryStack
-        group={item}
-        stackKey={item.key}
-        open={openKeys.has(item.key)}
-        onOpen={openStack}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
-    ),
-    [openKeys, openStack, handleEdit, handleDelete],
-  );
   const extraData = useMemo(() => ({ openKeys, cellTick }), [openKeys, cellTick]);
-
-  const contentStyle = [
-    styles.content,
-    { paddingTop: 16 + insets.top, paddingBottom: 32 + insets.bottom },
-  ];
-  const listProps = {
-    style: styles.list,
-    contentContainerStyle: contentStyle,
-    showsVerticalScrollIndicator: false,
-    initialNumToRender: 12,
-    windowSize: 7,
-    removeClippedSubviews: Platform.OS === "android",
-    onScroll,
-    scrollEventThrottle: 16,
-    CellRendererComponent: CellRenderer,
-    extraData,
-  };
+  const showTabs = hydrated && transactions.length > 0;
 
   return (
     <ScreenFrame gradient={RABBIT_HOLE} statusBar="light">
@@ -225,37 +216,33 @@ export function History() {
         <GradientLayer gradient={RABBIT_HOLE} />
       </Animated.View>
 
-      {transactions.length === 0 ? (
-        <AnimatedFlatList
-          {...listProps}
-          data={[] as HistoryGroup[]}
-          renderItem={renderGroup}
-          keyExtractor={groupKey}
-          ListHeaderComponent={<Header gapBelow={SECTION_GAP} />}
-          ListEmptyComponent={<Text style={styles.empty}>Nothin' here yet, Doc.</Text>}
-        />
-      ) : grouping === "timeline" ? (
-        <AnimatedSectionList
-          {...listProps}
-          sections={sections}
-          renderItem={renderDayGroup}
-          renderSectionHeader={renderDayHeader}
-          keyExtractor={dayGroupKey}
-          stickySectionHeadersEnabled={false}
-          ItemSeparatorComponent={RowGap}
-          ListHeaderComponent={
-            <Header grouping={grouping} onGrouping={changeGrouping} gapBelow={SECTION_GAP} />
-          }
-        />
-      ) : (
-        <AnimatedFlatList
-          {...listProps}
-          data={groups}
-          renderItem={renderGroup}
-          keyExtractor={groupKey}
-          ItemSeparatorComponent={RowGap}
-          ListHeaderComponent={
-            <Header grouping={grouping} onGrouping={changeGrouping} gapBelow={12}>
+      <AnimatedSectionList
+        ref={listRef}
+        style={styles.list}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: 16 + insets.top, paddingBottom: 32 + insets.bottom },
+        ]}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={12}
+        windowSize={7}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        CellRendererComponent={CellRenderer}
+        extraData={extraData}
+        sections={listSections}
+        renderItem={renderGroup}
+        renderSectionHeader={renderSectionHeader}
+        keyExtractor={stackKey}
+        stickySectionHeadersEnabled={false}
+        ItemSeparatorComponent={RowGap}
+        ListHeaderComponent={
+          <Header
+            grouping={showTabs ? grouping : undefined}
+            onGrouping={changeGrouping}
+            gapBelow={isTimeline ? SECTION_GAP : 12}
+          >
+            {showTabs && !isTimeline && (
               <MonthSwitcher
                 label={monthLabel(anchor)}
                 onPrev={() => setMonthOffset((o) => o - 1)}
@@ -263,22 +250,28 @@ export function History() {
                 canPrev={hasOlder}
                 canNext={monthOffset < 0}
               />
-            </Header>
-          }
-          ListEmptyComponent={
+            )}
+          </Header>
+        }
+        ListEmptyComponent={
+          !hydrated ? null : transactions.length === 0 ? (
+            <Text style={styles.empty}>Nothin' here yet, Doc.</Text>
+          ) : (
             <Text style={styles.empty}>Nothin' logged this month, Doc.</Text>
-          }
-        />
-      )}
+          )
+        }
+      />
     </ScreenFrame>
   );
 }
 
-const groupKey = (g: HistoryGroup) => g.key;
-const dayGroupKey = (g: HistoryGroup, index: number) => `${g.key}:${index}`;
-const renderDayHeader = ({ section }: { section: TimelineSection }) => (
-  <DayHeader day={section} first={section.first} />
-);
+const MONTH_SECTION = "month";
+// Stable across deletes: a run is identified by its direction/category and its
+// newest row, never by its position in the day — so a delete above it neither
+// re-keys it nor hands its open state to a neighbour.
+const stackKey = (g: HistoryGroup) => `${g.key}:${g.rows[0].id}`;
+const renderSectionHeader = ({ section }: { section: TimelineSection }) =>
+  section.key === MONTH_SECTION ? null : <DayHeader day={section} first={section.first} />;
 // gap-1.5 between rows (the section header carries its own gap).
 const RowGap = () => <View style={{ height: ROW_GAP }} />;
 

@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { Press } from "@/components/ui/Press";
@@ -42,6 +42,8 @@ export const HistoryStack = memo(function HistoryStack({
 }) {
   const [openLocal, setOpenLocal] = useState(false);
   const isOpen = open ?? openLocal;
+  // A recycled cell that remounts already open shouldn't replay the reveal.
+  const mountedOpen = useRef(isOpen);
   const key = stackKey ?? group.key;
   const handleOpen = useCallback(() => {
     setOpenLocal(true);
@@ -63,7 +65,7 @@ export const HistoryStack = memo(function HistoryStack({
     return (
       <Animated.View layout={EXPAND} style={styles.list}>
         {group.rows.map((tx) => (
-          <Animated.View key={tx.id} entering={REVEAL}>
+          <Animated.View key={tx.id} entering={mountedOpen.current ? undefined : REVEAL}>
             <SwipeRow tx={tx} onEdit={onEdit} onDelete={onDelete} dark />
           </Animated.View>
         ))}

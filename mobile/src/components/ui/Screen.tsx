@@ -105,7 +105,7 @@ export function Screen({
       <ScrollView
         ref={scrollRef}
         style={styles.root}
-        contentContainerStyle={[styles.grow, center && styles.center]}
+        contentContainerStyle={styles.grow}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         // iOS: scroll the focused input into view natively, like the browser
@@ -118,6 +118,7 @@ export function Screen({
         <View
           style={[
             styles.column,
+            center && styles.center,
             {
               gap,
               paddingHorizontal: paddingX,

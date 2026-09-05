@@ -10,6 +10,7 @@ import {
 import {
   StyleSheet,
   Text,
+  PixelRatio,
   useWindowDimensions,
   View,
   type LayoutChangeEvent,
@@ -53,8 +54,7 @@ import {
   text,
   trackingWide,
   weight,
-  white,
-} from "@/lib/theme";
+  white, motion, } from "@/lib/theme";
 
 // The stats page — a deep indigo "observatory" you climb up to and look at
 // your money from, deliberately distinct from History's charcoal rabbit hole
@@ -111,10 +111,13 @@ function Grid({
   const { width: windowWidth } = useWindowDimensions();
   const [measured, setMeasured] = useState<number | null>(null);
   const width = measured ?? Math.min(windowWidth, COLUMN_MAX_WIDTH) - 2 * space(4);
-  const cell = (width - GRID_GAP * (columns - 1)) / columns;
+  // Floor to the pixel grid: Yoga's float32 wrap check otherwise rounds the
+  // last cell over the container on some widths and wraps it onto its own row.
+  const scale = PixelRatio.get();
+  const cell = Math.floor(((width - GRID_GAP * (columns - 1)) / columns) * scale) / scale;
   const onLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
-    if (w > 0 && w !== measured) setMeasured(w);
+    if (w > 0 && w !== width) setMeasured(w);
   };
   return (
     <View onLayout={onLayout} style={[styles.grid, style]}>
@@ -216,7 +219,7 @@ function MonthlyBars({
 
 const BAR_TRACK_H = 96; // h-24
 const BAR_EASE = Easing.bezier(0.4, 0, 0.2, 1); // Tailwind's `transition` curve
-const BAR_MS = 300;
+const BAR_MS = motion.transition;
 
 // One bar. The web's `transition-[height]`: when the data reshuffles (a new
 // entry, the fetch settling) the bar eases to its new height instead of
@@ -433,7 +436,7 @@ function PersonalStats() {
             <MonthlyBars
               months={monthly}
               selectedOffset={monthOffset}
-              onSelect={(o) => setMonthOffset(o)}
+              onSelect={setMonthOffset}
             />
           </View>
           <Grid columns={2}>

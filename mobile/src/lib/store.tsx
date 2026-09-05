@@ -359,12 +359,20 @@ export function StoreProvider({
 
   const deleteTransaction = useCallback(
     async (id: string) => {
-      // Optimistic remove; restore on failure.
-      const prev = transactions;
+      // Optimistic remove; on failure put that one row back. (Restoring a
+      // whole earlier snapshot would clobber anything that changed while the
+      // native confirm sheet was up — window.confirm on the web was synchronous.)
+      const removed = transactions.find((t) => t.id === id);
       setTransactions((cur) => cur.filter((t) => t.id !== id));
       const { error } = await supabase.from("transactions").delete().eq("id", id);
       if (error) {
-        setTransactions(prev);
+        if (removed) {
+          setTransactions((cur) =>
+            cur.some((t) => t.id === id)
+              ? cur
+              : [...cur, removed].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
+          );
+        }
         return { error: error.message };
       }
       return { error: null };
@@ -416,14 +424,20 @@ export function StoreProvider({
 
   const deleteSafeGoldEntry = useCallback(
     async (id: string) => {
-      const prev = safeGoldEntries;
+      const removed = safeGoldEntries.find((e) => e.id === id);
       setSafeGoldEntries((cur) => cur.filter((e) => e.id !== id));
       const { error } = await supabase
         .from("safe_gold_entries")
         .delete()
         .eq("id", id);
       if (error) {
-        setSafeGoldEntries(prev);
+        if (removed) {
+          setSafeGoldEntries((cur) =>
+            cur.some((e) => e.id === id)
+              ? cur
+              : [...cur, removed].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
+          );
+        }
         return { error: error.message };
       }
       return { error: null };

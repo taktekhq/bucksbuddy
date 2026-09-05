@@ -14,6 +14,7 @@ const KEY = "bb-history-grouping";
 export function useHistoryGrouping(): [
   HistoryGrouping,
   (grouping: HistoryGrouping) => void,
+  boolean, // hydrated: the stored preference has been read
 ] {
   const [grouping, setGrouping] = useState<HistoryGrouping>("timeline");
   const [hydrated, setHydrated] = useState(false);
@@ -41,5 +42,5 @@ export function useHistoryGrouping(): [
   }, [grouping, hydrated]);
 
   const set = useCallback((next: HistoryGrouping) => setGrouping(next), []);
-  return [grouping, set];
+  return [grouping, set, hydrated];
 }

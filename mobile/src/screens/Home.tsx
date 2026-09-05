@@ -72,7 +72,7 @@ export function Home() {
 
   // The full history lives on its own "/history" page; the page itself only
   // lists today's entries so it doesn't grow without bound.
-  const todays = transactions.filter((t) => isToday(t.occurred_at));
+  const todays = useMemo(() => transactions.filter((t) => isToday(t.occurred_at)), [transactions]);
 
   // Editing a row on the full-history page navigates back here with the target
   // stashed; pick it up once the matching transaction is in hand. Home stays
@@ -110,16 +110,16 @@ export function Home() {
   }, [hasSavings, tint]);
   const tintStyle = useAnimatedStyle(() => ({ opacity: tint.value }));
 
-  function handleEdit(tx: Transaction) {
+  const handleEdit = useCallback((tx: Transaction) => {
     setEditing(tx);
     scroll.current?.scrollTo({ y: 0, animated: true });
-  }
+  }, []);
 
   function clearEdit() {
     setEditing(null);
   }
 
-  function handleDelete(tx: Transaction) {
+  const handleDelete = useCallback((tx: Transaction) => {
     Alert.alert("Delete this entry?", undefined, [
       { text: "Cancel", style: "cancel" },
       {
@@ -134,7 +134,7 @@ export function Home() {
         },
       },
     ]);
-  }
+  }, [deleteTransaction]);
 
   // When locked (this device doesn't have the passphrase yet) amounts show
   // obscured, so the safe balance can't be revealed either.
@@ -351,6 +351,7 @@ const styles = StyleSheet.create({
     ...display,
     fontSize: 14,
     lineHeight: 14,
+    includeFontPadding: false,
     color: colors.labelMuted,
   },
   navActions: { flexDirection: "row", alignItems: "center", gap: space(4) },
