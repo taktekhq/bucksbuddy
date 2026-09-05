@@ -64,7 +64,7 @@ describe("useSession", () => {
     await waitFor(() => expect(result.current.ready).toBe(true));
 
     expect(result.current.session).toBe(fakeSession);
-    expect(posthog.identify).toHaveBeenCalledWith("u1", { email: "x@y.com" });
+    expect(posthog.identify).toHaveBeenCalledWith("u1");
   });
 
   it("stays signed out (and silent) when there's no cached session", async () => {
@@ -82,7 +82,7 @@ describe("useSession", () => {
     const next = { user: { id: "u2", email: "a@b.com" } };
     await act(async () => listener("SIGNED_IN", next));
     expect(result.current.session).toBe(next);
-    expect(posthog.identify).toHaveBeenCalledWith("u2", { email: "a@b.com" });
+    expect(posthog.identify).toHaveBeenCalledWith("u2");
     expect(posthog.capture).toHaveBeenCalledWith("signed_in");
 
     await unmount();

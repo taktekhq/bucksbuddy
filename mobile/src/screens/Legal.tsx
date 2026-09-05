@@ -63,6 +63,7 @@ export function Legal() {
               To create your account, we only take your name, email, and ID (OpenID) from Google.
             </Bullet>
             <Bullet>No ads, and we don't sell your data.</Bullet>
+            <Bullet>We count how the app is used, never what you spend.</Bullet>
             <Bullet>
               Turn on end-to-end encryption and not even we can read your numbers.
             </Bullet>
@@ -73,7 +74,8 @@ export function Legal() {
             Google user data we access
           </Text>
           <Text className="text-[15px] leading-relaxed text-label">
-            Signing in with Google is the only way into BucksBuddy. Using the standard openid,
+            Almost everyone signs in with Google; a small number of accounts we create by hand
+            use an email address and a password instead. Using the standard openid,
             email, and profile scopes, we receive your Google account ID (OpenID), email address,
             name, and profile picture. We do not request access to any other Google data or API (no
             Gmail, Drive, Contacts, or Calendar).
@@ -94,6 +96,23 @@ export function Legal() {
             </Link>
             , including the Limited Use requirements.
           </Text>
+          <Text className="pt-2 font-semibold text-label text-[15px] leading-relaxed">Analytics</Text>
+          <Text className="text-[15px] leading-relaxed text-label">
+            We count how the app gets used: signing in, adding, editing or deleting an entry,
+            exporting a CSV, and turning encryption on or off. Those counts carry your account ID
+            so that one person using BucksBuddy ten times isn't counted as ten people. We use
+            PostHog for this. It never receives your amounts, notes, categories or email address,
+            and we never use any of it for advertising or profiling.
+          </Text>
+
+          <Text className="pt-2 font-semibold text-label text-[15px] leading-relaxed">On your device</Text>
+          <Text className="text-[15px] leading-relaxed text-label">
+            The iOS and Android apps keep a copy of your entries on the device so the app opens
+            instantly, and your encryption key in the device's secure keystore so you aren't asked
+            for your passphrase every time. Both are erased when you sign out or delete your
+            account.
+          </Text>
+
           <Text className="text-[15px] leading-relaxed text-label">
             Delete your account anytime from Settings to permanently wipe your data, or revoke
             access from your{" "}
@@ -111,12 +130,16 @@ export function Legal() {
             <Bullet>BucksBuddy is a personal money journal, offered as-is.</Bullet>
             <Bullet>Track your own money — nothing illegal.</Bullet>
             <Bullet>You're responsible for your account and what you put in it.</Bullet>
+            <Bullet>
+              The iOS and Android apps are distributed by Apple and Google, so their terms cover
+              the download too.
+            </Bullet>
           </View>
           <Text className="text-[15px] leading-relaxed text-label">That's all, folks. 🥕</Text>
         </View>
       </View>
 
-      <Text className="px-2 text-xs text-label-secondary">Last updated June 2026.</Text>
+      <Text className="px-2 text-xs text-label-secondary">Last updated September 2026.</Text>
     </Screen>
   );
 }

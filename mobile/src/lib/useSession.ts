@@ -58,7 +58,7 @@ export function useSession() {
         if (cancelled) return;
         setSession(data.session);
         if (data.session) {
-          posthog.identify(data.session.user.id, { email: data.session.user.email });
+          posthog.identify(data.session.user.id);
         }
       }
       setReady(true);
@@ -76,7 +76,7 @@ export function useSession() {
         setRecoveryMode(false);
         posthog.reset();
       } else if (event === "SIGNED_IN" && s) {
-        posthog.identify(s.user.id, { email: s.user.email });
+        posthog.identify(s.user.id);
         posthog.capture("signed_in");
       }
     });

@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/Input";
 // The wrapper exists to correct two platform quirks that push text off-centre
 // inside a field (see the comment in Input.tsx). Both are asserted here
 // because neither is visible in a snapshot of the app's own screens.
-function flatten(style: unknown) {
-  return StyleSheet.flatten(style as never) ?? {};
+function flatten(style: unknown): Record<string, unknown> {
+  return (StyleSheet.flatten(style as never) ?? {}) as Record<string, unknown>;
 }
 
 describe("Input", () => {

@@ -8,29 +8,18 @@ once the mobile apps are actually live.
 
 ---
 
-## 0. Two things to fix before you submit
+## 0. Done — the policy and the analytics
 
-Both are true of the web app today, so fixing them fixes both products.
+Both apps' privacy pages now disclose the analytics, correct the "Google is the
+only way in" claim, describe what the mobile apps keep on the device, and note
+that the stores distribute the apps. Terms gained one line about Apple and
+Google. "Last updated" is September 2026.
 
-### The privacy policy doesn't mention analytics
-
-`src/screens/Legal.tsx` says what Google data is taken and that nothing is sold,
-but it never mentions PostHog. The app sends PostHog eight events
-(`signed_in`, `transaction_added/updated/deleted`, `csv_exported`,
-`encryption_enabled/disabled`, `account_deleted`) and calls `identify()` with
-the user's **id and email address**.
-
-An email address leaving for a third-party processor has to be disclosed. Both
-stores ask you to declare it, and the declaration has to match the policy.
-See §7 for the wording to add.
-
-### The policy says Google is the only way in
-
-> "Signing in with Google is the only way into BucksBuddy."
-
-There is also an email/password sign-in (`signInWithPassword`, reached by
-tapping the carrot seven times). It exists for one friend without a Google
-account, but the sentence as written is inaccurate. See §7.
+The app also **no longer sends the email address to PostHog** — `identify()`
+carries the account ID alone, which is all that is needed to avoid
+double-counting one person. That keeps *Contact Info → Email Address* off the
+"used for analytics" side of both stores' forms and matches what the policy
+now says.
 
 ---
 
@@ -79,8 +68,8 @@ revisiting only if you want native crash reports later.
       answer the questionnaire in App Store Connect once and let it record the
       answer.
 - [ ] **App Privacy (the nutrition label).** Declare, at minimum:
-      - *Contact Info → Email Address* — linked to identity, used for App
-        Functionality **and Analytics** (PostHog receives it).
+      - *Contact Info → Email Address* — linked to identity, App Functionality
+        only. PostHog no longer receives it.
       - *Identifiers → User ID* — linked to identity, App Functionality and
         Analytics.
       - *Financial Info* — the amounts. Linked to identity, App Functionality.
@@ -164,39 +153,21 @@ revisiting only if you want native crash reports later.
 
 ---
 
-## 7. Privacy policy and terms — what to change
+## 7. Privacy policy and terms — done
 
-Both live in one page, `src/screens/Legal.tsx` in the **web** app, served at
-`/privacy` and `/terms`. The mobile app links to the same page, so editing it
-once covers both. Three changes:
+Both pages live in `src/screens/Legal.tsx` (web) and
+`mobile/src/screens/Legal.tsx` (mobile), kept in step. What changed:
 
-**a. Correct the sign-in claim.** Replace "Signing in with Google is the only
-way into BucksBuddy" with wording that admits the password path, e.g. "Most
-people sign in with Google; a small number of accounts we create by hand use an
-email and password."
+- The sign-in claim now admits the hand-made email/password accounts.
+- An **Analytics** section names PostHog, lists the events, and states that it
+  never receives amounts, notes, categories or the email address.
+- An **On your device** section covers the cached entries and the encryption key
+  in the keystore, and says both are erased on sign-out and account deletion.
+- Terms gained a line: the apps are distributed by Apple and Google, whose terms
+  cover the download.
+- "Last updated" is September 2026.
 
-**b. Disclose the analytics.** Add a short section:
-
-> **Analytics.** We use PostHog to count how the app is used — when someone
-> signs in, adds or edits an entry, exports a CSV, or turns encryption on or
-> off. PostHog receives your account ID and email address so those counts can
-> be tied to one person rather than double-counted. It never receives your
-> amounts, notes or categories. PostHog processes this on our behalf and does
-> not sell it.
-
-**c. Say the apps exist.** Once they are live, add a line that the same account
-and data are available in the iOS and Android apps, and that the mobile apps
-store data on the device (a cached copy of your entries, and your encryption
-key in the device keystore) which is removed when you sign out or delete your
-account.
-
-**Terms** need no change for launch. The existing three points still hold. When
-you list on the stores you may want one line noting the apps are distributed
-through Apple and Google and are subject to their terms as well.
-
-Bump "Last updated" when you publish the changes.
-
----
+Re-read them once before you submit — the store forms have to match the wording.
 
 ## 8. The web app — last, not first
 

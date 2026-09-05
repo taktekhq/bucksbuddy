@@ -36,6 +36,9 @@ export function Legal() {
               To create your account, we only take your name, email, and ID
               (OpenID) from Google.
             </li>
+            <li>
+              We count how the app is used, never what you spend.
+            </li>
             <li>No ads, and we don&apos;t sell your data.</li>
             <li>
               Turn on end-to-end encryption and not even we can read your
@@ -48,7 +51,8 @@ export function Legal() {
             Google user data we access
           </p>
           <p>
-            Signing in with Google is the only way into BucksBuddy. Using the
+            Almost everyone signs in with Google; a small number of accounts we
+            create by hand use an email address and a password instead. Using the
             standard openid, email, and profile scopes, we receive your Google
             account ID (OpenID), email address, name, and profile picture. We do
             not request access to any other Google data or API (no Gmail, Drive,
@@ -76,6 +80,26 @@ export function Legal() {
             </a>
             , including the Limited Use requirements.
           </p>
+          <p className="pt-2 font-semibold text-label">Analytics</p>
+          <p>
+            We count how the app gets used: signing in, adding, editing or
+            deleting an entry, exporting a CSV, and turning encryption on or
+            off. Those counts carry your account ID so that one person using
+            BucksBuddy ten times isn&apos;t counted as ten people. We use
+            PostHog for this. It never receives your amounts, notes, categories
+            or email address, and we never use any of it for advertising or
+            profiling.
+          </p>
+
+          <p className="pt-2 font-semibold text-label">On your device</p>
+          <p>
+            The iOS and Android apps keep a copy of your entries on the device
+            so the app opens instantly, and your encryption key in the
+            device&apos;s secure keystore so you aren&apos;t asked for your
+            passphrase every time. Both are erased when you sign out or delete
+            your account.
+          </p>
+
           <p>
             Delete your account anytime from Settings to permanently wipe your
             data, or revoke access from your{" "}
@@ -106,12 +130,16 @@ export function Legal() {
             <li>
               You&apos;re responsible for your account and what you put in it.
             </li>
+            <li>
+              The iOS and Android apps are distributed by Apple and Google, so
+              their terms cover the download too.
+            </li>
           </ul>
           <p>That&apos;s all, folks. 🥕</p>
         </div>
       </section>
 
-      <p className="px-2 text-xs text-label-secondary">Last updated June 2026.</p>
+      <p className="px-2 text-xs text-label-secondary">Last updated September 2026.</p>
     </main>
   );
 }
