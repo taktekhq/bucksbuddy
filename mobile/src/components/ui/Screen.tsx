@@ -29,6 +29,7 @@ export type Gradient = {
 type Props = {
   children: ReactNode;
   gradient?: Gradient;
+  gradientFixed?: boolean;
   floor?: string;
   gap?: number;
   paddingX?: number;
@@ -46,6 +47,7 @@ type Props = {
 export function Screen({
   children,
   gradient,
+  gradientFixed = false,
   floor,
   gap = space(5),
   paddingX = space(4),
@@ -59,9 +61,24 @@ export function Screen({
   const insets = useSafeAreaInsets();
   const floorColor = floor ?? gradient?.floor ?? colors.canvas;
 
+  const gradientView = gradient && (
+    <LinearGradient
+      pointerEvents="none"
+      colors={gradient.colors}
+      locations={toLocations(gradient.stops)}
+      style={[
+        StyleSheet.absoluteFill,
+        { height: gradient.stops[gradient.stops.length - 1] },
+      ]}
+    />
+  );
+
   return (
     <View style={[styles.root, { backgroundColor: floorColor }]}>
       <StatusBar style={statusBar} />
+      {/* Home's savings tint is viewport-fixed on the web (`fixed inset-0`);
+          the dark rooms paint theirs on the scrolling content. */}
+      {gradientFixed && gradientView}
       <KeyboardAvoidingView
         style={styles.root}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -77,17 +94,7 @@ export function Screen({
           keyboardDismissMode="on-drag"
           bounces
         >
-          {gradient && (
-            <LinearGradient
-              pointerEvents="none"
-              colors={gradient.colors}
-              locations={toLocations(gradient.stops)}
-              style={[
-                StyleSheet.absoluteFill,
-                { height: gradient.stops[gradient.stops.length - 1] },
-              ]}
-            />
-          )}
+          {!gradientFixed && gradientView}
           <View
             style={[
               styles.column,

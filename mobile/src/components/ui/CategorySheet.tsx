@@ -76,7 +76,7 @@ export function CategorySheet({
   }, [open]);
 
   const drag = Gesture.Pan()
-    .activeOffsetY([8, 8])
+    .activeOffsetY(8)
     .onStart(() => {
       startY.value = y.value;
     })

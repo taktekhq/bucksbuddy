@@ -119,6 +119,7 @@ export function Home() {
     <Screen
       scrollRef={scroll}
       gradient={hasSavings ? SAVINGS_GRADIENT : undefined}
+      gradientFixed
       floor={colors.canvas}
     >
       {/* Carrot mark + wordmark + safe + settings — the plain Apple nav bar. */}
