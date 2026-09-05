@@ -1,10 +1,18 @@
-import { useEffect, useState } from "react";
-import { BackHandler } from "react-native";
+import { createNavigationContainerRef, StackActions } from "@react-navigation/native";
 
-// Minimal in-memory router — the native twin of the PWA's hash router. Same
-// route set, same `navigate()` API, so screens port over unchanged. A small
-// history stack backs the Android hardware back button (the web relied on the
-// browser's).
+// The route set from the PWA's hash router, kept as the app's navigation API
+// so screens port over unchanged: `navigate("/safe")`. Underneath it's a
+// native stack (react-navigation + react-native-screens), which is what gives
+// the app real iOS push/pop transitions and the edge swipe-back — the browser
+// gave the PWA none of that, but a native app without them feels broken.
+//
+// Route semantics, mapped onto a stack:
+//   • "/" is the root (Home when signed in, Landing when signed out). Going
+//     there pops everything — it's never a page you go *back* from.
+//   • Every other route is pushed on top of whatever's showing, except
+//     "/stats/*" receipts which naturally sit on top of Stats.
+//   • Back chevrons call `back()`, which pops one screen. If a screen was
+//     deep-linked and there's nothing under it, back falls through to "/".
 export type Route =
   | "/"
   | "/settings"
@@ -17,44 +25,28 @@ export type Route =
   | "/contact"
   | "/reset";
 
-let stack: Route[] = ["/"];
-const listeners = new Set<() => void>();
+// Screen names in the navigators (see App.tsx) are the routes themselves.
+export type StackParams = Record<Route, undefined>;
 
-function emit() {
-  for (const l of listeners) l();
-}
+export const navigationRef = createNavigationContainerRef<StackParams>();
 
 export function currentRoute(): Route {
-  return stack[stack.length - 1];
+  if (!navigationRef.isReady()) return "/";
+  return (navigationRef.getCurrentRoute()?.name as Route | undefined) ?? "/";
 }
 
 export function navigate(to: Route) {
+  if (!navigationRef.isReady()) return;
   if (currentRoute() === to) return;
-  // Going "/" resets the stack — it's the root, never a page you go back from.
-  stack = to === "/" ? ["/"] : [...stack, to];
-  emit();
+  if (to === "/") {
+    navigationRef.dispatch(StackActions.popToTop());
+    return;
+  }
+  navigationRef.dispatch(StackActions.push(to));
 }
 
-/** Pop one entry. Returns false when already at the root. */
-export function back(): boolean {
-  if (stack.length <= 1) return false;
-  stack = stack.slice(0, -1);
-  emit();
-  return true;
-}
-
-export function useRoute(): Route {
-  const [route, setRoute] = useState<Route>(currentRoute());
-  useEffect(() => {
-    const onChange = () => setRoute(currentRoute());
-    listeners.add(onChange);
-    // Android back button walks the stack; at the root it falls through to the
-    // OS (which backgrounds the app), like any native app.
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => back());
-    return () => {
-      listeners.delete(onChange);
-      sub.remove();
-    };
-  }, []);
-  return route;
+/** Pop one screen; at the root this is a no-op (the hardware back then exits). */
+export function back() {
+  if (!navigationRef.isReady()) return;
+  if (navigationRef.canGoBack()) navigationRef.goBack();
 }

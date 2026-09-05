@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -7,9 +8,10 @@ import {
   Coins,
   StickyNote,
   Vault,
+  type LucideIcon,
 } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
-import { Screen } from "@/components/ui/Screen";
+import { Screen, type Gradient } from "@/components/ui/Screen";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
 import { useStore } from "@/lib/store";
@@ -19,7 +21,20 @@ import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
 import { formatSignedUsdCents, formatUsdCents } from "@/lib/money";
 import { fetchGoldUsdPerGram, formatGrams } from "@/lib/gold";
-import { black, display, numeric, radius, shadowSegment, white } from "@/lib/theme";
+import {
+  black,
+  display,
+  motion,
+  numeric,
+  radius,
+  shadows,
+  space,
+  text,
+  trackingWide,
+  weight,
+  white,
+  withAlpha,
+} from "@/lib/theme";
 import type { SafeGoldEntry, Transaction } from "@/types/db";
 
 type Asset = "cash" | "gold";
@@ -30,10 +45,12 @@ const SYMBOL: Record<Currency, string> = { USD: "$", LBP: "LL" };
 // mentality from the bright daily tracker. The gradient is painted on the
 // scrolling content and fades over the first ~640px, then holds a deep green.
 // Behind it sits a fixed, viewport-filling backdrop in that same terminal green
-// (the floor), so an overscroll bounce can never flash the light canvas.
-const VAULT = {
-  colors: ["#0E4A37", "#0A3A2A", "#06281E"] as const,
-  stops: [0, 320, 640] as const,
+// (the floor), so an overscroll bounce can never flash the light canvas
+// through. `Screen` paints both; nothing global is touched, so Home is
+// unaffected on the way back.
+const VAULT: Gradient = {
+  colors: ["#0E4A37", "#0A3A2A", "#06281E"],
+  stops: [0, 320, 640],
   floor: "#06281E",
 };
 const GOLD = "#FFD479";
@@ -63,6 +80,8 @@ function sanitizeGrams(raw: string): string {
 function parseGrams(display: string): number {
   if (!display || display === ".") return 0;
   const n = Number.parseFloat(display);
+  // The input is sanitized to digits + one dot, so `n` is always a finite,
+  // non-negative number here; the `: 0` fallback is purely defensive.
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
@@ -73,7 +92,10 @@ function groupInt(s: string): string {
 }
 
 function dateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 // Cash and gold normalized into one shape for the shared history list.
@@ -89,6 +111,69 @@ type Move = {
   mask?: string; // obscured stand-in shown while locked
   onDelete: () => void | Promise<void>;
 };
+
+const TIMING = { duration: motion.transition };
+
+// One half of a pill toggle. The web's `transition` class eases the active
+// background and text color over 150ms; here Reanimated does the same on the
+// UI thread. Colors tween in place (so Add/Take re-tint smoothly when the
+// asset flips), and the 16px icon cross-fades between its two tints since an
+// SVG stroke can't be interpolated as a style.
+function Segment({
+  active,
+  activeBg,
+  inactiveBg,
+  activeText,
+  shadow = false,
+  icon: Icon,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  activeBg: string;
+  inactiveBg: string;
+  activeText: string;
+  /** `shadow-segment` on the active side (the gold tile has none). */
+  shadow?: boolean;
+  icon: LucideIcon;
+  label: string;
+  onPress: () => void;
+}) {
+  const inactiveText = white(0.55);
+  const bgStyle = useAnimatedStyle(
+    () => ({ backgroundColor: withTiming(active ? activeBg : inactiveBg, TIMING) }),
+    [active, activeBg, inactiveBg],
+  );
+  const textStyle = useAnimatedStyle(
+    () => ({ color: withTiming(active ? activeText : inactiveText, TIMING) }),
+    [active, activeText, inactiveText],
+  );
+  const onStyle = useAnimatedStyle(() => ({ opacity: withTiming(active ? 1 : 0, TIMING) }), [active]);
+  const offStyle = useAnimatedStyle(() => ({ opacity: withTiming(active ? 0 : 1, TIMING) }), [active]);
+
+  return (
+    <Press onPress={onPress} style={styles.segment}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.segmentBg,
+          active && shadow && { boxShadow: shadows.segment },
+          bgStyle,
+        ]}
+      />
+      <View style={styles.segmentIcon}>
+        <Animated.View style={[StyleSheet.absoluteFill, offStyle]}>
+          <Icon size={16} strokeWidth={2.5} color={inactiveText} />
+        </Animated.View>
+        <Animated.View style={onStyle}>
+          <Icon size={16} strokeWidth={2.5} color={activeText} />
+        </Animated.View>
+      </View>
+      <Animated.Text style={[styles.segmentText, textStyle]}>{label}</Animated.Text>
+    </Press>
+  );
+}
 
 export function Safe() {
   const {
@@ -138,6 +223,7 @@ export function Safe() {
   }
 
   async function save() {
+    // Defensive: the CTA is disabled unless canSave, so this never returns.
     if (!canSave) return;
     setSaving(true);
     setError(null);
@@ -166,7 +252,9 @@ export function Safe() {
     if (isGold) {
       posthog.capture(isDeposit ? "safe_gold_deposited" : "safe_gold_withdrawn");
     } else {
-      posthog.capture(isDeposit ? "safe_cash_deposited" : "safe_cash_withdrawn", { currency });
+      posthog.capture(isDeposit ? "safe_cash_deposited" : "safe_cash_withdrawn", {
+        currency,
+      });
     }
     setDisplay("");
     setNote("");
@@ -204,12 +292,16 @@ export function Safe() {
     onDelete: () => confirmDelete(() => deleteSafeGoldEntry(e.id)),
   }));
   const movements = [...cashMoves, ...goldMoves].sort(
-    (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
+    (a, b) =>
+      new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
   );
 
-  const goldValueCents = goldPerGram != null ? Math.round(safeGoldGrams * goldPerGram * 100) : null;
+  const goldValueCents =
+    goldPerGram != null ? Math.round(safeGoldGrams * goldPerGram * 100) : null;
   const enteredGoldValueCents =
-    goldPerGram != null && grams > 0 ? Math.round(grams * goldPerGram * 100) : null;
+    goldPerGram != null && grams > 0
+      ? Math.round(grams * goldPerGram * 100)
+      : null;
 
   const amountLabel = isGold
     ? formatGrams(grams)
@@ -228,51 +320,71 @@ export function Safe() {
 
   const actionColor = isGold ? GOLD : isDeposit ? "#1FB85A" : "#E0631A";
   const actionText = isGold ? "#06281E" : "#FFFFFF";
+  const actionClear = withAlpha(actionColor, 0);
+
+  // The CTA's `transition`: background and text ease between the action tint
+  // and the dimmed disabled look.
+  const ctaBg = useAnimatedStyle(
+    () => ({
+      backgroundColor: withTiming(canSave ? actionColor : "rgba(255,255,255,0.08)", TIMING),
+    }),
+    [canSave, actionColor],
+  );
+  const ctaText = useAnimatedStyle(
+    () => ({ color: withTiming(canSave ? actionText : "rgba(255,255,255,0.4)", TIMING) }),
+    [canSave, actionText],
+  );
 
   return (
-    <Screen gradient={VAULT} statusBar="light" gap={24}>
+    <Screen gradient={VAULT} statusBar="light" gap={space(6)}>
+      {/* Dark nav: back chevron + centered title. */}
       <NavHeader title="The Safe" onBack={() => navigate("/")} dark tint={GOLD} />
 
       {/* TOTALS — cash and gold in one vault card. */}
-      <View style={styles.vaultCard}>
-        <View style={styles.vaultHead}>
-          <Vault size={16} strokeWidth={2} color={white(0.55)} />
-          <Text style={styles.vaultHeadText}>In the safe</Text>
-        </View>
+      <View>
+        <View style={styles.vaultCard}>
+          <View style={styles.vaultHead}>
+            <Vault size={16} strokeWidth={2} color={white(0.55)} />
+            <Text style={styles.vaultHeadText}>In the safe</Text>
+          </View>
 
-        <View style={[styles.assetHead, { marginTop: 12 }]}>
-          <Banknote size={14} strokeWidth={2} color={white(0.45)} />
-          <Text style={styles.assetHeadText}>Cash</Text>
-        </View>
-        <Text style={[styles.bigNumber, { color: safeTotalCents < 0 ? "#FF8A8A" : MINT }]}>
-          {locked ? "$•••••" : formatSignedUsdCents(safeTotalCents)}
-        </Text>
+          <View style={[styles.assetHead, { marginTop: space(3) }]}>
+            <Banknote size={14} strokeWidth={2} color={white(0.45)} />
+            <Text style={styles.assetHeadText}>Cash</Text>
+          </View>
+          <Text style={[styles.bigNumber, { color: safeTotalCents < 0 ? "#FF8A8A" : MINT }]}>
+            {locked ? "$•••••" : formatSignedUsdCents(safeTotalCents)}
+          </Text>
 
-        <View style={[styles.assetHead, { marginTop: 16 }]}>
-          <Coins size={14} strokeWidth={2} color={white(0.45)} />
-          <Text style={styles.assetHeadText}>Gold</Text>
-        </View>
-        <Text style={[styles.bigNumber, { color: GOLD }]}>
-          {locked ? "••••" : formatGrams(safeGoldGrams)}
-        </Text>
-        {locked ? (
-          <Text style={[styles.tiny, { color: white(0.3) }]}>
-            Locked — unlock in Settings to see the safe.
+          <View style={[styles.assetHead, { marginTop: space(4) }]}>
+            <Coins size={14} strokeWidth={2} color={white(0.45)} />
+            <Text style={styles.assetHeadText}>Gold</Text>
+          </View>
+          <Text style={[styles.bigNumber, { color: GOLD }]}>
+            {locked ? "••••" : formatGrams(safeGoldGrams)}
           </Text>
-        ) : goldValueCents != null ? (
-          <Text style={[styles.tiny, { color: white(0.45) }]}>
-            ≈ {formatUsdCents(goldValueCents)} · {formatUsdCents(Math.round((goldPerGram ?? 0) * 100))}/g
-            (live)
-          </Text>
-        ) : (
-          <Text style={[styles.tiny, { color: white(0.3) }]}>
-            Tracked in grams — live price unavailable.
-          </Text>
-        )}
+          {locked ? (
+            <Text style={[styles.tiny, { color: white(0.3) }]}>
+              Locked — unlock in Settings to see the safe.
+            </Text>
+          ) : goldValueCents != null ? (
+            <Text style={[styles.tiny, { color: white(0.45) }]}>
+              ≈ {formatUsdCents(goldValueCents)} ·{" "}
+              {/* goldValueCents != null implies goldPerGram != null; the `?? 0`
+                  is defensive for the type-checker only. */}
+              {formatUsdCents(Math.round((goldPerGram ?? 0) * 100))}/g (live)
+            </Text>
+          ) : (
+            <Text style={[styles.tiny, { color: white(0.3) }]}>
+              Tracked in grams — live price unavailable.
+            </Text>
+          )}
 
-        <Text style={[styles.tiny, { marginTop: 12, color: white(0.45) }]}>
-          Cash here is moved out of your spendable balance; gold is tracked separately in grams.
-        </Text>
+          <Text style={[styles.tiny, { marginTop: space(3), color: white(0.45) }]}>
+            Cash here is moved out of your spendable balance; gold is tracked
+            separately in grams.
+          </Text>
+        </View>
       </View>
 
       {/* COMPOSER — choose cash or gold, then add to or take from the safe. */}
@@ -281,40 +393,49 @@ export function Safe() {
         <View style={styles.composer}>
           {/* Cash / Gold asset selector. */}
           <View style={styles.track}>
-            <Press
+            <Segment
+              active={!isGold}
+              activeBg={white(0.15)}
+              inactiveBg={white(0)}
+              activeText="#FFFFFF"
+              shadow
+              icon={Banknote}
+              label="Cash"
               onPress={() => switchAsset("cash")}
-              style={[styles.segment, !isGold && styles.segmentActive]}
-            >
-              <Banknote size={16} strokeWidth={2.5} color={!isGold ? "#FFF" : white(0.55)} />
-              <Text style={[styles.segmentText, { color: !isGold ? "#FFF" : white(0.55) }]}>Cash</Text>
-            </Press>
-            <Press
+            />
+            <Segment
+              active={isGold}
+              activeBg={GOLD}
+              inactiveBg={withAlpha(GOLD, 0)}
+              activeText="#06281E"
+              icon={Coins}
+              label="Gold"
               onPress={() => switchAsset("gold")}
-              style={[styles.segment, isGold && { backgroundColor: GOLD }]}
-            >
-              <Coins size={16} strokeWidth={2.5} color={isGold ? "#06281E" : white(0.55)} />
-              <Text style={[styles.segmentText, { color: isGold ? "#06281E" : white(0.55) }]}>Gold</Text>
-            </Press>
+            />
           </View>
 
           {/* Add / Take toggle. */}
           <View style={styles.track}>
-            <Press
+            <Segment
+              active={isDeposit}
+              activeBg={actionColor}
+              inactiveBg={actionClear}
+              activeText={actionText}
+              shadow
+              icon={ArrowDownToLine}
+              label="Add"
               onPress={() => setIsDeposit(true)}
-              style={[styles.segment, isDeposit && { backgroundColor: actionColor, ...shadowSegment }]}
-            >
-              <ArrowDownToLine size={16} strokeWidth={2.5} color={isDeposit ? actionText : white(0.55)} />
-              <Text style={[styles.segmentText, { color: isDeposit ? actionText : white(0.55) }]}>Add</Text>
-            </Press>
-            <Press
+            />
+            <Segment
+              active={!isDeposit}
+              activeBg={actionColor}
+              inactiveBg={actionClear}
+              activeText={actionText}
+              shadow
+              icon={ArrowUpFromLine}
+              label="Take out"
               onPress={() => setIsDeposit(false)}
-              style={[styles.segment, !isDeposit && { backgroundColor: actionColor, ...shadowSegment }]}
-            >
-              <ArrowUpFromLine size={16} strokeWidth={2.5} color={!isDeposit ? actionText : white(0.55)} />
-              <Text style={[styles.segmentText, { color: !isDeposit ? actionText : white(0.55) }]}>
-                Take out
-              </Text>
-            </Press>
+            />
           </View>
 
           {/* Amount (cash) or grams (gold). */}
@@ -331,6 +452,7 @@ export function Safe() {
               placeholder={isGold ? "0" : "0.00"}
               placeholderTextColor={white(0.35)}
               accessibilityLabel={isGold ? "Grams" : "Amount"}
+              selectionColor={isGold ? GOLD : MINT}
               style={styles.amountInput}
             />
             {isGold ? (
@@ -347,14 +469,16 @@ export function Safe() {
             )}
           </View>
           {isGold && enteredGoldValueCents != null && (
-            <Text style={styles.approx}>≈ {formatUsdCents(enteredGoldValueCents)} at the live price</Text>
+            <Text style={styles.approx}>
+              ≈ {formatUsdCents(enteredGoldValueCents)} at the live price
+            </Text>
           )}
           {!isGold && currency === "LBP" && amount > 0 && (
             <Text style={styles.approx}>≈ {formatUsdCents(usdCents)}</Text>
           )}
 
           {/* Note (optional). */}
-          <View style={[styles.field, { paddingVertical: 12 }]}>
+          <View style={[styles.field, { paddingVertical: space(3) }]}>
             <StickyNote size={20} strokeWidth={2} color={white(0.45)} />
             <TextInput
               value={note}
@@ -363,24 +487,15 @@ export function Safe() {
               placeholderTextColor={white(0.35)}
               accessibilityLabel="Note"
               maxLength={140}
+              selectionColor={MINT}
               style={styles.noteInput}
             />
           </View>
 
           {/* CTA. */}
-          <Press
-            onPress={save}
-            disabled={!canSave}
-            style={[
-              styles.cta,
-              canSave
-                ? { backgroundColor: actionColor }
-                : { backgroundColor: "rgba(255,255,255,0.08)" },
-            ]}
-          >
-            <Text style={[styles.ctaText, { color: canSave ? actionText : "rgba(255,255,255,0.4)" }]}>
-              {cta}
-            </Text>
+          <Press onPress={save} disabled={!canSave} style={styles.cta}>
+            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.ctaBg, ctaBg]} />
+            <Animated.Text style={[styles.ctaText, ctaText]}>{cta}</Animated.Text>
           </Press>
 
           {error && <Text style={styles.error}>{error}</Text>}
@@ -393,10 +508,12 @@ export function Safe() {
         {movements.length === 0 ? (
           <Text style={styles.empty}>Nothin' in the safe yet, Doc. Add some above.</Text>
         ) : (
-          <View style={{ gap: 6 }}>
+          <View style={styles.list}>
             {movements.map((m) => {
               const tone = m.kind === "gold" ? GOLD : m.isDeposit ? MINT : TAKE;
               const sign = m.isDeposit ? "+" : "-";
+              // grams is always set on gold moves and cents on cash moves (see
+              // construction above), so the non-null assertions hold.
               // While locked, `mask` holds an obscured stand-in instead.
               const right =
                 m.mask != null
@@ -404,7 +521,12 @@ export function Safe() {
                   : m.kind === "gold"
                     ? `${sign}${formatGrams(m.grams!)}`
                     : `${sign}${formatUsdCents(m.cents!)}`;
-              const Icon = m.kind === "gold" ? Coins : m.isDeposit ? ArrowDownToLine : ArrowUpFromLine;
+              const Icon =
+                m.kind === "gold"
+                  ? Coins
+                  : m.isDeposit
+                    ? ArrowDownToLine
+                    : ArrowUpFromLine;
               return (
                 <SwipeToDelete
                   key={m.key}
@@ -415,7 +537,7 @@ export function Safe() {
                   <View style={styles.moveBadge}>
                     <Icon size={20} strokeWidth={2} color={tone} />
                   </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={styles.moveBody}>
                     <Text style={styles.moveTitle}>
                       {m.isDeposit ? "Added" : "Took out"}
                       {m.kind === "gold" ? " gold" : " cash"}
@@ -442,119 +564,160 @@ export function Safe() {
 }
 
 const styles = StyleSheet.create({
+  // rounded-card bg-white/[0.06] px-5 py-6 ring-1 ring-white/10 (backdrop-blur skipped)
   vaultCard: {
     borderRadius: radius.card,
     backgroundColor: white(0.06),
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    borderWidth: 1,
-    borderColor: white(0.1),
+    paddingHorizontal: space(5),
+    paddingVertical: space(6),
+    boxShadow: shadows.ringWhite10,
   },
-  vaultHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  // flex items-center gap-2 text-[13px] font-medium uppercase tracking-wide text-white/55
+  vaultHead: { flexDirection: "row", alignItems: "center", gap: space(2) },
   vaultHeadText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "500",
+    ...text["13"],
+    fontWeight: weight.medium,
     textTransform: "uppercase",
-    letterSpacing: 0.4,
+    letterSpacing: trackingWide(13),
     color: white(0.55),
   },
-  assetHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  // flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-white/45
+  assetHead: { flexDirection: "row", alignItems: "center", gap: space(2) },
   assetHeadText: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "600",
+    ...text["11"],
+    fontWeight: weight.semibold,
     textTransform: "uppercase",
-    letterSpacing: 0.4,
+    letterSpacing: trackingWide(11),
     color: white(0.45),
   },
-  bigNumber: { ...numeric, fontSize: 36, lineHeight: 40, fontWeight: "700" },
-  tiny: { marginTop: 2, fontSize: 12, lineHeight: 16 },
-  section: { gap: 8 },
+  // font-numeric text-4xl font-bold tabular-nums
+  bigNumber: { ...numeric, ...text["4xl"], fontWeight: weight.bold },
+  // mt-0.5 text-xs
+  tiny: { marginTop: space(0.5), ...text.xs },
+  // section: flex flex-col gap-2
+  section: { gap: space(2) },
+  // px-2 font-display text-sm font-semibold uppercase tracking-wide text-white/55
   sectionTitle: {
     ...display,
-    paddingHorizontal: 8,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.35,
+    ...text.sm,
+    paddingHorizontal: space(2),
+    letterSpacing: trackingWide(14),
     color: white(0.55),
   },
+  // flex flex-col gap-3 rounded-card bg-white/[0.06] p-4 ring-1 ring-white/10
   composer: {
-    gap: 12,
+    gap: space(3),
     borderRadius: radius.card,
     backgroundColor: white(0.06),
-    padding: 16,
-    borderWidth: 1,
-    borderColor: white(0.1),
+    padding: space(4),
+    boxShadow: shadows.ringWhite10,
   },
+  // grid grid-cols-2 gap-1 rounded-pill bg-black/25 p-1
   track: {
     flexDirection: "row",
-    gap: 4,
+    gap: space(1),
     borderRadius: radius.pill,
     backgroundColor: black(0.25),
-    padding: 4,
+    padding: space(1),
   },
+  // press flex items-center justify-center gap-1.5 rounded-pill py-2.5 text-base font-semibold
   segment: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: space(1.5),
     borderRadius: radius.pill,
-    paddingVertical: 10,
+    paddingVertical: space(2.5),
   },
-  segmentActive: { backgroundColor: white(0.15), ...shadowSegment },
-  segmentText: { fontSize: 16, lineHeight: 24, fontWeight: "600" },
+  segmentBg: { borderRadius: radius.pill },
+  segmentIcon: { width: 16, height: 16 },
+  segmentText: { ...text.base, fontWeight: weight.semibold },
+  // flex items-center gap-3 rounded-card border border-white/15 bg-black/15 px-4 py-3.5
   field: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: space(3),
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: white(0.15),
     backgroundColor: black(0.15),
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: space(4),
+    paddingVertical: space(3.5),
   },
+  // h-10 w-10 shrink-0 rounded-full bg-white/10 text-base font-bold
   symbol: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: white(0.1),
   },
-  symbolText: { fontSize: 16, fontWeight: "700" },
+  symbolText: { ...text.base, fontWeight: weight.bold },
+  // min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-white
   amountInput: {
     ...numeric,
     flex: 1,
     minWidth: 0,
+    height: 36,
     fontSize: 30,
-    lineHeight: 36,
-    fontWeight: "700",
-    color: "#FFF",
+    fontWeight: weight.bold,
+    color: "#FFFFFF",
     padding: 0,
+    includeFontPadding: false,
   },
-  unit: { paddingHorizontal: 8, paddingVertical: 4, fontSize: 14, fontWeight: "700", color: white(0.6) },
-  currency: { borderRadius: radius.lg, paddingHorizontal: 8, paddingVertical: 4 },
-  currencyText: { fontSize: 14, fontWeight: "700", color: white(0.7) },
-  approx: { marginTop: -4, paddingHorizontal: 4, fontSize: 12, lineHeight: 16, color: white(0.45) },
-  noteInput: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 20, color: "#FFF", padding: 0 },
-  cta: { marginTop: 4, width: "100%", borderRadius: radius.pill, paddingVertical: 14, alignItems: "center" },
-  ctaText: { fontSize: 18, lineHeight: 28, fontWeight: "600" },
-  error: { textAlign: "center", fontSize: 14, lineHeight: 20, fontWeight: "500", color: "#FF8A8A" },
-  empty: { paddingVertical: 40, textAlign: "center", fontSize: 16, lineHeight: 24, color: white(0.45) },
+  // shrink-0 px-2 py-1 text-sm font-bold text-white/60
+  unit: {
+    ...text.sm,
+    paddingHorizontal: space(2),
+    paddingVertical: space(1),
+    fontWeight: weight.bold,
+    color: white(0.6),
+  },
+  // press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-white/70 active:bg-white/10
+  currency: { borderRadius: radius.lg, paddingHorizontal: space(2), paddingVertical: space(1) },
+  currencyText: { ...text.sm, fontWeight: weight.bold, color: white(0.7) },
+  // -mt-1 px-1 text-xs text-white/45
+  approx: { marginTop: -space(1), paddingHorizontal: space(1), ...text.xs, color: white(0.45) },
+  // min-w-0 flex-1 bg-transparent text-base text-white
+  noteInput: {
+    flex: 1,
+    minWidth: 0,
+    height: 24,
+    fontSize: 16,
+    color: "#FFFFFF",
+    padding: 0,
+    includeFontPadding: false,
+  },
+  // press mt-1 w-full rounded-pill py-3.5 text-lg font-semibold transition
+  cta: {
+    marginTop: space(1),
+    width: "100%",
+    borderRadius: radius.pill,
+    paddingVertical: space(3.5),
+    alignItems: "center",
+  },
+  ctaBg: { borderRadius: radius.pill },
+  ctaText: { ...text.lg, fontWeight: weight.semibold },
+  // text-center text-sm font-medium, #FF8A8A
+  error: { textAlign: "center", ...text.sm, fontWeight: weight.medium, color: "#FF8A8A" },
+  // py-10 text-center text-white/45
+  empty: { paddingVertical: space(10), textAlign: "center", ...text.base, color: white(0.45) },
+  // ul flex flex-col gap-1.5
+  list: { gap: space(1.5) },
+  // flex items-center gap-3 bg-[#163E2F] px-4 py-3.5 ring-1 ring-inset ring-white/10
+  // — the sliding content is a plain rectangle; the frame clips its corners.
   move: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: space(3),
     backgroundColor: "#163E2F",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: white(0.1),
+    paddingHorizontal: space(4),
+    paddingVertical: space(3.5),
+    boxShadow: shadows.ringWhite10,
   },
+  // h-10 w-10 shrink-0 rounded-pill bg-white/10
   moveBadge: {
     width: 40,
     height: 40,
@@ -563,7 +726,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: white(0.1),
   },
-  moveTitle: { fontSize: 16, lineHeight: 24, fontWeight: "500", color: "#FFF" },
-  moveMeta: { fontSize: 12, lineHeight: 16, color: white(0.5) },
-  moveAmount: { ...numeric, fontSize: 16, lineHeight: 24, fontWeight: "500" },
+  moveBody: { flex: 1, minWidth: 0 },
+  // font-medium text-white
+  moveTitle: { ...text.base, fontWeight: weight.medium, color: "#FFFFFF" },
+  // text-xs text-white/50
+  moveMeta: { ...text.xs, color: white(0.5) },
+  // font-numeric font-medium tabular-nums
+  moveAmount: { ...numeric, ...text.base, fontWeight: weight.medium },
 });

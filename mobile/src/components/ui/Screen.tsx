@@ -1,7 +1,5 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   View,
@@ -13,35 +11,78 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { colors, space } from "@/lib/theme";
 
-// The `<main>` shell every page shares: a single centered column (max-w-md),
-// safe-area padding top and bottom, natural scrolling. Dark rooms (Safe,
-// History, Stats) paint a gradient on the content and a solid "floor" behind
-// it in the gradient's terminal color, so an overscroll bounce never flashes
-// the light canvas through — the same trick as the web.
+// The page shell, in two layers:
+//
+//   ScreenFrame — the full-screen backdrop: floor color, status-bar style, and
+//                 (for the dark rooms) the gradient painted over the first
+//                 few hundred points. Lists that virtualize (History) use the
+//                 frame directly and bring their own SectionList/FlatList.
+//   Screen      — ScreenFrame + a ScrollView + the centered `max-w-md` column
+//                 with safe-area padding. What `<main>` is on the web.
+//
+// The web's gradient trick: the gradient sits on the scrolling content and a
+// fixed "floor" in the gradient's terminal color sits behind it, so an
+// overscroll bounce never flashes the light canvas. Home's savings tint is
+// the exception — it's viewport-fixed there (`gradientFixed`).
 export type Gradient = {
   colors: readonly [string, string, ...string[]];
-  // Pixel stops, like the web's "0px, 220px, 460px". Converted to fractions of
-  // the gradient's height, which is the stop span itself.
+  // Pixel stops, like the web's "0px, 220px, 460px".
   stops: readonly number[];
   floor: string;
 };
+
+export function GradientLayer({ gradient }: { gradient: Gradient }) {
+  return (
+    <LinearGradient
+      pointerEvents="none"
+      colors={gradient.colors}
+      locations={toLocations(gradient.stops)}
+      style={[StyleSheet.absoluteFill, { height: gradient.stops[gradient.stops.length - 1] }]}
+    />
+  );
+}
+
+export function ScreenFrame({
+  children,
+  gradient,
+  gradientFixed = false,
+  floor,
+  statusBar = "dark",
+}: {
+  children: ReactNode;
+  gradient?: Gradient;
+  gradientFixed?: boolean;
+  floor?: string;
+  statusBar?: "light" | "dark";
+}) {
+  const floorColor = floor ?? gradient?.floor ?? colors.canvas;
+  return (
+    <View style={[styles.root, { backgroundColor: floorColor }]}>
+      <StatusBar style={statusBar} />
+      {gradient && gradientFixed && <GradientLayer gradient={gradient} />}
+      {children}
+    </View>
+  );
+}
 
 type Props = {
   children: ReactNode;
   gradient?: Gradient;
   gradientFixed?: boolean;
   floor?: string;
+  /** `gap-*` between the column's children (web default gap-5 = 20). */
   gap?: number;
+  /** `px-*` (web default px-4 = 16). */
   paddingX?: number;
-  // Top/bottom padding in rem-ish web terms (1rem = 16), before safe areas.
+  /** Top/bottom padding before safe areas (web: 1rem top, 2rem bottom). */
   paddingTop?: number;
   paddingBottom?: number;
-  // "light" = white status bar text, for the dark rooms.
+  /** "light" = white status bar text, for the dark rooms. */
   statusBar?: "light" | "dark";
   contentStyle?: StyleProp<ViewStyle>;
-  // Center the column vertically (Landing's email flow, Reset).
+  /** Center the column vertically (Landing's email flow, Reset). */
   center?: boolean;
-  scrollRef?: React.Ref<ScrollView>;
+  scrollRef?: Ref<ScrollView>;
 };
 
 export function Screen({
@@ -59,66 +100,48 @@ export function Screen({
   scrollRef,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const floorColor = floor ?? gradient?.floor ?? colors.canvas;
-
-  const gradientView = gradient && (
-    <LinearGradient
-      pointerEvents="none"
-      colors={gradient.colors}
-      locations={toLocations(gradient.stops)}
-      style={[
-        StyleSheet.absoluteFill,
-        { height: gradient.stops[gradient.stops.length - 1] },
-      ]}
-    />
-  );
-
   return (
-    <View style={[styles.root, { backgroundColor: floorColor }]}>
-      <StatusBar style={statusBar} />
-      {/* Home's savings tint is viewport-fixed on the web (`fixed inset-0`);
-          the dark rooms paint theirs on the scrolling content. */}
-      {gradientFixed && gradientView}
-      <KeyboardAvoidingView
+    <ScreenFrame gradient={gradient} gradientFixed={gradientFixed} floor={floor} statusBar={statusBar}>
+      <ScrollView
+        ref={scrollRef}
         style={styles.root}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        contentContainerStyle={[styles.grow, center && styles.center]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        // iOS: scroll the focused input into view natively, like the browser
+        // does — no KeyboardAvoidingView jump.
+        automaticallyAdjustKeyboardInsets
+        contentInsetAdjustmentBehavior="never"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          ref={scrollRef}
-          style={styles.root}
-          contentContainerStyle={[
-            styles.grow,
-            center && styles.center,
+        {gradient && !gradientFixed && <GradientLayer gradient={gradient} />}
+        <View
+          style={[
+            styles.column,
+            {
+              gap,
+              paddingHorizontal: paddingX,
+              paddingTop: paddingTop + insets.top,
+              paddingBottom: paddingBottom + insets.bottom,
+            },
+            contentStyle,
           ]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          bounces
         >
-          {!gradientFixed && gradientView}
-          <View
-            style={[
-              styles.column,
-              {
-                gap,
-                paddingHorizontal: paddingX,
-                paddingTop: paddingTop + insets.top,
-                paddingBottom: paddingBottom + insets.bottom,
-              },
-              contentStyle,
-            ]}
-          >
-            {children}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          {children}
+        </View>
+      </ScrollView>
+    </ScreenFrame>
   );
 }
 
-function toLocations(stops: readonly number[]): [number, number, ...number[]] {
+export function toLocations(stops: readonly number[]): [number, number, ...number[]] {
   const last = stops[stops.length - 1] || 1;
   return stops.map((s) => s / last) as [number, number, ...number[]];
 }
+
+// The `max-w-md` column, exported for list screens that lay out their own
+// header/footer/rows and want the same gutters.
+export const COLUMN_MAX_WIDTH = 448;
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -127,7 +150,7 @@ const styles = StyleSheet.create({
   column: {
     flexGrow: 1,
     width: "100%",
-    maxWidth: 448, // max-w-md
+    maxWidth: COLUMN_MAX_WIDTH,
     alignSelf: "center",
   },
 });

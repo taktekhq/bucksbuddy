@@ -2,10 +2,10 @@ import Svg, { Path } from "react-native-svg";
 
 // Google's brand "G" as inline SVG — lucide has no brand glyphs and we don't
 // want a new dependency just for one icon. Used by the Landing page's
-// "Continue with Google" call-to-action.
+// "Continue with Google" call-to-action. Paths are verbatim from the web.
 export function GoogleIcon({ size = 16 }: { size?: number }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
       <Path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z"

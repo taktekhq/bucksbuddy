@@ -1,19 +1,53 @@
-import { useMemo, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
+import {
+  Alert,
+  FlatList,
+  Platform,
+  SectionList,
+  StyleSheet,
+  Text,
+  View,
+  type FlatListProps,
+  type LayoutChangeEvent,
+  type ListRenderItem,
+  type SectionListProps,
+  type SectionListRenderItem,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import Animated, {
+  LinearTransition,
+  interpolateColor,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type ScrollHandlerProcessed,
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Press } from "@/components/ui/Press";
-import { Screen } from "@/components/ui/Screen";
+import { COLUMN_MAX_WIDTH, GradientLayer, ScreenFrame, type Gradient } from "@/components/ui/Screen";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { HistoryStack } from "@/components/HistoryStack";
-import { HistoryTimeline } from "@/components/HistoryTimeline";
+import { DayHeader, ROW_GAP, SECTION_GAP, toSections, type TimelineSection } from "@/components/HistoryTimeline";
 import { MonthSwitcher } from "@/components/ui/MonthSwitcher";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { requestEdit } from "@/lib/editIntent";
 import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
-import { groupByCategory, groupByDay } from "@/lib/history";
-import { useHistoryGrouping } from "@/lib/useHistoryGrouping";
+import { groupByCategory, groupByDay, type HistoryGroup } from "@/lib/history";
+import { useHistoryGrouping, type HistoryGrouping } from "@/lib/useHistoryGrouping";
 import posthog from "@/lib/posthog";
-import { radius, shadowSegment, white } from "@/lib/theme";
+import { colors, motion, radius, shadows, text, weight, white } from "@/lib/theme";
 import type { Transaction } from "@/types/db";
 
 // The full history in its own page — a deep, neutral-charcoal "rabbit hole"
@@ -24,16 +58,39 @@ import type { Transaction } from "@/types/db";
 //
 // Two ways to read it, switchable from the header (remembered across sessions):
 // a day-by-day Timeline (the default) or the old all-time By-category stacks.
-const RABBIT_HOLE = {
-  colors: ["#2C2C2E", "#232325", "#1C1C1E"] as const,
-  stops: [0, 220, 460] as const,
+//
+// Both views virtualize (PORTING.md §5): the Timeline is a SectionList whose
+// sections are the days, By category a FlatList of stacks; the nav bar, the
+// segmented control (and the month switcher) ride along as the list header.
+const RABBIT_HOLE: Gradient = {
+  colors: ["#2C2C2E", "#232325", "#1C1C1E"],
+  stops: [0, 220, 460],
   floor: "#1C1C1E",
 };
+
+// Reanimated's own Animated.FlatList reserves `CellRendererComponent` for
+// itself, so wrap the plain lists: the same UI-thread `onScroll`, our cells.
+type AnimatedListProps<P> = Omit<P, "onScroll"> & { onScroll?: ScrollHandlerProcessed };
+const AnimatedFlatList = Animated.createAnimatedComponent(
+  FlatList,
+) as unknown as ComponentType<AnimatedListProps<FlatListProps<HistoryGroup>>>;
+const AnimatedSectionList = Animated.createAnimatedComponent(
+  SectionList,
+) as unknown as ComponentType<AnimatedListProps<SectionListProps<HistoryGroup, TimelineSection>>>;
+
+const TABS = [
+  ["timeline", "Timeline"],
+  ["category", "By category"],
+] as const;
+
+const goHome = () => navigate("/");
 
 export function History() {
   const { transactions, deleteTransaction } = useStore();
   const [grouping, setGrouping] = useHistoryGrouping();
   const days = useMemo(() => groupByDay(transactions), [transactions]);
+  const sections = useMemo(() => toSections(days), [days]);
+  const insets = useSafeAreaInsets();
 
   // The "By category" view is scoped to one month at a time, paged with the
   // switcher (this month, last month, or further back). The timeline stays
@@ -53,64 +110,152 @@ export function History() {
     return transactions.some((t) => new Date(t.occurred_at) < from);
   }, [transactions, anchor]);
 
-  function handleEdit(tx: Transaction) {
+  // Which stacks are open. On the web each stack owns this; here the list is
+  // virtualized and a cell scrolled far away is unmounted, so the page keeps
+  // the set — otherwise a stack you opened would fold back up behind your
+  // back. Switching views remounts everything on the web, so reset there.
+  const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const { CellRenderer, cellTick, withCellAnimation } = useAnimatedCells();
+  const openStack = useCallback(
+    (key: string) =>
+      withCellAnimation(() => setOpenKeys((prev) => new Set(prev).add(key))),
+    [withCellAnimation],
+  );
+  const changeGrouping = useCallback(
+    (value: HistoryGrouping) => {
+      setGrouping(value);
+      setOpenKeys(new Set());
+    },
+    [setGrouping],
+  );
+
+  // The gradient scrolls with the content, like the web's `<main>` background,
+  // and the frame's floor shows through on an overscroll bounce.
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+  const gradientStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -scrollY.value }],
+  }));
+
+  const handleEdit = useCallback((tx: Transaction) => {
     requestEdit(tx.id);
     navigate("/");
-  }
+  }, []);
 
-  function handleDelete(tx: Transaction) {
-    Alert.alert("Delete this entry?", undefined, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          await deleteTransaction(tx.id);
-          posthog.capture("transaction_deleted", {
-            category: tx.category,
-            is_income: tx.is_income,
-          });
+  // Keep the row callbacks stable across store updates so a delete doesn't
+  // re-render every memoized row in the list.
+  const deleteRef = useRef(deleteTransaction);
+  deleteRef.current = deleteTransaction;
+  const handleDelete = useCallback(
+    (tx: Transaction) => {
+      Alert.alert("Delete this entry?", undefined, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () =>
+            withCellAnimation(() => {
+              void (async () => {
+                await deleteRef.current(tx.id);
+                posthog.capture("transaction_deleted", {
+                  category: tx.category,
+                  is_income: tx.is_income,
+                });
+              })();
+            }),
         },
-      },
-    ]);
-  }
+      ]);
+    },
+    [withCellAnimation],
+  );
+
+  const renderDayGroup = useCallback<SectionListRenderItem<HistoryGroup, TimelineSection>>(
+    ({ item, index, section }) => {
+      const key = `${section.key}:${index}`;
+      return (
+        <HistoryStack
+          group={item}
+          stackKey={key}
+          open={openKeys.has(key)}
+          onOpen={openStack}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      );
+    },
+    [openKeys, openStack, handleEdit, handleDelete],
+  );
+  const renderGroup = useCallback<ListRenderItem<HistoryGroup>>(
+    ({ item }) => (
+      <HistoryStack
+        group={item}
+        stackKey={item.key}
+        open={openKeys.has(item.key)}
+        onOpen={openStack}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+    ),
+    [openKeys, openStack, handleEdit, handleDelete],
+  );
+  const extraData = useMemo(() => ({ openKeys, cellTick }), [openKeys, cellTick]);
+
+  const contentStyle = [
+    styles.content,
+    { paddingTop: 16 + insets.top, paddingBottom: 32 + insets.bottom },
+  ];
+  const listProps = {
+    style: styles.list,
+    contentContainerStyle: contentStyle,
+    showsVerticalScrollIndicator: false,
+    initialNumToRender: 12,
+    windowSize: 7,
+    removeClippedSubviews: Platform.OS === "android",
+    onScroll,
+    scrollEventThrottle: 16,
+    CellRendererComponent: CellRenderer,
+    extraData,
+  };
 
   return (
-    <Screen gradient={RABBIT_HOLE} statusBar="light">
-      <NavHeader title="All History" onBack={() => navigate("/")} dark />
+    <ScreenFrame gradient={RABBIT_HOLE} statusBar="light">
+      <Animated.View pointerEvents="none" style={[styles.gradient, gradientStyle]}>
+        <GradientLayer gradient={RABBIT_HOLE} />
+      </Animated.View>
 
       {transactions.length === 0 ? (
-        <Text style={styles.empty}>Nothin' here yet, Doc.</Text>
+        <AnimatedFlatList
+          {...listProps}
+          data={[] as HistoryGroup[]}
+          renderItem={renderGroup}
+          keyExtractor={groupKey}
+          ListHeaderComponent={<Header gapBelow={SECTION_GAP} />}
+          ListEmptyComponent={<Text style={styles.empty}>Nothin' here yet, Doc.</Text>}
+        />
+      ) : grouping === "timeline" ? (
+        <AnimatedSectionList
+          {...listProps}
+          sections={sections}
+          renderItem={renderDayGroup}
+          renderSectionHeader={renderDayHeader}
+          keyExtractor={dayGroupKey}
+          stickySectionHeadersEnabled={false}
+          ItemSeparatorComponent={RowGap}
+          ListHeaderComponent={
+            <Header grouping={grouping} onGrouping={changeGrouping} gapBelow={SECTION_GAP} />
+          }
+        />
       ) : (
-        <>
-          {/* Segmented control: flip between the day-by-day timeline and the
-              all-time per-category stacks. */}
-          <View style={styles.tabs} accessibilityRole="tablist">
-            {(
-              [
-                ["timeline", "Timeline"],
-                ["category", "By category"],
-              ] as const
-            ).map(([value, label]) => {
-              const active = grouping === value;
-              return (
-                <Press
-                  key={value}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: active }}
-                  onPress={() => setGrouping(value)}
-                  style={[styles.tab, active && styles.tabActive]}
-                >
-                  <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
-                </Press>
-              );
-            })}
-          </View>
-
-          {grouping === "timeline" ? (
-            <HistoryTimeline days={days} onEdit={handleEdit} onDelete={handleDelete} />
-          ) : (
-            <View style={{ gap: 12 }}>
+        <AnimatedFlatList
+          {...listProps}
+          data={groups}
+          renderItem={renderGroup}
+          keyExtractor={groupKey}
+          ItemSeparatorComponent={RowGap}
+          ListHeaderComponent={
+            <Header grouping={grouping} onGrouping={changeGrouping} gapBelow={12}>
               <MonthSwitcher
                 label={monthLabel(anchor)}
                 onPrev={() => setMonthOffset((o) => o - 1)}
@@ -118,37 +263,213 @@ export function History() {
                 canPrev={hasOlder}
                 canNext={monthOffset < 0}
               />
-              {groups.length === 0 ? (
-                <Text style={styles.empty}>Nothin' logged this month, Doc.</Text>
-              ) : (
-                <View style={{ gap: 6 }}>
-                  {groups.map((g) => (
-                    <HistoryStack key={g.key} group={g} onEdit={handleEdit} onDelete={handleDelete} />
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
-        </>
+            </Header>
+          }
+          ListEmptyComponent={
+            <Text style={styles.empty}>Nothin' logged this month, Doc.</Text>
+          }
+        />
       )}
-    </Screen>
+    </ScreenFrame>
   );
 }
 
+const groupKey = (g: HistoryGroup) => g.key;
+const dayGroupKey = (g: HistoryGroup, index: number) => `${g.key}:${index}`;
+const renderDayHeader = ({ section }: { section: TimelineSection }) => (
+  <DayHeader day={section} first={section.first} />
+);
+// gap-1.5 between rows (the section header carries its own gap).
+const RowGap = () => <View style={{ height: ROW_GAP }} />;
+
+// Everything above the rows: the dark nav, the segmented control (only when
+// there's history to group) and, for By category, the month switcher. The
+// column's `gap-5` runs between them; `gapBelow` is the gap to what follows
+// (`gap-5` to a day section, `gap-3` to the category stacks).
+const Header = memo(function Header({
+  grouping,
+  onGrouping,
+  gapBelow,
+  children,
+}: {
+  grouping?: HistoryGrouping;
+  onGrouping?: (value: HistoryGrouping) => void;
+  gapBelow: number;
+  children?: ReactNode;
+}) {
+  return (
+    <View style={[styles.header, { marginBottom: gapBelow }]}>
+      {/* Dark nav: back chevron + centered title. */}
+      <NavHeader title="All History" onBack={goHome} dark />
+      {grouping && onGrouping && <GroupingTabs value={grouping} onChange={onGrouping} />}
+      {children}
+    </View>
+  );
+});
+
+// Segmented control: flip between the day-by-day timeline and the all-time
+// per-category stacks. The white segment slides between the tabs and the
+// labels cross-fade over the web's `transition` (150ms).
+function GroupingTabs({
+  value,
+  onChange,
+}: {
+  value: HistoryGrouping;
+  onChange: (value: HistoryGrouping) => void;
+}) {
+  const [width, setWidth] = useState(0);
+  const onLayout = useCallback((e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width), []);
+  // 0 = Timeline, 1 = By category.
+  const progress = useSharedValue(value === "category" ? 1 : 0);
+  useEffect(() => {
+    progress.value = withTiming(value === "category" ? 1 : 0, { duration: motion.transition });
+  }, [progress, value]);
+  const segment = Math.max(0, (width - 4) / 2); // p-0.5 either side
+  const highlight = useAnimatedStyle(
+    () => ({ transform: [{ translateX: progress.value * segment }] }),
+    [segment],
+  );
+
+  return (
+    <View style={styles.tabs} accessibilityRole="tablist" onLayout={onLayout}>
+      <Animated.View pointerEvents="none" style={[styles.tabHighlight, { width: segment }, highlight]} />
+      {TABS.map(([tab, label], i) => (
+        <Press
+          key={tab}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: value === tab }}
+          onPress={() => onChange(tab)}
+          style={styles.tab}
+        >
+          <TabLabel progress={progress} index={i}>
+            {label}
+          </TabLabel>
+        </Press>
+      ))}
+    </View>
+  );
+}
+
+function TabLabel({
+  progress,
+  index,
+  children,
+}: {
+  progress: { value: number };
+  index: number;
+  children: string;
+}) {
+  // text-[#1C1C1E] when this tab is active, text-white/55 otherwise.
+  const style = useAnimatedStyle(() => ({
+    color: interpolateColor(
+      progress.value,
+      [0, 1],
+      index === 0 ? [colors.label, white(0.55)] : [white(0.55), colors.label],
+    ),
+  }));
+  return <Animated.Text style={[styles.tabText, style]}>{children}</Animated.Text>;
+}
+
+// Cells animate their layout (LinearTransition, 220ms) only around a change we
+// make on purpose — a stack expanding, a row deleted — so the rows below slide
+// out of the way like the web's height tween, while ordinary scrolling and the
+// list's own re-measuring never wobble. `withCellAnimation` arms the cells on
+// one render, applies the change on the next commit, and disarms afterwards.
+const CELL_LAYOUT = LinearTransition.duration(motion.pop);
+
+type CellProps = {
+  children?: ReactNode;
+  onLayout?: (e: LayoutChangeEvent) => void;
+  style?: StyleProp<ViewStyle>;
+};
+
+function useAnimatedCells() {
+  const armed = useRef(false);
+  const pending = useRef<(() => void) | null>(null);
+  const disarm = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [cellTick, setCellTick] = useState(0);
+
+  const CellRenderer = useMemo(
+    () =>
+      function AnimatedCell({ children, onLayout, style }: CellProps) {
+        return (
+          <Animated.View layout={armed.current ? CELL_LAYOUT : undefined} onLayout={onLayout} style={style}>
+            {children}
+          </Animated.View>
+        );
+      },
+    [],
+  );
+
+  const withCellAnimation = useCallback((change: () => void) => {
+    pending.current = change;
+    armed.current = true;
+    if (disarm.current) clearTimeout(disarm.current);
+    setCellTick((t) => t + 1);
+  }, []);
+
+  // The arming render has committed (and Reanimated has registered the cells'
+  // layout transition); now make the change so the next layout animates.
+  useEffect(() => {
+    const change = pending.current;
+    if (!change) return;
+    pending.current = null;
+    change();
+    disarm.current = setTimeout(() => {
+      disarm.current = null;
+      armed.current = false;
+      setCellTick((t) => t + 1);
+    }, motion.pop + 100);
+  }, [cellTick]);
+
+  useEffect(
+    () => () => {
+      if (disarm.current) clearTimeout(disarm.current);
+    },
+    [],
+  );
+
+  return { CellRenderer, cellTick, withCellAnimation };
+}
+
 const styles = StyleSheet.create({
+  list: { flex: 1 },
+  gradient: { position: "absolute", left: 0, right: 0, top: 0, height: 460 },
+  // mx-auto max-w-md px-4 pb-[calc(2rem+safe)] pt-[calc(1rem+safe)]
+  content: {
+    width: "100%",
+    maxWidth: COLUMN_MAX_WIDTH,
+    alignSelf: "center",
+    paddingHorizontal: 16,
+  },
+  // gap-5 between the nav, the tabs and the month switcher.
+  header: { gap: SECTION_GAP },
+  // py-10 text-center text-white/45
   empty: {
     paddingVertical: 40,
     textAlign: "center",
-    fontSize: 16,
-    lineHeight: 24,
+    ...text.base,
     color: white(0.45),
   },
+  // flex rounded-pill bg-white/10 p-0.5 text-xs font-semibold
   tabs: {
+    position: "relative",
     flexDirection: "row",
     borderRadius: radius.pill,
     backgroundColor: white(0.1),
     padding: 2,
   },
+  // bg-white shadow-segment, sliding under the active tab.
+  tabHighlight: {
+    position: "absolute",
+    top: 2,
+    bottom: 2,
+    left: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+    boxShadow: shadows.segment,
+  },
+  // press flex-1 rounded-pill px-3 py-1.5
   tab: {
     flex: 1,
     borderRadius: radius.pill,
@@ -156,7 +477,5 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     alignItems: "center",
   },
-  tabActive: { backgroundColor: "#FFF", ...shadowSegment },
-  tabText: { fontSize: 12, lineHeight: 16, fontWeight: "600", color: white(0.55) },
-  tabTextActive: { color: "#1C1C1E" },
+  tabText: { ...text.xs, fontWeight: weight.semibold },
 });

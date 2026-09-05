@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { ChevronRight, StickyNote, Tag } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
 import { CategorySheet } from "@/components/ui/CategorySheet";
@@ -8,7 +14,16 @@ import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
 import { formatUsdCents } from "@/lib/money";
 import posthog from "@/lib/posthog";
-import { colors, numeric, radius } from "@/lib/theme";
+import {
+  colors,
+  motion,
+  numeric,
+  radius,
+  space,
+  text,
+  trackingWide,
+  weight,
+} from "@/lib/theme";
 import type { Transaction } from "@/types/db";
 
 const INCOME_COLOR = "#34C759";
@@ -71,6 +86,19 @@ export function AddComposer({
   const usdCents = toUsdCents(amount, currency, lbpPerUsd);
   const canSave = category !== null && amount > 0 && !saving;
 
+  // The CTA's `transition`: blend bg-separator ↔ bg-carrot (and the label's
+  // grey ↔ white) over 150ms instead of flipping.
+  const ready = useSharedValue(canSave ? 1 : 0);
+  useEffect(() => {
+    ready.value = withTiming(canSave ? 1 : 0, { duration: motion.transition });
+  }, [canSave, ready]);
+  const ctaStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(ready.value, [0, 1], [colors.separator, colors.carrot]),
+  }));
+  const ctaLabelStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(ready.value, [0, 1], [colors.labelSecondary, colors.white]),
+  }));
+
   function changeDirection(next: boolean) {
     setIsIncome(next);
     setCategory(null);
@@ -82,6 +110,8 @@ export function AddComposer({
   }
 
   async function save() {
+    // Defensive guard: the CTA is disabled unless canSave, so this never
+    // returns in practice — it's here for safety and to narrow `category`.
     if (!canSave || category === null) return;
     setSaving(true);
     setError(null);
@@ -107,10 +137,18 @@ export function AddComposer({
       return;
     }
     if (editing) {
-      posthog.capture("transaction_updated", { category, is_income: isIncome, currency });
+      posthog.capture("transaction_updated", {
+        category,
+        is_income: isIncome,
+        currency,
+      });
       onClearEdit();
     } else {
-      posthog.capture("transaction_added", { category, is_income: isIncome, currency });
+      posthog.capture("transaction_added", {
+        category,
+        is_income: isIncome,
+        currency,
+      });
       setDisplay("");
       setCategory(null);
       setNote("");
@@ -134,9 +172,9 @@ export function AddComposer({
   return (
     <View style={styles.composer}>
       {/* AMOUNT — always visible, edited with the native keyboard. */}
-      <View style={styles.field}>
-        <View style={styles.symbol}>
-          <Text style={styles.symbolText}>{SYMBOL[currency]}</Text>
+      <View style={[styles.field, styles.fieldRoomy]}>
+        <View style={[styles.badge, styles.badgeSoft]}>
+          <Text style={styles.symbol}>{SYMBOL[currency]}</Text>
         </View>
         <TextInput
           keyboardType="decimal-pad"
@@ -145,13 +183,13 @@ export function AddComposer({
           placeholder="0.00"
           placeholderTextColor={colors.labelSecondary}
           accessibilityLabel="Amount"
-          style={styles.amountInput}
+          style={styles.amount}
         />
         <Press
           onPress={() => setCurrency((c) => (c === "USD" ? "LBP" : "USD"))}
           accessibilityLabel="Switch currency"
           style={styles.currency}
-          pressedStyle={{ backgroundColor: colors.grouped }}
+          pressedStyle={styles.currencyPressed}
         >
           <Text style={styles.currencyText}>{currency}</Text>
         </Press>
@@ -162,15 +200,15 @@ export function AddComposer({
 
       {/* CATEGORY — wide card; opens the sheet. Shows the pick + direction. */}
       {category && SelectedIcon ? (
-        <View style={[styles.field, styles.fieldTight]}>
-          <View style={[styles.symbol, { backgroundColor: catColor }]}>
-            <SelectedIcon size={20} strokeWidth={2} color="#FFF" />
+        <View style={styles.field}>
+          <View style={[styles.badge, { backgroundColor: catColor }]}>
+            <SelectedIcon size={20} strokeWidth={2} color={colors.white} />
           </View>
           <View style={styles.body}>
             <Text style={[styles.direction, { color: dirColor }]}>
               {isIncome ? "Income" : "Expense"}
             </Text>
-            <Text style={styles.categoryName} numberOfLines={1}>
+            <Text style={styles.strong} numberOfLines={1}>
               {categoryLabel(category)}
             </Text>
           </View>
@@ -179,15 +217,15 @@ export function AddComposer({
           </Press>
         </View>
       ) : (
-        <Press onPress={() => setSheetOpen(true)} style={styles.pickCategory}>
-          <View style={styles.symbol}>
+        <Press onPress={() => setSheetOpen(true)} style={styles.addCategory}>
+          <View style={[styles.badge, styles.badgeSoft]}>
             <Tag size={20} strokeWidth={2} color={colors.carrot} />
           </View>
           <View>
-            <Text style={styles.categoryName}>Add Category</Text>
+            <Text style={styles.strong}>Add Category</Text>
             <Text style={styles.hint}>Income or expense</Text>
           </View>
-          <View style={{ marginLeft: "auto" }}>
+          <View style={styles.trailing}>
             <ChevronRight size={20} strokeWidth={2} color={colors.labelSecondary} />
           </View>
         </Press>
@@ -195,7 +233,7 @@ export function AddComposer({
 
       {/* NOTE — optional, available once a category is chosen. */}
       {category && (
-        <View style={[styles.field, styles.fieldTight]}>
+        <View style={styles.field}>
           <StickyNote size={20} strokeWidth={2} color={colors.labelSecondary} />
           <TextInput
             value={note}
@@ -204,27 +242,25 @@ export function AddComposer({
             placeholderTextColor={colors.labelSecondary}
             accessibilityLabel="Note"
             maxLength={140}
-            style={styles.noteInput}
+            style={styles.note}
           />
         </View>
       )}
 
       {/* CTA — contextual, shows the amount when ready. */}
-      <Press
-        onPress={save}
-        disabled={!canSave}
-        style={[styles.cta, { backgroundColor: canSave ? colors.carrot : colors.separator }]}
-      >
-        <Text style={[styles.ctaText, { color: canSave ? "#FFF" : colors.labelSecondary }]}>
-          {cta}
-        </Text>
+      <Press onPress={save} disabled={!canSave} style={styles.ctaPress}>
+        <Animated.View style={[styles.cta, ctaStyle]}>
+          <Animated.Text style={[styles.ctaText, ctaLabelStyle]}>{cta}</Animated.Text>
+        </Animated.View>
       </Press>
 
       {error && <Text style={styles.error}>{error}</Text>}
       {editing && (
-        <Press onPress={onClearEdit} style={styles.cancel}>
-          <Text style={styles.cancelText}>Cancel edit</Text>
-        </Press>
+        <View style={styles.center}>
+          <Press onPress={onClearEdit} style={styles.cancel}>
+            <Text style={styles.cancelText}>Cancel edit</Text>
+          </Press>
+        </View>
       )}
 
       <CategorySheet
@@ -240,80 +276,126 @@ export function AddComposer({
 }
 
 const styles = StyleSheet.create({
-  composer: { gap: 12, paddingHorizontal: 16, paddingBottom: 20, paddingTop: 16 },
+  // flex flex-col gap-3 px-4 pb-5 pt-4
+  composer: {
+    gap: space(3),
+    paddingHorizontal: space(4),
+    paddingBottom: space(5),
+    paddingTop: space(4),
+  },
+  // flex items-center gap-3 rounded-card border border-separator px-4 py-3
   field: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: space(3),
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.separator,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: space(4),
+    paddingVertical: space(3),
   },
-  fieldTight: { paddingVertical: 12 },
-  symbol: {
+  // py-3.5 (the amount field)
+  fieldRoomy: { paddingVertical: space(3.5) },
+  // h-10 w-10 rounded-full
+  badge: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.carrotSoft,
   },
-  symbolText: { fontSize: 16, fontWeight: "700", color: colors.carrot },
-  amountInput: {
+  badgeSoft: { backgroundColor: colors.carrotSoft },
+  // text-base font-bold text-carrot
+  symbol: { ...text.base, fontWeight: weight.bold, color: colors.carrot },
+  // min-w-0 flex-1 font-numeric text-3xl font-bold tabular-nums text-label
+  amount: {
     ...numeric,
+    ...text["3xl"],
     flex: 1,
     minWidth: 0,
-    fontSize: 30,
-    lineHeight: 36,
-    fontWeight: "700",
+    fontWeight: weight.bold,
     color: colors.label,
     padding: 0,
   },
-  currency: { borderRadius: radius.lg, paddingHorizontal: 8, paddingVertical: 4 },
-  currencyText: { fontSize: 14, fontWeight: "700", color: colors.labelSecondary },
-  approx: { marginTop: -4, paddingHorizontal: 4, fontSize: 12, lineHeight: 16, color: colors.labelSecondary },
-  body: { flex: 1, minWidth: 0 },
-  direction: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+  // rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-grouped
+  currency: {
+    borderRadius: radius.lg,
+    paddingHorizontal: space(2),
+    paddingVertical: space(1),
   },
-  categoryName: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.label },
-  hint: { fontSize: 14, lineHeight: 20, color: colors.labelSecondary },
+  currencyPressed: { backgroundColor: colors.grouped },
+  currencyText: { ...text.sm, fontWeight: weight.bold, color: colors.labelSecondary },
+  // -mt-1 px-1 text-xs text-label-secondary
+  approx: {
+    marginTop: -space(1),
+    paddingHorizontal: space(1),
+    ...text.xs,
+    color: colors.labelSecondary,
+  },
+  body: { flex: 1, minWidth: 0 },
+  // text-[11px] font-semibold uppercase tracking-wide
+  direction: {
+    ...text["11"],
+    fontWeight: weight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: trackingWide(11),
+  },
+  // font-bold text-label
+  strong: { ...text.base, fontWeight: weight.bold, color: colors.label },
+  // text-sm text-label-secondary
+  hint: { ...text.sm, color: colors.labelSecondary },
+  // rounded-pill border border-carrot px-3 py-1 text-sm font-semibold text-carrot
   change: {
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.carrot,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: space(3),
+    paddingVertical: space(1),
   },
-  changeText: { fontSize: 14, lineHeight: 20, fontWeight: "600", color: colors.carrot },
-  pickCategory: {
+  changeText: { ...text.sm, fontWeight: weight.semibold, color: colors.carrot },
+  // flex w-full items-center gap-3 rounded-card border border-dashed
+  // border-carrot/40 bg-carrot-soft/40 px-4 py-3.5
+  addCategory: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: space(3),
     borderRadius: radius.card,
     borderWidth: 1,
     borderStyle: "dashed",
     borderColor: "rgba(245,99,0,0.4)",
     backgroundColor: "rgba(255,241,230,0.4)",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: space(4),
+    paddingVertical: space(3.5),
   },
-  noteInput: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 20, color: colors.label, padding: 0 },
+  trailing: { marginLeft: "auto" },
+  // min-w-0 flex-1 text-base text-label
+  note: {
+    ...text.base,
+    flex: 1,
+    minWidth: 0,
+    color: colors.label,
+    padding: 0,
+  },
+  // mt-1 w-full rounded-pill
+  ctaPress: { marginTop: space(1), width: "100%", borderRadius: radius.pill },
+  // py-3.5, bg animated
   cta: {
-    marginTop: 4,
-    width: "100%",
     borderRadius: radius.pill,
-    paddingVertical: 14,
+    paddingVertical: space(3.5),
     alignItems: "center",
   },
-  ctaText: { fontSize: 18, lineHeight: 28, fontWeight: "600" },
-  error: { textAlign: "center", fontSize: 14, lineHeight: 20, fontWeight: "500", color: colors.danger },
-  cancel: { alignSelf: "center", paddingVertical: 4 },
-  cancelText: { fontSize: 14, lineHeight: 20, color: colors.carrot },
+  // text-lg font-semibold
+  ctaText: { ...text.lg, fontWeight: weight.semibold },
+  // text-center text-sm font-medium text-danger
+  error: {
+    ...text.sm,
+    textAlign: "center",
+    fontWeight: weight.medium,
+    color: colors.danger,
+  },
+  center: { alignItems: "center" },
+  // py-1 text-sm text-carrot
+  cancel: { paddingVertical: space(1) },
+  cancelText: { ...text.sm, color: colors.carrot },
 });

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { Carrot } from "@/components/ui/Carrot";
 import { Press } from "@/components/ui/Press";
 import { Screen } from "@/components/ui/Screen";
-import { Carrot } from "@/components/ui/Carrot";
 import { supabase } from "@/lib/supabase";
-import { colors, display, radius, shadowCard } from "@/lib/theme";
+import { colors, display, leading, motion, radius, shadows, space, text, weight } from "@/lib/theme";
 
 // New-password screen, rendered while Supabase's PASSWORD_RECOVERY event is in
 // effect (see useSession). The recovery token from the email link is what
@@ -50,85 +51,139 @@ export function Reset() {
     await supabase.auth.signOut();
   }
 
-  if (done) {
-    return (
-      <Screen center paddingX={24} gap={0}>
-        <View style={styles.centered}>
-          <Carrot size={60} />
-          <Text style={styles.h1}>All set</Text>
-          <Text style={styles.doneText}>Your password's been updated. Sign in to keep going.</Text>
-        </View>
-      </Screen>
-    );
-  }
-
+  // Form → "All set" is a crossfade (220ms), same as Landing's flow swap.
   return (
-    <Screen center paddingX={24} gap={0}>
-      <View style={styles.centered}>
-        <Carrot size={60} />
-        <Text style={styles.h1}>New{"\n"}Password</Text>
-        <Text style={styles.subtitle}>Pick something memorable.</Text>
-      </View>
+    <View style={styles.root}>
+      {done ? (
+        <Animated.View
+          key="done"
+          style={StyleSheet.absoluteFill}
+          entering={FadeIn.duration(motion.pop)}
+          exiting={FadeOut.duration(motion.pop)}
+        >
+          <Screen center paddingX={space(6)} gap={0}>
+            <View style={styles.centered}>
+              <Carrot size={60} />
+              <Text style={styles.h1}>All set</Text>
+              <Text style={styles.doneText}>
+                Your password's been updated. Sign in to keep going.
+              </Text>
+            </View>
+          </Screen>
+        </Animated.View>
+      ) : (
+        <Animated.View
+          key="form"
+          style={StyleSheet.absoluteFill}
+          entering={FadeIn.duration(motion.pop)}
+          exiting={FadeOut.duration(motion.pop)}
+        >
+          <Screen center paddingX={space(6)} gap={0}>
+            <View style={styles.centered}>
+              <Carrot size={60} />
+              <Text style={styles.h1}>New{"\n"}Password</Text>
+              <Text style={styles.subtitle}>Pick something memorable.</Text>
+            </View>
 
-      <View style={styles.form}>
-        <TextInput
-          secureTextEntry
-          autoComplete="new-password"
-          textContentType="newPassword"
-          value={password}
-          onChangeText={setPassword}
-          placeholder="New password"
-          placeholderTextColor={colors.labelMuted}
-          style={styles.input}
-        />
-        <TextInput
-          secureTextEntry
-          autoComplete="new-password"
-          textContentType="newPassword"
-          value={confirm}
-          onChangeText={setConfirm}
-          placeholder="Confirm password"
-          placeholderTextColor={colors.labelMuted}
-          onSubmitEditing={submit}
-          style={styles.input}
-        />
-        <Press onPress={submit} disabled={busy} disabledOpacity={0.5} style={styles.primary}>
-          <Text style={styles.primaryText}>{busy ? "Saving…" : "Update password"}</Text>
-        </Press>
-        {error && <Text style={styles.error}>{error}</Text>}
-      </View>
+            <View style={styles.form}>
+              <TextInput
+                secureTextEntry
+                autoComplete="new-password"
+                textContentType="newPassword"
+                returnKeyType="next"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="New password"
+                placeholderTextColor={colors.labelMuted}
+                style={styles.input}
+              />
+              <TextInput
+                secureTextEntry
+                autoComplete="new-password"
+                textContentType="newPassword"
+                returnKeyType="go"
+                value={confirm}
+                onChangeText={setConfirm}
+                onSubmitEditing={submit}
+                placeholder="Confirm password"
+                placeholderTextColor={colors.labelMuted}
+                style={styles.input}
+              />
+              <Press onPress={submit} disabled={busy} disabledOpacity={0.5} style={styles.submit}>
+                <Text style={styles.submitText}>{busy ? "Saving…" : "Update password"}</Text>
+              </Press>
+              {error && <Text style={styles.error}>{error}</Text>}
+            </View>
 
-      <Press onPress={cancel} disabled={busy} style={styles.cancel}>
-        <Text style={styles.cancelText}>Cancel</Text>
-      </Press>
-    </Screen>
+            <Press onPress={cancel} disabled={busy} style={styles.cancel}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Press>
+          </Screen>
+        </Animated.View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.canvas },
   centered: { alignItems: "center" },
-  h1: { ...display, marginTop: 16, textAlign: "center", fontSize: 30, lineHeight: 30, color: colors.labelMuted },
-  subtitle: { marginTop: 4, fontSize: 16, lineHeight: 24, color: colors.labelSecondary },
-  doneText: { marginTop: 12, textAlign: "center", fontSize: 16, lineHeight: 24, color: colors.labelSecondary },
+  // mt-4 text-center font-display text-3xl uppercase leading-none text-label-muted
+  h1: {
+    ...display,
+    marginTop: space(4),
+    fontSize: text["3xl"].fontSize,
+    lineHeight: leading.none(text["3xl"].fontSize),
+    textAlign: "center",
+    color: colors.labelMuted,
+  },
+  // mt-1 text-base text-label-secondary
+  subtitle: { ...text.base, marginTop: space(1), color: colors.labelSecondary },
+  // mt-3 text-center text-base text-label-secondary
+  doneText: {
+    ...text.base,
+    marginTop: space(3),
+    textAlign: "center",
+    color: colors.labelSecondary,
+  },
+  // mt-8 flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card
   form: {
-    marginTop: 32,
-    gap: 12,
+    marginTop: space(8),
+    gap: space(3),
     borderRadius: radius.card,
     backgroundColor: colors.surface,
-    padding: 20,
-    ...shadowCard,
+    padding: space(5),
+    boxShadow: shadows.card,
   },
+  // rounded-pill bg-grouped px-4 py-3.5 text-lg text-label — 28px line +
+  // 14px padding each side = 56, pinned so both platforms match the web box.
   input: {
+    height: text.lg.lineHeight + space(3.5) * 2,
+    paddingHorizontal: space(4),
+    paddingVertical: 0,
     borderRadius: radius.pill,
     backgroundColor: colors.grouped,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 18,
+    fontSize: text.lg.fontSize,
     color: colors.label,
+    textAlignVertical: "center",
   },
-  primary: { borderRadius: radius.pill, backgroundColor: colors.carrot, paddingVertical: 14, alignItems: "center" },
-  primaryText: { fontSize: 18, lineHeight: 28, fontWeight: "600", color: "#FFF" },
-  error: { paddingHorizontal: 4, fontSize: 14, lineHeight: 20, fontWeight: "500", color: colors.danger },
-  cancel: { marginTop: 20, alignSelf: "center" },
-  cancelText: { fontSize: 16, lineHeight: 24, fontWeight: "600", color: colors.carrot },
+  // rounded-pill bg-carrot py-3.5 text-lg font-semibold text-white
+  submit: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.pill,
+    backgroundColor: colors.carrot,
+    paddingVertical: space(3.5),
+  },
+  submitText: { ...text.lg, fontWeight: weight.semibold, color: colors.white },
+  // px-1 text-sm font-medium text-danger
+  error: {
+    ...text.sm,
+    paddingHorizontal: space(1),
+    fontWeight: weight.medium,
+    color: colors.danger,
+  },
+  // mt-5 text-base font-semibold text-carrot (a block button: full width, centred)
+  cancel: { marginTop: space(5), alignItems: "center" },
+  cancelText: { ...text.base, fontWeight: weight.semibold, color: colors.carrot },
 });

@@ -1,10 +1,12 @@
 import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useSession } from "@/lib/useSession";
-import { useRoute } from "@/lib/router";
+import { navigationRef, type StackParams } from "@/lib/router";
 import { StoreProvider } from "@/lib/store";
 import { Carrot } from "@/components/ui/Carrot";
 import { Landing } from "@/screens/Landing";
@@ -19,6 +21,32 @@ import { Safe } from "@/screens/Safe";
 import { Reset } from "@/screens/Reset";
 import { colors } from "@/lib/theme";
 
+// One native stack per signed-in / signed-out world; the session decides which
+// is mounted. Screen names are the PWA's routes (see lib/router.ts), so
+// `navigate("/safe")` pushes the Safe with the platform's own push transition
+// and the edge swipe pops it — the smoothness the hash router never had.
+const Stack = createNativeStackNavigator<StackParams>();
+
+// Every screen paints its own chrome (the web's <header>), so the native
+// header stays off. Each screen also owns its floor color so the push
+// transition never flashes the wrong background.
+const screenOptions: NativeStackNavigationOptions = {
+  headerShown: false,
+  animation: "default",
+  gestureEnabled: true,
+  fullScreenGestureEnabled: true,
+  contentStyle: { backgroundColor: colors.canvas },
+};
+
+const dark = (color: string): NativeStackNavigationOptions => ({
+  contentStyle: { backgroundColor: color },
+});
+
+const theme = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: colors.canvas, card: colors.canvas },
+};
+
 function Splash() {
   return (
     <View style={styles.splash}>
@@ -28,9 +56,48 @@ function Splash() {
   );
 }
 
-function Router() {
+// Signed-out: the marketing landing owns "/" and the public pages push on top.
+function PublicStack() {
+  return (
+    <Stack.Navigator screenOptions={screenOptions} initialRouteName="/">
+      <Stack.Screen name="/" component={Landing} />
+      <Stack.Screen name="/legal" component={Legal} />
+      <Stack.Screen name="/contact" component={Contact} />
+      <Stack.Screen name="/stats" options={dark("#141428")}>
+        {() => <Stats signedIn={false} />}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+}
+
+// Signed-in: Home is the root; everything else pushes. The store lives above
+// the navigator so it survives every push/pop instead of refetching per page.
+function AppStack({ userId }: { userId: string }) {
+  return (
+    <StoreProvider userId={userId}>
+      <Stack.Navigator screenOptions={screenOptions} initialRouteName="/">
+        <Stack.Screen name="/" component={Home} />
+        <Stack.Screen name="/settings" component={Settings} />
+        <Stack.Screen name="/safe" component={Safe} options={dark("#06281E")} />
+        <Stack.Screen name="/history" component={History} options={dark("#1C1C1E")} />
+        <Stack.Screen name="/stats" options={dark("#141428")}>
+          {() => <Stats signedIn />}
+        </Stack.Screen>
+        <Stack.Screen name="/stats/treats" options={dark("#141428")}>
+          {() => <Receipts kind="treats" />}
+        </Stack.Screen>
+        <Stack.Screen name="/stats/weekend" options={dark("#141428")}>
+          {() => <Receipts kind="weekend" />}
+        </Stack.Screen>
+        <Stack.Screen name="/legal" component={Legal} />
+        <Stack.Screen name="/contact" component={Contact} />
+      </Stack.Navigator>
+    </StoreProvider>
+  );
+}
+
+function Root() {
   const { session, ready, recoveryMode } = useSession();
-  const route = useRoute();
 
   if (recoveryMode) {
     // Password recovery wins over route + session: the user opened a reset
@@ -38,43 +105,11 @@ function Router() {
     // need to set a new password before doing anything else.
     return <Reset />;
   }
-  if (route === "/legal") return <Legal />;
-  if (route === "/contact") return <Contact />;
   if (!ready) return <Splash />;
-  if (route === "/stats") {
-    // Half-public: signed-in users get their personal breakdown (which needs
-    // the store), signed-out visitors get the community numbers only. Sits
-    // after the splash gate so a signed-in user never flashes the public
-    // variant while the session loads.
-    return session ? (
-      <StoreProvider userId={session.user.id}>
-        <Stats signedIn />
-      </StoreProvider>
-    ) : (
-      <Stats signedIn={false} />
-    );
-  }
-  if (!session) {
-    // The marketing landing page is the entry point for signed-out visitors;
-    // it owns the Google + email sign-in flows.
-    return <Landing />;
-  }
   return (
-    <StoreProvider userId={session.user.id}>
-      {route === "/settings" ? (
-        <Settings />
-      ) : route === "/safe" ? (
-        <Safe />
-      ) : route === "/history" ? (
-        <History />
-      ) : route === "/stats/treats" ? (
-        <Receipts kind="treats" />
-      ) : route === "/stats/weekend" ? (
-        <Receipts kind="weekend" />
-      ) : (
-        <Home />
-      )}
-    </StoreProvider>
+    <NavigationContainer ref={navigationRef} theme={theme}>
+      {session ? <AppStack userId={session.user.id} /> : <PublicStack />}
+    </NavigationContainer>
   );
 }
 
@@ -87,7 +122,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaProvider>{fontsLoaded ? <Router /> : <Splash />}</SafeAreaProvider>
+      <SafeAreaProvider>{fontsLoaded ? <Root /> : <Splash />}</SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

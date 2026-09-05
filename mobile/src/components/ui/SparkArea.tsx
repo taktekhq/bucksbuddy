@@ -57,9 +57,13 @@ type Props = {
    */
   stroke?: string;
   fill: string;
+  /** Extra style on top of the default `absolute inset-0 h-full w-full`. */
   style?: StyleProp<ViewStyle>;
 };
 
+// The web's `pointer-events-none absolute inset-0 h-full w-full` is baked in:
+// every caller draws this behind something tappable, and the parent card's
+// `overflow: hidden` + rounded corners clip it, exactly like the browser.
 export function SparkArea({ values, stroke, fill, style }: Props) {
   const paths = buildAreaPath(values);
   if (!paths) return null;
@@ -68,6 +72,8 @@ export function SparkArea({ values, stroke, fill, style }: Props) {
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       preserveAspectRatio="none"
       pointerEvents="none"
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
       style={[StyleSheet.absoluteFill, style]}
     >
       <Path d={paths.area} fill={fill} />

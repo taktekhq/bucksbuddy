@@ -1,8 +1,30 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import {
+  createContext,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { ChevronRight, Lock } from "lucide-react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { Press } from "@/components/ui/Press";
-import { Screen } from "@/components/ui/Screen";
+import { COLUMN_MAX_WIDTH, Screen, type Gradient } from "@/components/ui/Screen";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { Carrot } from "@/components/ui/Carrot";
 import { SparkArea } from "@/components/ui/SparkArea";
@@ -22,7 +44,17 @@ import {
   type MonthSpend,
 } from "@/lib/stats";
 import { fetchPublicStats, type PublicStats } from "@/lib/publicStats";
-import { colors, display, numeric, radius, white } from "@/lib/theme";
+import {
+  colors,
+  display,
+  numeric,
+  radius,
+  space,
+  text,
+  trackingWide,
+  weight,
+  white,
+} from "@/lib/theme";
 
 // The stats page — a deep indigo "observatory" you climb up to and look at
 // your money from, deliberately distinct from History's charcoal rabbit hole
@@ -30,18 +62,23 @@ import { colors, display, numeric, radius, white } from "@/lib/theme";
 // breakdown (App wraps this route in the store only then), while signed-out
 // visitors get the community numbers — those come from an aggregate-only rpc,
 // so there's nothing personal to leak.
-export const OBSERVATORY = {
-  colors: ["#23234A", "#1B1B38", "#141428"] as const,
-  stops: [0, 220, 460] as const,
+//
+// `linear-gradient(180deg, #23234A 0px, #1B1B38 220px, #141428 460px)` over a
+// fixed `#141428` floor — Receipts imports this so the tap-through stays in
+// the same room.
+export const OBSERVATORY: Gradient = {
+  colors: ["#23234A", "#1B1B38", "#141428"],
+  stops: [0, 220, 460],
   floor: "#141428",
 };
 
 export function Stats({ signedIn }: { signedIn: boolean }) {
   return (
     <Screen gradient={OBSERVATORY} statusBar="light">
-      {/* For signed-out visitors "/" is the landing page, so Back always lands
-          somewhere sensible. */}
+      {/* Dark nav: back chevron + centered title. For signed-out visitors "/"
+          is the landing page, so Back always lands somewhere sensible. */}
       <NavHeader title={signedIn ? "Your Stats" : "Stats"} onBack={() => navigate("/")} dark />
+
       {signedIn ? <PersonalStats /> : <PublicTeaser />}
       <CommunityStats />
     </Screen>
@@ -54,6 +91,38 @@ function Caption({ children }: { children: ReactNode }) {
   return <Text style={styles.caption}>{children}</Text>;
 }
 
+// The web's `grid grid-cols-N gap-2`: measure the row with onLayout and hand
+// each chip its exact column width — `(width - gap*(N-1)) / N` — rather than
+// guessing a percentage. Before the first layout lands, the column is derived
+// from the window (Screen's max-w-md column minus its px-4), so the first
+// frame already has the right widths and nothing jumps.
+const GRID_GAP = 8; // gap-2
+const CellWidth = createContext<number | undefined>(undefined);
+
+function Grid({
+  columns,
+  style,
+  children,
+}: {
+  columns: number;
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
+  const { width: windowWidth } = useWindowDimensions();
+  const [measured, setMeasured] = useState<number | null>(null);
+  const width = measured ?? Math.min(windowWidth, COLUMN_MAX_WIDTH) - 2 * space(4);
+  const cell = (width - GRID_GAP * (columns - 1)) / columns;
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0 && w !== measured) setMeasured(w);
+  };
+  return (
+    <View onLayout={onLayout} style={[styles.grid, style]}>
+      <CellWidth.Provider value={cell}>{children}</CellWidth.Provider>
+    </View>
+  );
+}
+
 // A small stat chip: tiny caption, big numeric value, optional one-liner.
 // Give it an onPress and it becomes a button with a disclosure chevron —
 // some chips open the receipts page behind their number.
@@ -62,18 +131,17 @@ function Fact({
   value,
   sub,
   onPress,
-  style,
 }: {
   caption: string;
   value: string;
   sub?: string;
   onPress?: () => void;
-  style?: object;
 }) {
+  const width = useContext(CellWidth);
   const body = (
     <>
       <View style={styles.factCaptionRow}>
-        <Text style={styles.factCaption}>{caption}</Text>
+        <Text style={[styles.microCaption, styles.factCaptionText]}>{caption}</Text>
         {onPress && <ChevronRight size={14} strokeWidth={2.5} color={white(0.4)} />}
       </View>
       <Text style={styles.factValue}>{value}</Text>
@@ -86,12 +154,12 @@ function Fact({
   );
   if (onPress) {
     return (
-      <Press onPress={onPress} style={[styles.fact, style]}>
+      <Press onPress={onPress} style={[styles.fact, { width }]}>
         {body}
       </Press>
     );
   }
-  return <View style={[styles.fact, style]}>{body}</View>;
+  return <View style={[styles.fact, { width }]}>{body}</View>;
 }
 
 // Stand-in for a fun fact that has no data yet — the chip still shows, it just
@@ -132,36 +200,66 @@ function MonthlyBars({
   const top = Math.max(...months.map((m) => m.totalCents), 1);
   return (
     <View style={styles.bars}>
-      {months.map((m) => {
-        const active = m.offset === selectedOffset;
-        return (
-          <Press
-            key={m.monthKey}
-            onPress={() => onSelect(m.offset)}
-            accessibilityLabel={`${m.label}: ${formatUsdCents(m.totalCents)}`}
-            style={styles.bar}
-          >
-            <View style={styles.barTrack}>
-              <View
-                style={{
-                  width: "100%",
-                  borderTopLeftRadius: 2,
-                  borderTopRightRadius: 2,
-                  // Even an empty month keeps a faint sliver so the axis reads.
-                  height: `${Math.max((m.totalCents / top) * 100, 3)}%`,
-                  backgroundColor: active ? "#F56300" : "rgba(255,255,255,0.22)",
-                }}
-              />
-            </View>
-            <Text style={[styles.barLabel, { color: active ? colors.carrot : white(0.5) }]}>
-              {m.label}
-            </Text>
-          </Press>
-        );
-      })}
+      {months.map((m) => (
+        <MonthBar
+          key={m.monthKey}
+          month={m}
+          // Even an empty month keeps a faint sliver so the axis reads.
+          pct={Math.max((m.totalCents / top) * 100, 3)}
+          active={m.offset === selectedOffset}
+          onSelect={onSelect}
+        />
+      ))}
     </View>
   );
 }
+
+const BAR_TRACK_H = 96; // h-24
+const BAR_EASE = Easing.bezier(0.4, 0, 0.2, 1); // Tailwind's `transition` curve
+const BAR_MS = 300;
+
+// One bar. The web's `transition-[height]`: when the data reshuffles (a new
+// entry, the fetch settling) the bar eases to its new height instead of
+// snapping. Owns its shared value, per the porting rules.
+const MonthBar = memo(function MonthBar({
+  month: m,
+  pct,
+  active,
+  onSelect,
+}: {
+  month: MonthSpend;
+  pct: number;
+  active: boolean;
+  onSelect: (offset: number) => void;
+}) {
+  const height = useSharedValue((pct / 100) * BAR_TRACK_H);
+  useEffect(() => {
+    height.value = withTiming((pct / 100) * BAR_TRACK_H, { duration: BAR_MS, easing: BAR_EASE });
+  }, [height, pct]);
+  const fill = useAnimatedStyle(() => ({ height: height.value }));
+
+  return (
+    <Press
+      onPress={() => onSelect(m.offset)}
+      accessibilityLabel={`${m.label}: ${formatUsdCents(m.totalCents)}`}
+      accessibilityState={{ selected: active }}
+      style={styles.bar}
+    >
+      <View style={styles.barTrack}>
+        <Animated.View
+          style={[
+            styles.barFill,
+            { backgroundColor: active ? "#F56300" : "rgba(255,255,255,0.22)" },
+            fill,
+          ]}
+        />
+      </View>
+      <Text style={[styles.barLabel, { color: active ? colors.carrot : white(0.5) }]}>
+        {m.label}
+      </Text>
+    </Press>
+  );
+});
 
 // The signed-in half. Lives in its own component so the top-level Stats never
 // touches useStore() — signed-out renders have no StoreProvider above them.
@@ -190,7 +288,9 @@ function PersonalStats() {
   const cats = useMemo(() => topCategories(transactions, 6, anchor), [transactions, anchor]);
   const facts = useMemo(() => monthInsights(transactions, anchor), [transactions, anchor]);
 
-  // The cross-month trend: spending per month over the last half-year.
+  // The cross-month trend: spending per month over the last half-year. Drives
+  // both the bar chart and the "per month" / "last month" call-outs. Bounded by
+  // FETCH_CAP like everything else; older months can read low once the cap bites.
   const monthly = useMemo(() => monthlySpendTotals(transactions, 6), [transactions]);
   const hasMonthly = monthly.some((m) => m.totalCents > 0);
   // "Typical month" averages the completed months that had spending — the
@@ -236,7 +336,7 @@ function PersonalStats() {
     return (
       <>
         <View style={styles.headline}>
-          <Text style={styles.factCaption}>{monthLabel()}</Text>
+          <Text style={styles.microCaption}>{monthLabel()}</Text>
           <Text style={[styles.headlineValue, { color: white(0.45) }]}>${garble(0)}</Text>
           <Text style={styles.headlineSub}>amounts locked</Text>
         </View>
@@ -252,16 +352,16 @@ function PersonalStats() {
 
         <View style={styles.section}>
           <Caption>Fun facts</Caption>
-          <View style={[styles.grid, { opacity: 0.6 }]}>
-            <Fact caption="Biggest splurge" value={`$${garble(1)}`} style={styles.half} />
-            <Fact caption="Busiest day" value={garble(2)} style={styles.half} />
-            <Fact caption="Safe runway" value={garble(3)} style={styles.half} />
-            <Fact caption="On pace for" value={`$${garble(4)}`} style={styles.half} />
-            <Fact caption="Treat yourself" value={`$${garble(5)}`} style={styles.half} />
-            <Fact caption="Weekend Spend" value={garble(6)} style={styles.half} />
-            <Fact caption="Coffee runs" value={garble(7)} style={styles.half} />
-            <Fact caption="No-spend days" value={garble(8)} style={styles.half} />
-          </View>
+          <Grid columns={2} style={{ opacity: 0.6 }}>
+            <Fact caption="Biggest splurge" value={`$${garble(1)}`} />
+            <Fact caption="Busiest day" value={garble(2)} />
+            <Fact caption="Safe runway" value={garble(3)} />
+            <Fact caption="On pace for" value={`$${garble(4)}`} />
+            <Fact caption="Treat yourself" value={`$${garble(5)}`} />
+            <Fact caption="Weekend Spend" value={garble(6)} />
+            <Fact caption="Coffee runs" value={garble(7)} />
+            <Fact caption="No-spend days" value={garble(8)} />
+          </Grid>
         </View>
       </>
     );
@@ -272,7 +372,7 @@ function PersonalStats() {
     return (
       <>
         {monthNav}
-        <View style={[styles.headline, { paddingVertical: 40 }]}>
+        <View style={styles.empty}>
           <Text style={styles.emptyText}>
             {isCurrentMonth
               ? "Nothin' to chart yet, Doc. Log a few entries and come back."
@@ -288,26 +388,35 @@ function PersonalStats() {
 
   // How many days the safe's cash would cover at this month's pace.
   const runwayDays =
-    facts.avgPerDayCents > 0 ? Math.round(safeTotalCents / facts.avgPerDayCents) : 0;
+    facts.avgPerDayCents > 0
+      ? Math.round(safeTotalCents / facts.avgPerDayCents)
+      : 0;
 
   return (
     <>
       {monthNav}
-      {/* Headline: the month so far. The daily rhythm fills the whole card as
-          a backdrop and the numbers sit on top of it. */}
+      {/* Headline: the month so far. The daily rhythm isn't given a slot of
+          its own. It fills the whole card as a backdrop and the numbers sit
+          on top of it. */}
       <View style={styles.heroCard}>
         <SparkArea
           values={series.map((p) => p.totalCents)}
           stroke="rgba(245, 99, 0, 0.55)"
           fill="rgba(245, 99, 0, 0.16)"
         />
-        {/* min-h matches the Home hero card exactly. (Keep in sync.) */}
+        {/* min-h matches the Home hero card exactly, so tapping the hero
+            lands on the same card with the same chart — only the room gets
+            darker. (Keep in sync with Home.tsx.) */}
         <View style={styles.heroBody}>
-          <Text style={styles.factCaption}>
+          {/* The month itself is named in the switcher right above, so the
+              headline just says what the number is. */}
+          <Text style={styles.microCaption}>
             {isCurrentMonth ? "Spent this month" : "Spent"}
           </Text>
           <Text style={styles.headlineValue}>{formatUsdCents(facts.spentCents)}</Text>
-          <Text style={styles.headlineSub}>≈ {formatUsdCents(facts.avgPerDayCents)} a day</Text>
+          <Text style={styles.headlineSub}>
+            ≈ {formatUsdCents(facts.avgPerDayCents)} a day
+          </Text>
           <Text style={styles.heroFoot}>
             spent per day · {isCurrentMonth ? "last 30 days" : monthLabel(anchor)}
           </Text>
@@ -315,27 +424,30 @@ function PersonalStats() {
       </View>
 
       {/* The cross-month picture: how each month's spending stacks up, a typical
-          month, and last month's damage. The bars double as a month picker. */}
+          month, and last month's damage. The bars double as a month picker —
+          tapping one pages the whole screen to that month. */}
       {hasMonthly && (
         <View style={styles.section}>
           <Caption>Spending by month</Caption>
           <View style={styles.panel}>
-            <MonthlyBars months={monthly} selectedOffset={monthOffset} onSelect={setMonthOffset} />
+            <MonthlyBars
+              months={monthly}
+              selectedOffset={monthOffset}
+              onSelect={(o) => setMonthOffset(o)}
+            />
           </View>
-          <View style={styles.grid}>
+          <Grid columns={2}>
             <Fact
               caption="Per month"
               value={avgMonthCents > 0 ? formatUsdCents(avgMonthCents) : EMPTY}
               sub={avgMonthCents > 0 ? "typical month" : undefined}
-              style={styles.half}
             />
             <Fact
               caption="Last month"
               value={lastMonthCents > 0 ? formatUsdCents(lastMonthCents) : EMPTY}
               onPress={lastMonthCents > 0 ? () => setMonthOffset(-1) : undefined}
-              style={styles.half}
             />
-          </View>
+          </Grid>
         </View>
       )}
 
@@ -349,13 +461,19 @@ function PersonalStats() {
       )}
 
       {/* Pairs by design: splurge|busiest, runway|forecast, treats|weekend,
-          coffee|no-spend — then the in-vs-out bar across the bottom. */}
+          coffee|no-spend — then the in-vs-out bar across the bottom. Every chip
+          always renders: a fun fact with no data yet shows an em-dash rather
+          than vanishing and leaving a hole in the grid. */}
       <View style={styles.section}>
         <Caption>Fun facts</Caption>
-        <View style={styles.grid}>
+        <Grid columns={2}>
           <Fact
             caption="Biggest splurge"
-            value={facts.biggestExpense ? formatUsdCents(facts.biggestExpense.amount_usd_cents) : EMPTY}
+            value={
+              facts.biggestExpense
+                ? formatUsdCents(facts.biggestExpense.amount_usd_cents)
+                : EMPTY
+            }
             sub={
               facts.biggestExpense
                 ? [categoryLabel(facts.biggestExpense.category), facts.biggestExpense.note]
@@ -363,7 +481,6 @@ function PersonalStats() {
                     .join(" · ")
                 : undefined
             }
-            style={styles.half}
           />
           <Fact
             caption="Busiest day"
@@ -373,44 +490,52 @@ function PersonalStats() {
                 ? `${dayLabel(facts.busiestDay.date)} · ${formatUsdCents(facts.busiestDay.totalCents)}`
                 : undefined
             }
-            style={styles.half}
           />
-          {/* Runway and the month-end forecast are present-tense — they only
+          {/* Runway and the month-end forecast are present-tense — they read
+              off the live safe and the days left in the month, so they only
               make sense for the current month. Past months show an em-dash. */}
           <Fact
             caption="Safe runway"
             value={isCurrentMonth && runwayDays > 0 ? runwayLabel(runwayDays) : EMPTY}
             sub={isCurrentMonth && runwayDays > 0 ? "at this pace" : undefined}
-            style={styles.half}
           />
           <Fact
             caption="On pace for"
-            value={isCurrentMonth && facts.forecastCents > 0 ? formatUsdCents(facts.forecastCents) : EMPTY}
+            value={
+              isCurrentMonth && facts.forecastCents > 0
+                ? formatUsdCents(facts.forecastCents)
+                : EMPTY
+            }
             sub={isCurrentMonth && facts.forecastCents > 0 ? "by month's end" : undefined}
-            style={styles.half}
           />
           <Fact
             caption="Treat yourself"
             value={facts.treatCents > 0 ? formatUsdCents(facts.treatCents) : EMPTY}
-            // Only tappable when there are receipts behind it — and only for
-            // the current month, since the receipts pages list this month.
-            onPress={isCurrentMonth && facts.treatCents > 0 ? () => navigate("/stats/treats") : undefined}
-            style={styles.half}
+            // Only tappable when there are receipts behind it — and only for the
+            // current month, since the receipts pages always list this month.
+            onPress={
+              isCurrentMonth && facts.treatCents > 0
+                ? () => navigate("/stats/treats")
+                : undefined
+            }
           />
           <Fact
             caption="Weekend Spend"
             value={facts.weekendCents > 0 ? formatUsdCents(facts.weekendCents) : EMPTY}
-            onPress={isCurrentMonth && facts.weekendCents > 0 ? () => navigate("/stats/weekend") : undefined}
-            style={styles.half}
+            onPress={
+              isCurrentMonth && facts.weekendCents > 0
+                ? () => navigate("/stats/weekend")
+                : undefined
+            }
           />
-          <Fact caption="Coffee runs" value={String(facts.coffeeCount)} style={styles.half} />
-          <Fact caption="No-spend days" value={String(facts.noSpendDays)} style={styles.half} />
+          <Fact caption="Coffee runs" value={String(facts.coffeeCount)} />
+          <Fact caption="No-spend days" value={String(facts.noSpendDays)} />
           {flow > 0 && (
             <View style={[styles.fact, styles.full]}>
-              <Text style={styles.factCaption}>In vs out</Text>
+              <Text style={styles.microCaption}>In vs out</Text>
               <View style={styles.flowTrack}>
-                <View style={{ width: `${inPct}%`, height: "100%", backgroundColor: "#34C759" }} />
-                <View style={{ flex: 1, height: "100%", backgroundColor: "#FF3B30" }} />
+                <View style={[styles.flowIn, { width: `${inPct}%` }]} />
+                <View style={styles.flowOut} />
               </View>
               <View style={styles.flowLabels}>
                 <Text style={[styles.flowLabel, { color: colors.income }]}>
@@ -422,7 +547,7 @@ function PersonalStats() {
               </View>
             </View>
           )}
-        </View>
+        </Grid>
       </View>
     </>
   );
@@ -433,7 +558,9 @@ function PublicTeaser() {
   return (
     <View style={styles.teaser}>
       <Carrot size={48} />
-      <Text style={styles.teaserText}>Wabbits get their own spending picture here.</Text>
+      <Text style={styles.teaserText}>
+        Wabbits get their own spending picture here.
+      </Text>
       <Press onPress={() => navigate("/")} style={styles.hopIn}>
         <Text style={styles.hopInText}>Hop in</Text>
       </Press>
@@ -476,17 +603,19 @@ function CommunityStats() {
       {stats === undefined ? (
         <Text style={styles.communityNote}>Counting carrots…</Text>
       ) : stats === null ? (
-        <Text style={styles.communityNote}>Couldn't reach the community stats. Try again later.</Text>
+        <Text style={styles.communityNote}>
+          Couldn't reach the community stats. Try again later.
+        </Text>
       ) : (
         <>
-          <View style={styles.grid}>
-            <Fact caption="Wabbits" value={stats.users.toLocaleString("en-US")} style={styles.third} />
-            <Fact caption="Entries" value={stats.transactions.toLocaleString("en-US")} style={styles.third} />
-            <Fact caption="E2EE" value={stats.encryptedUsers.toLocaleString("en-US")} style={styles.third} />
-          </View>
+          <Grid columns={3}>
+            <Fact caption="Wabbits" value={stats.users.toLocaleString("en-US")} />
+            <Fact caption="Entries" value={stats.transactions.toLocaleString("en-US")} />
+            <Fact caption="E2EE" value={stats.encryptedUsers.toLocaleString("en-US")} />
+          </Grid>
           {communityBars.length > 0 && (
             <View style={styles.panel}>
-              <Text style={[styles.factCaption, { marginBottom: 12 }]}>What everyone logs most</Text>
+              <Text style={[styles.microCaption, styles.mb3]}>What everyone logs most</Text>
               <StatBars items={communityBars} />
             </View>
           )}
@@ -499,65 +628,139 @@ function CommunityStats() {
   );
 }
 
-const GRID_GAP = 8;
-
 const styles = StyleSheet.create({
+  // px-1 font-display text-sm font-semibold uppercase tracking-wide text-white/60
   caption: {
     ...display,
+    ...text.sm,
     paddingHorizontal: 4,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.35,
+    letterSpacing: trackingWide(14),
     color: white(0.6),
   },
-  section: { gap: 8 },
+  section: { gap: 8 }, // flex-col gap-2
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
-  // Two-up and three-up chips: fractional widths minus their share of the gap.
-  half: { width: "48.8%" },
-  third: { width: "31.9%" },
-  full: { width: "100%" },
+  full: { width: "100%" }, // col-span-2
+  mb3: { marginBottom: 12 },
+
+  // text-[11px] font-semibold uppercase tracking-wide text-white/55
+  microCaption: {
+    ...text["11"],
+    fontWeight: weight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: trackingWide(11),
+    color: white(0.55),
+  },
+
+  // rounded-card bg-white/10 px-4 py-3
   fact: {
     borderRadius: radius.card,
     backgroundColor: white(0.1),
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  factCaptionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  factCaption: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    color: white(0.55),
+  factCaptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  factValue: { ...numeric, marginTop: 4, fontSize: 20, lineHeight: 28, fontWeight: "700", color: "#FFF" },
-  factSub: { marginTop: 2, fontSize: 12, lineHeight: 16, color: white(0.55) },
+  factCaptionText: { flexShrink: 1 },
+  // mt-1 font-numeric text-xl font-bold tabular-nums
+  factValue: {
+    ...numeric,
+    ...text.xl,
+    marginTop: 4,
+    fontWeight: weight.bold,
+    color: colors.white,
+  },
+  // mt-0.5 truncate text-xs text-white/55
+  factSub: { ...text.xs, marginTop: 2, color: white(0.55) },
+
+  // rounded-card bg-white/10 px-5 py-5 (the locked headline)
   headline: {
     borderRadius: radius.card,
     backgroundColor: white(0.1),
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
-  headlineValue: { ...numeric, marginTop: 4, fontSize: 36, lineHeight: 40, fontWeight: "700", color: "#FFF" },
-  headlineSub: { marginTop: 2, fontSize: 14, lineHeight: 20, color: white(0.55) },
-  emptyText: { textAlign: "center", fontSize: 16, lineHeight: 24, color: white(0.55) },
-  heroCard: { position: "relative", overflow: "hidden", borderRadius: radius.card, backgroundColor: white(0.1) },
-  heroBody: { position: "relative", minHeight: 188, paddingHorizontal: 20, paddingVertical: 20 },
+  // mt-1 font-numeric text-4xl font-bold tabular-nums
+  headlineValue: {
+    ...numeric,
+    ...text["4xl"],
+    marginTop: 4,
+    fontWeight: weight.bold,
+    color: colors.white,
+  },
+  // mt-0.5 text-sm text-white/55
+  headlineSub: { ...text.sm, marginTop: 2, color: white(0.55) },
+
+  // rounded-card bg-white/10 px-5 py-10 text-center text-white/55
+  empty: {
+    borderRadius: radius.card,
+    backgroundColor: white(0.1),
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+  },
+  emptyText: { ...text.base, textAlign: "center", color: white(0.55) },
+
+  // relative overflow-hidden rounded-card bg-white/10 — clips the spark to
+  // the corners. No shadow lives here, so clipping and radius can share a view.
+  heroCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: radius.card,
+    backgroundColor: white(0.1),
+  },
+  // relative flex min-h-[188px] flex-col px-5 py-5
+  heroBody: {
+    position: "relative",
+    minHeight: 188,
+    flexDirection: "column",
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  // mt-auto text-right text-[11px] uppercase tracking-wide text-white/45
   heroFoot: {
+    ...text["11"],
     marginTop: "auto",
     textAlign: "right",
-    fontSize: 11,
-    lineHeight: 14,
     textTransform: "uppercase",
-    letterSpacing: 0.4,
+    letterSpacing: trackingWide(11),
     color: white(0.45),
   },
-  panel: { borderRadius: radius.card, backgroundColor: white(0.1), padding: 16 },
-  bars: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 6 },
-  bar: { flex: 1, alignItems: "center", gap: 6 },
-  barTrack: { height: 96, width: "100%", justifyContent: "flex-end" },
-  barLabel: { fontSize: 10, lineHeight: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 },
+
+  // rounded-card bg-white/10 p-4
+  panel: {
+    borderRadius: radius.card,
+    backgroundColor: white(0.1),
+    padding: 16,
+  },
+
+  // flex items-end justify-between gap-1.5
+  bars: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 6,
+  },
+  // press flex flex-1 flex-col items-center gap-1.5
+  bar: { flex: 1, flexDirection: "column", alignItems: "center", gap: 6 },
+  // flex h-24 w-full items-end
+  barTrack: { height: BAR_TRACK_H, width: "100%", justifyContent: "flex-end" },
+  // w-full rounded-t-sm
+  barFill: {
+    width: "100%",
+    borderTopLeftRadius: radius.sm,
+    borderTopRightRadius: radius.sm,
+  },
+  // text-[10px] font-semibold uppercase tracking-wide
+  barLabel: {
+    ...text["10"],
+    fontWeight: weight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: trackingWide(10),
+  },
+
+  // press flex w-full items-center gap-3 rounded-card bg-white/10 px-4 py-3.5
   lockedCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -567,15 +770,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
+  // h-9 w-9 shrink-0 rounded-full bg-white/10
   lockBadge: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: white(0.1),
   },
-  lockedText: { flex: 1, fontSize: 14, lineHeight: 20, color: white(0.85) },
+  lockedText: { ...text.sm, flex: 1, color: white(0.85) },
+
+  // mt-2 flex h-2 overflow-hidden rounded-pill bg-white/10
   flowTrack: {
     marginTop: 8,
     flexDirection: "row",
@@ -584,8 +790,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: white(0.1),
   },
+  flowIn: { height: "100%", backgroundColor: "#34C759" },
+  flowOut: { height: "100%", flex: 1, backgroundColor: "#FF3B30" },
+  // mt-1.5 flex justify-between font-numeric text-xs font-semibold tabular-nums
   flowLabels: { marginTop: 6, flexDirection: "row", justifyContent: "space-between" },
-  flowLabel: { ...numeric, fontSize: 12, lineHeight: 16, fontWeight: "600" },
+  flowLabel: { ...numeric, ...text.xs, fontWeight: weight.semibold },
+
+  // flex flex-col items-center gap-3 rounded-card bg-white/10 px-5 py-8 text-center
   teaser: {
     alignItems: "center",
     gap: 12,
@@ -594,18 +805,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 32,
   },
-  teaserText: { textAlign: "center", fontSize: 16, lineHeight: 24, color: white(0.85) },
-  hopIn: { borderRadius: radius.pill, backgroundColor: colors.carrot, paddingHorizontal: 24, paddingVertical: 10 },
-  hopInText: { fontSize: 16, lineHeight: 24, fontWeight: "600", color: "#FFF" },
+  teaserText: { ...text.base, textAlign: "center", color: white(0.85) },
+  // press rounded-pill bg-carrot px-6 py-2.5 text-base font-semibold text-white
+  hopIn: {
+    borderRadius: radius.pill,
+    backgroundColor: colors.carrot,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  hopInText: { ...text.base, fontWeight: weight.semibold, color: colors.white },
+
+  // rounded-card bg-white/10 px-4 py-6 text-center text-sm text-white/55
   communityNote: {
+    ...text.sm,
     borderRadius: radius.card,
     backgroundColor: white(0.1),
     paddingHorizontal: 16,
     paddingVertical: 24,
     textAlign: "center",
-    fontSize: 14,
-    lineHeight: 20,
     color: white(0.55),
   },
-  footnote: { paddingHorizontal: 4, fontSize: 12, lineHeight: 16, color: white(0.4) },
+  // px-1 text-xs text-white/40
+  footnote: { ...text.xs, paddingHorizontal: 4, color: white(0.4) },
 });

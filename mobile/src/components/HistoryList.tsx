@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { SwipeRow } from "@/components/SwipeRow";
-import { colors } from "@/lib/theme";
+import { colors, text } from "@/lib/theme";
 import type { Transaction } from "@/types/db";
 
 export function HistoryList({
@@ -13,9 +13,7 @@ export function HistoryList({
   onDelete: (tx: Transaction) => void;
 }) {
   if (rows.length === 0) {
-    return (
-      <Text style={styles.empty}>Nothin' here yet, Doc. Add your first one above.</Text>
-    );
+    return <Text style={styles.empty}>Nothin' here yet, Doc. Add your first one above.</Text>;
   }
 
   return (
@@ -28,12 +26,13 @@ export function HistoryList({
 }
 
 const styles = StyleSheet.create({
-  list: { gap: 6 },
+  // py-10 text-center text-label-secondary
   empty: {
     paddingVertical: 40,
     textAlign: "center",
-    fontSize: 16,
-    lineHeight: 24,
+    ...text.base,
     color: colors.labelSecondary,
   },
+  // flex flex-col gap-1.5
+  list: { gap: 6 },
 });
