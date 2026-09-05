@@ -11,7 +11,7 @@ import Animated, {
 import { Pencil, Trash2 } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
-import { formatUsdCents } from "@/lib/money";
+import { formatUsdCents, amountColorClass } from "@/lib/money";
 import { colors, motion } from "@/lib/theme";
 import type { Transaction } from "@/types/db";
 
@@ -21,11 +21,6 @@ const AUTO_RESET_MS = 2000; // close an open row if no action is taken
 // `{ type: "tween", duration: 0.16, ease: [0.2, 0, 0, 1] }`.)
 const SNAP = { duration: motion.snap, easing: Easing.bezier(...motion.snapEase) };
 
-// The web imports this from `@/lib/money`; the mobile copy of that module still
-// returns a hex from the pre-NativeWind port, so the class version lives here
-// until it's put back (see the porting notes). Same one-liner as the web's.
-const amountColorClass = (isIncome: boolean) =>
-  isIncome ? "text-income" : "text-expense";
 
 function dateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {

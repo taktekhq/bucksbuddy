@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/5</span>
+                <span class='fraction'>5/5</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/5</span>
+                <span class='fraction'>5/5</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/5</span>
+                <span class='fraction'>5/5</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -204,25 +204,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -232,12 +219,25 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">40x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -325,13 +325,13 @@ import { navigate } from "@/lib/router";
 // `&lt;a class="text-carrot underline"&gt;` — a Text nested in the paragraph's Text,
 // so it wraps inline like the anchor does, opening in the system browser or
 // mail app.
-function <span class="fstat-no" title="function not covered" >Link(</span>{ href, children }: { href: string; children: ReactNode }) {
-<span class="cstat-no" title="statement not covered" >  return (</span>
+function Link({ href, children }: { href: string; children: ReactNode }) {
+  return (
     &lt;Text
       className="text-carrot underline"
       accessibilityRole="link"
-      onPress={<span class="fstat-no" title="function not covered" >()</span> =&gt; {
-<span class="cstat-no" title="statement not covered" >        void Linking.openURL(href);</span>
+      onPress={() =&gt; {
+        void Linking.openURL(href);
       }}
     &gt;
       {children}
@@ -343,8 +343,8 @@ function <span class="fstat-no" title="function not covered" >Link(</span>{ href
 // markers, so the disc is drawn into a 20pt gutter (`w-5`, the web's `pl-5`)
 // and the copy takes the rest of the row. The card's text classes are repeated
 // on both, since text styles don't inherit through a View.
-function <span class="fstat-no" title="function not covered" >Bullet(</span>{ children }: { children: ReactNode }) {
-<span class="cstat-no" title="statement not covered" >  return (</span>
+function Bullet({ children }: { children: ReactNode }) {
+  return (
     &lt;View className="flex flex-row"&gt;
       &lt;Text className="w-5 text-center text-[15px] leading-relaxed text-label"&gt;•&lt;/Text&gt;
       &lt;Text className="flex-1 text-[15px] leading-relaxed text-label"&gt;{children}&lt;/Text&gt;
@@ -352,14 +352,14 @@ function <span class="fstat-no" title="function not covered" >Bullet(</span>{ ch
   );
 }
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >Legal(</span>) {
+export function Legal() {
   // Back returns to the landing (the signed-out home).
-<span class="cstat-no" title="statement not covered" >  return (</span>
+  return (
     // pb/pt: the web's `calc(2rem + var(--safe-bottom))` / `calc(1rem +
     // var(--safe-top))` — the padding here, the inset added by Screen.
     &lt;Screen className="flex flex-col gap-6 px-4 pb-8 pt-4"&gt;
       {/* Plain iOS nav: back chevron + centered title — matches Settings. */}
-      &lt;NavHeader title="Legal" section onBack={<span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >navigate("/")}</span> /&gt;
+      &lt;NavHeader title="Legal" section onBack={() =&gt; navigate("/")} /&gt;
 &nbsp;
       &lt;View className="flex flex-col gap-2"&gt;
         &lt;SectionHeader&gt;Privacy&lt;/SectionHeader&gt;
@@ -436,7 +436,7 @@ export function <span class="fstat-no" title="function not covered" >Legal(</spa
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-05T12:21:44.547Z
+                at 2026-09-05T12:55:14.371Z
             </div>
         <script src="../prettify.js"></script>
         <script>

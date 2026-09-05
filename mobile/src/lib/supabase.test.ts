@@ -7,7 +7,7 @@ jest.mock("react-native-url-polyfill/auto", () => ({}));
 
 const mockCreateClient = jest.fn(() => ({ mock: "client" }));
 jest.mock("@supabase/supabase-js", () => ({
-  createClient: (...args: unknown[]) => mockCreateClient(...args),
+  createClient: (...args: unknown[]) => (mockCreateClient as (...a: unknown[]) => unknown)(...args),
 }));
 
 const URL_VAR = "EXPO_PUBLIC_SUPABASE_URL";

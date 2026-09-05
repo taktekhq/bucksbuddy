@@ -84,9 +84,8 @@ export function AddComposer({
   async function save() {
     // Defensive guard: the CTA is disabled unless canSave, so this never
     // returns in practice — it's here for safety and to narrow `category`.
-    /* v8 ignore start */
+    /* istanbul ignore next -- unreachable: the CTA is disabled unless canSave */
     if (!canSave || category === null) return;
-    /* v8 ignore stop */
     setSaving(true);
     setError(null);
 

@@ -1,15 +1,6 @@
 import { Text, View } from "react-native";
-import { formatSignedUsdCents } from "@/lib/money";
+import { formatSignedUsdCents, netColorClass } from "@/lib/money";
 
-// The web imports `netColorClass` from lib/money; this app's copy of that
-// module exports `netColor` (a hex, for the places React Native takes a color
-// as a *prop*) but not the class version yet, so the web's exact class list
-// lives here until it does.
-function netColorClass(cents: number): string {
-  if (cents > 0) return "text-income";
-  if (cents < 0) return "text-expense";
-  return "text-label";
-}
 
 // Clean Apple stat: a small caption on top, the net number below it,
 // green/red by direction. Left-aligned. When `masked` (the device is locked),

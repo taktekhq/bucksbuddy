@@ -3,6 +3,10 @@
 // `changeText` rather than userEvent.type.
 import { render, screen, fireEvent } from "@testing-library/react-native";
 
+// Rendering a whole screen (and the modules it drags in) can outrun jest's
+// 5s default on a cold, loaded machine — see TESTING.md.
+jest.setTimeout(30000);
+
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -16,8 +20,8 @@ const mockSignOut = jest.fn(async (..._a: unknown[]) => ({ error: null }));
 jest.mock("@/lib/supabase", () => ({
   supabase: {
     auth: {
-      updateUser: (...a: unknown[]) => mockUpdateUser(...a),
-      signOut: (...a: unknown[]) => mockSignOut(...a),
+      updateUser: (...a: unknown[]) => (mockUpdateUser as (...x: unknown[]) => unknown)(...a),
+      signOut: (...a: unknown[]) => (mockSignOut as (...x: unknown[]) => unknown)(...a),
     },
   },
 }));

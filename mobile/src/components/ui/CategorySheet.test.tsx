@@ -12,13 +12,20 @@ const mockStyleFns: Array<() => Record<string, never>> = [];
 // Reanimated's own mock pulls in the real module (which needs the worklets
 // native module) and throws under jest, so this is the same shape by hand.
 jest.mock("react-native-reanimated", () => {
+  const React = require("react");
   const { View, Text } = require("react-native");
   return {
     __esModule: true,
     default: { View, Text, createAnimatedComponent: (c: unknown) => c },
     Easing: { bezier: () => ({}) },
     runOnJS: (fn: unknown) => fn,
-    useSharedValue: (v: unknown) => ({ value: v }),
+    // Stable per hook call, like the real one — a fresh object each render
+    // would retrigger every effect that depends on a shared value.
+    useSharedValue: (v: unknown) => {
+      const ref = React.useRef(null);
+      if (ref.current === null) ref.current = { value: v };
+      return ref.current;
+    },
     useAnimatedStyle: (fn: () => unknown) => {
       mockStyleFns.push(fn as () => Record<string, never>);
       return fn();

@@ -1,7 +1,7 @@
 
 const mockRpc = jest.fn();
 jest.mock("@/lib/supabase", () => ({
-  supabase: { rpc: (...args: unknown[]) => mockRpc(...args) },
+  supabase: { rpc: (...args: unknown[]) => (mockRpc as (...a: unknown[]) => unknown)(...args) },
 }));
 
 import { fetchPublicStats } from "@/lib/publicStats";

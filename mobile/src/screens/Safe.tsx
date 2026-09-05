@@ -148,6 +148,7 @@ export function Safe() {
 
   async function save() {
     // Defensive: the CTA is disabled unless canSave, so this never returns.
+    /* istanbul ignore next -- unreachable: the CTA is disabled unless canSave */
     if (!canSave) return;
     setSaving(true);
     setError(null);
@@ -221,8 +222,15 @@ export function Safe() {
       new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
   );
 
-  const goldValueCents =
-    goldPerGram != null ? Math.round(safeGoldGrams * goldPerGram * 100) : null;
+  // Both figures come from one null check, so the JSX below needs no
+  // defensive fallback for a price that is provably there.
+  const livePrice =
+    goldPerGram != null
+      ? {
+          totalCents: Math.round(safeGoldGrams * goldPerGram * 100),
+          perGramCents: Math.round(goldPerGram * 100),
+        }
+      : null;
   const enteredGoldValueCents =
     goldPerGram != null && grams > 0
       ? Math.round(grams * goldPerGram * 100)
@@ -310,12 +318,10 @@ export function Safe() {
             <Text className="mt-0.5 text-xs text-white/30">
               Locked — unlock in Settings to see the safe.
             </Text>
-          ) : goldValueCents != null ? (
+          ) : livePrice != null ? (
             <Text className="mt-0.5 text-xs text-white/45">
-              ≈ {formatUsdCents(goldValueCents)} ·{" "}
-              {/* goldValueCents != null implies goldPerGram != null; the `?? 0`
-                  is defensive for the type-checker only. */}
-              {formatUsdCents(Math.round((goldPerGram ?? 0) * 100))}/g (live)
+              ≈ {formatUsdCents(livePrice.totalCents)} ·{" "}
+              {formatUsdCents(livePrice.perGramCents)}/g (live)
             </Text>
           ) : (
             <Text className="mt-0.5 text-xs text-white/30">

@@ -12,6 +12,7 @@ export function SectionHeader({
 }) {
   return (
     <Text
+      accessibilityRole="header"
       className={`px-2 font-display text-sm font-semibold uppercase tracking-wide text-label-secondary ${className}`}
     >
       {children}

@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Text, View } from "react-native";
 import { HistoryStack } from "@/components/HistoryStack";
-import { formatSignedUsdCents } from "@/lib/money";
+import { formatSignedUsdCents, netColorClass } from "@/lib/money";
 import type { HistoryGroup, TimelineDay } from "@/lib/history";
 import type { Transaction } from "@/types/db";
 
@@ -14,14 +14,6 @@ import type { Transaction } from "@/types/db";
 // SectionList instead of mapping over them (PORTING.md §5): `toSections` turns
 // the days into its sections and `DayHeader` is each section's `<header>`.
 // `HistoryTimeline` below is the plain composition, identical to the web's.
-
-// See lib/money — the mobile copy still returns a hex, so the class version
-// lives here until it's put back.
-const netColorClass = (cents: number) => {
-  if (cents > 0) return "text-income";
-  if (cents < 0) return "text-expense";
-  return "text-label";
-};
 
 export type TimelineSection = TimelineDay & {
   data: HistoryGroup[];

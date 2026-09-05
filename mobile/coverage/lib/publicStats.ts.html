@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/21</span>
+                <span class='fraction'>21/21</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/20</span>
+                <span class='fraction'>20/20</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>2/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/19</span>
+                <span class='fraction'>19/19</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -133,34 +133,34 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">8x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Community numbers for the Stats page, via the public_stats() rpc (see
@@ -182,35 +182,35 @@ export type PublicStats = {
 };
 &nbsp;
 /** A non-negative finite count, or null when the payload is junk. */
-function <span class="fstat-no" title="function not covered" >toCount(</span>v: unknown): number | null {
-  const n = <span class="cstat-no" title="statement not covered" >Number(v);</span>
-<span class="cstat-no" title="statement not covered" >  return Number.isFinite(n) &amp;&amp; n &gt;= 0 ? n : null;</span>
+function toCount(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) &amp;&amp; n &gt;= 0 ? n : null;
 }
 &nbsp;
-export async function <span class="fstat-no" title="function not covered" >fetchPublicStats(</span>): Promise&lt;PublicStats | null&gt; {
-<span class="cstat-no" title="statement not covered" >  try {</span>
-    const { data, error } = <span class="cstat-no" title="statement not covered" >await supabase.rpc("public_stats");</span>
-<span class="cstat-no" title="statement not covered" >    if (error || data == null || typeof data !== "object") <span class="cstat-no" title="statement not covered" >return null;</span></span>
-    const blob = <span class="cstat-no" title="statement not covered" >data as Record&lt;string, unknown&gt;;</span>
+export async function fetchPublicStats(): Promise&lt;PublicStats | null&gt; {
+  try {
+    const { data, error } = await supabase.rpc("public_stats");
+    if (error || data == null || typeof data !== "object") return null;
+    const blob = data as Record&lt;string, unknown&gt;;
 &nbsp;
-    const users = <span class="cstat-no" title="statement not covered" >toCount(blob.users);</span>
-    const transactions = <span class="cstat-no" title="statement not covered" >toCount(blob.transactions);</span>
-    const encryptedUsers = <span class="cstat-no" title="statement not covered" >toCount(blob.encrypted_users);</span>
-<span class="cstat-no" title="statement not covered" >    if (users === null || transactions === null || encryptedUsers === null) {</span>
-<span class="cstat-no" title="statement not covered" >      return null;</span>
+    const users = toCount(blob.users);
+    const transactions = toCount(blob.transactions);
+    const encryptedUsers = toCount(blob.encrypted_users);
+    if (users === null || transactions === null || encryptedUsers === null) {
+      return null;
     }
 &nbsp;
-    const topCategories: PublicCategoryCount[] = <span class="cstat-no" title="statement not covered" >[];</span>
-<span class="cstat-no" title="statement not covered" >    for (const entry of Array.isArray(blob.top_categories) ? blob.top_categories : []) {</span>
-      const category = <span class="cstat-no" title="statement not covered" >(entry as Record&lt;string, unknown&gt; | null)?.category;</span>
-      const count = <span class="cstat-no" title="statement not covered" >toCount((entry as Record&lt;string, unknown&gt; | null)?.count);</span>
-<span class="cstat-no" title="statement not covered" >      if (typeof category !== "string" || count === null) <span class="cstat-no" title="statement not covered" >return null;</span></span>
-<span class="cstat-no" title="statement not covered" >      topCategories.push({ category, count });</span>
+    const topCategories: PublicCategoryCount[] = [];
+    for (const entry of Array.isArray(blob.top_categories) ? blob.top_categories : []) {
+      const category = (entry as Record&lt;string, unknown&gt; | null)?.category;
+      const count = toCount((entry as Record&lt;string, unknown&gt; | null)?.count);
+      if (typeof category !== "string" || count === null) return null;
+      topCategories.push({ category, count });
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    return { users, transactions, encryptedUsers, topCategories };</span>
+    return { users, transactions, encryptedUsers, topCategories };
   } catch {
-<span class="cstat-no" title="statement not covered" >    return null;</span>
+    return null;
   }
 }
 &nbsp;</pre></td></tr></table></pre>
@@ -220,7 +220,7 @@ export async function <span class="fstat-no" title="function not covered" >fetch
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-05T12:21:44.547Z
+                at 2026-09-05T12:55:14.371Z
             </div>
         <script src="../prettify.js"></script>
         <script>

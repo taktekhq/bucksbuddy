@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>8/8</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/7</span>
+                <span class='fraction'>7/7</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>8/8</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -99,8 +99,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -110,17 +110,17 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -130,8 +130,8 @@
 // Same events as the PWA, through the React Native SDK. When no key is set
 // (a fresh checkout without .env) every call is a silent no-op so the app
 // still runs.
-const key = <span class="cstat-no" title="statement not covered" >process.env.EXPO_PUBLIC_POSTHOG_KEY;</span>
-const host = <span class="cstat-no" title="statement not covered" >process.env.EXPO_PUBLIC_POSTHOG_HOST;</span>
+const key = process.env.EXPO_PUBLIC_POSTHOG_KEY;
+const host = process.env.EXPO_PUBLIC_POSTHOG_HOST;
 &nbsp;
 type Props = Record&lt;string, string | number | boolean | null | undefined&gt; | undefined;
 &nbsp;
@@ -141,17 +141,17 @@ type Analytics = {
   reset: () =&gt; void;
 };
 &nbsp;
-const noop: Analytics = <span class="cstat-no" title="statement not covered" >{ <span class="fstat-no" title="function not covered" >ca</span>pture() {}, <span class="fstat-no" title="function not covered" >id</span>entify() {}, <span class="fstat-no" title="function not covered" >re</span>set() {} };</span>
+const noop: Analytics = { capture() {}, identify() {}, reset() {} };
 &nbsp;
-function <span class="fstat-no" title="function not covered" >real(</span>client: PostHog): Analytics {
-<span class="cstat-no" title="statement not covered" >  return {</span>
-    capture: <span class="fstat-no" title="function not covered" >(e</span>vent, properties) =&gt; <span class="cstat-no" title="statement not covered" >client.capture(event, properties as never),</span>
-    identify: <span class="fstat-no" title="function not covered" >(d</span>istinctId, properties) =&gt; <span class="cstat-no" title="statement not covered" >client.identify(distinctId, properties as never),</span>
-    reset: <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >client.reset(),</span>
+function real(client: PostHog): Analytics {
+  return {
+    capture: (event, properties) =&gt; client.capture(event, properties as never),
+    identify: (distinctId, properties) =&gt; client.identify(distinctId, properties as never),
+    reset: () =&gt; client.reset(),
   };
 }
 &nbsp;
-const posthog: Analytics = <span class="cstat-no" title="statement not covered" >key</span>
+const posthog: Analytics = key
   ? real(new PostHog(key, { host: host || "https://us.i.posthog.com" }))
   : noop;
 &nbsp;
@@ -163,7 +163,7 @@ export default posthog;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-05T12:21:44.547Z
+                at 2026-09-05T12:55:14.371Z
             </div>
         <script src="../prettify.js"></script>
         <script>

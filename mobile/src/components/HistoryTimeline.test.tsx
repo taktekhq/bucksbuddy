@@ -8,6 +8,7 @@
 // Reanimated's own mock pulls in the real module (which needs the worklets
 // native module) and throws under jest, so this is the same shape by hand.
 jest.mock("react-native-reanimated", () => {
+  const React = require("react");
   const { View, Text } = require("react-native");
   const builder: Record<string, unknown> = {};
   builder.duration = () => builder;
@@ -16,7 +17,13 @@ jest.mock("react-native-reanimated", () => {
     default: { View, Text, createAnimatedComponent: (c: unknown) => c },
     Easing: { bezier: () => ({}) },
     runOnJS: (fn: unknown) => fn,
-    useSharedValue: (v: unknown) => ({ value: v }),
+    // Stable per hook call, like the real one — a fresh object each render
+    // would retrigger every effect that depends on a shared value.
+    useSharedValue: (v: unknown) => {
+      const ref = React.useRef(null);
+      if (ref.current === null) ref.current = { value: v };
+      return ref.current;
+    },
     useAnimatedStyle: (fn: () => unknown) => fn(),
     withTiming: (to: unknown) => to,
     FadeIn: builder,
@@ -95,7 +102,14 @@ describe("HistoryTimeline", () => {
 
   it("renders every day, each with its own entries", async () => {
     const days = [
-      day({ key: "2026-06-02", label: "Jun 2", totalCents: 5000, groups: groupByCategory([tx({ id: "a", is_income: true, category: "salary", amount_usd_cents: 5000 })]) }),
+      day({
+        key: "2026-06-02",
+        label: "Jun 2",
+        totalCents: 5000,
+        groups: groupByCategory([
+          tx({ id: "a", is_income: true, category: "salary", amount_usd_cents: 5000 }),
+        ]),
+      }),
       day({ key: "2026-06-01", label: "Jun 1" }),
     ];
     await render(

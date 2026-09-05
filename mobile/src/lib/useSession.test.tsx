@@ -10,9 +10,9 @@ const mockUnsubscribe = jest.fn();
 jest.mock("@/lib/supabase", () => ({
   supabase: {
     auth: {
-      getSession: (...args: unknown[]) => mockGetSession(...args),
-      setSession: (...args: unknown[]) => mockSetSession(...args),
-      onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
+      getSession: (...args: unknown[]) => (mockGetSession as (...a: unknown[]) => unknown)(...args),
+      setSession: (...args: unknown[]) => (mockSetSession as (...a: unknown[]) => unknown)(...args),
+      onAuthStateChange: (...args: unknown[]) => (mockOnAuthStateChange as (...a: unknown[]) => unknown)(...args),
     },
   },
 }));
@@ -20,8 +20,8 @@ jest.mock("@/lib/supabase", () => ({
 const mockGetInitialURL = jest.fn();
 const mockAddEventListener = jest.fn();
 jest.mock("expo-linking", () => ({
-  getInitialURL: (...args: unknown[]) => mockGetInitialURL(...args),
-  addEventListener: (...args: unknown[]) => mockAddEventListener(...args),
+  getInitialURL: (...args: unknown[]) => (mockGetInitialURL as (...a: unknown[]) => unknown)(...args),
+  addEventListener: (...args: unknown[]) => (mockAddEventListener as (...a: unknown[]) => unknown)(...args),
 }));
 
 import { act, renderHook, waitFor } from "@testing-library/react-native";

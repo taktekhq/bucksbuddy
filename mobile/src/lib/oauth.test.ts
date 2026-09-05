@@ -15,7 +15,7 @@ const mockExchangeCodeForSession = jest.fn();
 jest.mock("@/lib/supabase", () => ({
   supabase: {
     auth: {
-      signInWithOAuth: (...args: unknown[]) => mockSignInWithOAuth(...args),
+      signInWithOAuth: (...args: unknown[]) => (mockSignInWithOAuth as (...a: unknown[]) => unknown)(...args),
       exchangeCodeForSession: (...args: unknown[]) =>
         mockExchangeCodeForSession(...args),
     },

@@ -115,7 +115,7 @@ function txInMemory(row: TransactionRow, tx: NewTransaction): Transaction {
 // While the vault can't produce a key (Expo Go), the write paths explain why
 // instead of the generic "unlock first" nudge.
 function lockedError(): Result {
-  return { error: vault.lockedMessage ?? LOCKED_MSG };
+  return { error: vault.lockedMessage };
 }
 
 export function StoreProvider({
@@ -171,7 +171,10 @@ export function StoreProvider({
           .limit(FETCH_CAP),
       ]);
     if (txError || goldError) {
-      // Keep whatever's already on screen rather than blanking it on a blip.
+      // Keep whatever's already on screen rather than blanking it on a blip —
+      // but a locked device is never entitled to cached plaintext, so drop the
+      // snapshot regardless of whether the read succeeded.
+      if (!masterKey.current) await clearCache(userId);
       setLoading(false);
       return;
     }
@@ -258,7 +261,7 @@ export function StoreProvider({
   const unlock = useCallback(
     async (pass: string) => {
       const key = await vault.unlockVault(userId, pass);
-      if (!key) return { error: vault.lockedMessage ?? "Wrong passphrase." };
+      if (!key) return { error: "Wrong passphrase." };
       masterKey.current = key;
       await storeStoredPassphrase(userId, pass);
       setPassphrase(pass);

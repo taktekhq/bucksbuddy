@@ -5,6 +5,10 @@ import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import { monthLabel } from "@/lib/dates";
 import type { Transaction } from "@/types/db";
 
+// Rendering a whole screen (and the modules it drags in) can outrun jest's
+// 5s default on a cold, loaded machine — see TESTING.md.
+jest.setTimeout(30000);
+
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -42,15 +46,15 @@ let mockStoreValue = makeStoreValue();
 jest.mock("@/lib/store", () => ({ useStore: () => mockStoreValue }));
 
 const mockNavigate = jest.fn();
-jest.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => mockNavigate(...a) }));
+jest.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => (mockNavigate as (...x: unknown[]) => unknown)(...a) }));
 
 // The month-scoped filters are unit-tested in lib/stats.test.ts; mocking them
 // keeps these fixtures independent of today's date and weekday.
 const mockTreatTransactions = jest.fn();
 const mockWeekendTransactions = jest.fn();
 jest.mock("@/lib/stats", () => ({
-  treatTransactions: (...a: unknown[]) => mockTreatTransactions(...a),
-  weekendTransactions: (...a: unknown[]) => mockWeekendTransactions(...a),
+  treatTransactions: (...a: unknown[]) => (mockTreatTransactions as (...x: unknown[]) => unknown)(...a),
+  weekendTransactions: (...a: unknown[]) => (mockWeekendTransactions as (...x: unknown[]) => unknown)(...a),
 }));
 
 import { Receipts } from "@/screens/Receipts";

@@ -336,3 +336,31 @@ describe("defaults", () => {
     expect(insights.biggestExpense).toBeNull();
   });
 });
+
+// The web's suite always passes an explicit anchor, so these default
+// parameters (`anchor = new Date()`, `months = 6`, `now = new Date()`) never
+// get exercised. Calling without them covers the defaults and pins the
+// documented behaviour: the current month, and six months ending with it.
+describe("default arguments", () => {
+  it("monthSpendSeries charts the current month when no anchor is given", () => {
+    const series = monthSpendSeries([]);
+    const now = new Date();
+    const daysThisMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+    ).getDate();
+    expect(series).toHaveLength(daysThisMonth);
+    expect(series[0].date.slice(0, 7)).toBe(
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    );
+  });
+
+  it("monthlySpendTotals covers six months ending with the current one", () => {
+    const series = monthlySpendTotals([]);
+    expect(series).toHaveLength(6);
+    expect(series[5].isCurrent).toBe(true);
+    expect(series[5].offset).toBe(0);
+    expect(series[0].offset).toBe(-5);
+  });
+});

@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/17</span>
+                <span class='fraction'>17/17</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/6</span>
+                <span class='fraction'>6/6</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/3</span>
+                <span class='fraction'>3/3</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/14</span>
+                <span class='fraction'>14/14</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -104,74 +104,74 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">77x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Gold is tracked in grams. Conversion is optional eye-candy: we try a free,
 // keyless spot-price API and degrade silently if it's unavailable or blocked
 // (CORS, offline, rate limits). Grams remain the source of truth either way.
 &nbsp;
-const TROY_OUNCE_IN_GRAMS = <span class="cstat-no" title="statement not covered" >31.1034768;</span>
+const TROY_OUNCE_IN_GRAMS = 31.1034768;
 &nbsp;
-const gramsFormatter = <span class="cstat-no" title="statement not covered" >new Intl.NumberFormat("en-US", {</span>
+const gramsFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 3,
 });
 &nbsp;
 /** "5 g", "2.5 g", "0.125 g". */
-export function <span class="fstat-no" title="function not covered" >formatGrams(</span>grams: number): string {
-<span class="cstat-no" title="statement not covered" >  return `${gramsFormatter.format(grams)} g`;</span>
+export function formatGrams(grams: number): string {
+  return `${gramsFormatter.format(grams)} g`;
 }
 &nbsp;
 /**
  * Best-effort live gold price in USD per gram, or null if it can't be fetched.
  * api.gold-api.com is keyless and CORS-friendly; price is USD per troy ounce.
  */
-export async function <span class="fstat-no" title="function not covered" >fetchGoldUsdPerGram(</span>): Promise&lt;number | null&gt; {
-<span class="cstat-no" title="statement not covered" >  try {</span>
-    const controller = <span class="cstat-no" title="statement not covered" >new AbortController();</span>
-    const timeout = <span class="cstat-no" title="statement not covered" >setTimeout(<span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >controller.abort(),</span> 8000);</span>
-    const res = <span class="cstat-no" title="statement not covered" >await fetch("https://api.gold-api.com/price/XAU", {</span>
+export async function fetchGoldUsdPerGram(): Promise&lt;number | null&gt; {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() =&gt; controller.abort(), 8000);
+    const res = await fetch("https://api.gold-api.com/price/XAU", {
       signal: controller.signal,
     });
-<span class="cstat-no" title="statement not covered" >    clearTimeout(timeout);</span>
-<span class="cstat-no" title="statement not covered" >    if (!res.ok) <span class="cstat-no" title="statement not covered" >return null;</span></span>
-    const data = <span class="cstat-no" title="statement not covered" >(await res.json()) as { price?: number };</span>
-    const perOunce = <span class="cstat-no" title="statement not covered" >Number(data?.price);</span>
-<span class="cstat-no" title="statement not covered" >    if (!Number.isFinite(perOunce) || perOunce &lt;= 0) <span class="cstat-no" title="statement not covered" >return null;</span></span>
-<span class="cstat-no" title="statement not covered" >    return perOunce / TROY_OUNCE_IN_GRAMS;</span>
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { price?: number };
+    const perOunce = Number(data?.price);
+    if (!Number.isFinite(perOunce) || perOunce &lt;= 0) return null;
+    return perOunce / TROY_OUNCE_IN_GRAMS;
   } catch {
-<span class="cstat-no" title="statement not covered" >    return null;</span>
+    return null;
   }
 }
 &nbsp;</pre></td></tr></table></pre>
@@ -181,7 +181,7 @@ export async function <span class="fstat-no" title="function not covered" >fetch
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-05T12:21:44.547Z
+                at 2026-09-05T12:55:14.371Z
             </div>
         <script src="../prettify.js"></script>
         <script>

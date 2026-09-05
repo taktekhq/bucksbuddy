@@ -4,7 +4,7 @@ import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { Press } from "@/components/ui/Press";
 import { SwipeRow } from "@/components/SwipeRow";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
-import { formatSignedUsdCents } from "@/lib/money";
+import { formatSignedUsdCents, amountColorClass } from "@/lib/money";
 import { motion } from "@/lib/theme";
 import type { HistoryGroup } from "@/lib/history";
 import type { Transaction } from "@/types/db";
@@ -15,10 +15,6 @@ import type { Transaction } from "@/types/db";
 const EXPAND = LinearTransition.duration(motion.pop);
 const REVEAL = FadeIn.duration(motion.pop);
 
-// See lib/money — the mobile copy still returns a hex, so the class version
-// lives here until it's put back.
-const amountColorClass = (isIncome: boolean) =>
-  isIncome ? "text-income" : "text-expense";
 
 // One category's worth of history on the dark full-history page. A single entry
 // is just a plain row. Two or more render as a stacked card (with charcoal

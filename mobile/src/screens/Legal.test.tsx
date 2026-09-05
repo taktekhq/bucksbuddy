@@ -4,12 +4,16 @@
 import { Linking } from "react-native";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 
+// Rendering a whole screen (and the modules it drags in) can outrun jest's
+// 5s default on a cold, loaded machine — see TESTING.md.
+jest.setTimeout(30000);
+
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
 const mockNavigate = jest.fn();
-jest.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => mockNavigate(...a) }));
+jest.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => (mockNavigate as (...x: unknown[]) => unknown)(...a) }));
 
 import { Legal } from "@/screens/Legal";
 

@@ -8,6 +8,10 @@ import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import posthog from "@/lib/posthog";
 import type { Transaction } from "@/types/db";
 
+// Rendering a whole screen (and the modules it drags in) can outrun jest's
+// 5s default on a cold, loaded machine — see TESTING.md.
+jest.setTimeout(30000);
+
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -97,7 +101,7 @@ let mockStoreValue = makeStoreValue();
 jest.mock("@/lib/store", () => ({ useStore: () => mockStoreValue }));
 
 const mockNavigate = jest.fn();
-jest.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => mockNavigate(...a) }));
+jest.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => (mockNavigate as (...x: unknown[]) => unknown)(...a) }));
 
 import { History } from "@/screens/History";
 import { takePendingEdit } from "@/lib/editIntent";

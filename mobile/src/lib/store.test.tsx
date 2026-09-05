@@ -71,14 +71,14 @@ const mockInvoke = jest.fn(
 jest.mock("@/lib/supabase", () => ({
   supabase: {
     from: (table: string) => mockFrom(table),
-    auth: { signOut: (...args: unknown[]) => mockSignOut(...args) },
-    functions: { invoke: (...args: unknown[]) => mockInvoke(...args) },
+    auth: { signOut: (...args: unknown[]) => (mockSignOut as (...a: unknown[]) => unknown)(...args) },
+    functions: { invoke: (...args: unknown[]) => (mockInvoke as (...a: unknown[]) => unknown)(...args) },
   },
 }));
 
 const mockNavigate = jest.fn();
 jest.mock("@/lib/router", () => ({
-  navigate: (...args: unknown[]) => mockNavigate(...args),
+  navigate: (...args: unknown[]) => (mockNavigate as (...a: unknown[]) => unknown)(...args),
 }));
 
 // --- vault ----------------------------------------------------------------
@@ -115,9 +115,9 @@ jest.mock("@/lib/vault", () => {
       encryptTxValues: (...a: unknown[]) => mockVault.encryptTxValues(...a),
       encryptGoldValues: (...a: unknown[]) => mockVault.encryptGoldValues(...a),
     },
-    loadStoredPassphrase: (...a: unknown[]) => mockLoadStoredPassphrase(...a),
-    storeStoredPassphrase: (...a: unknown[]) => mockStoreStoredPassphrase(...a),
-    clearStoredPassphrase: (...a: unknown[]) => mockClearStoredPassphrase(...a),
+    loadStoredPassphrase: (...a: unknown[]) => (mockLoadStoredPassphrase as (...x: unknown[]) => unknown)(...a),
+    storeStoredPassphrase: (...a: unknown[]) => (mockStoreStoredPassphrase as (...x: unknown[]) => unknown)(...a),
+    clearStoredPassphrase: (...a: unknown[]) => (mockClearStoredPassphrase as (...x: unknown[]) => unknown)(...a),
   };
 });
 
@@ -627,9 +627,9 @@ describe("StoreProvider / useStore", () => {
     await act(async () => {
       res = await result.current.unlock("nope");
     });
-    // The web says "Wrong passphrase." here; this port surfaces the vault's
-    // locked message instead (see behaviourDifferences).
-    expect(res.error).toBe(LOCKED_MSG);
+    // Same wording as the web: a rejected passphrase is a wrong passphrase,
+    // not the "you are locked" nudge that write attempts get.
+    expect(res.error).toBe("Wrong passphrase.");
     expect(result.current.locked).toBe(true);
 
     mockVault.unlockVault.mockResolvedValue(KEY);
@@ -647,10 +647,10 @@ describe("StoreProvider / useStore", () => {
     expect(result.current.safeGoldGrams).toBe(9); // decrypted gold
   });
 
-  it("falls back to a generic message when the vault has none", async () => {
-    // `vault.lockedMessage` is what the Expo Go build sets to explain itself;
-    // with it unset the store's own wording stands in.
-    mockVault.lockedMessage = undefined;
+  it("tells a locked device why a write was refused", async () => {
+    // Unlocking and writing fail for different reasons and say so differently:
+    // a rejected passphrase is "wrong", an attempted write while locked is a
+    // nudge to unlock first.
     mockVault.loadVault.mockResolvedValue({ status: "locked", mode: "passphrase" });
     const { result } = await setup();
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -665,6 +665,26 @@ describe("StoreProvider / useStore", () => {
       res = await result.current.addTransaction(newTx);
     });
     expect(res.error).toBe(LOCKED_MSG);
+  });
+
+  it("drops the cached plaintext when a read fails on a locked device", async () => {
+    // A locked device is never entitled to a decrypted snapshot. The web
+    // cleared it unconditionally; here the read can bail out early, so the
+    // clear has to happen on that path too.
+    mockVault.loadVault.mockResolvedValue({ status: "locked", mode: "passphrase" });
+    await AsyncStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ v: 1, transactions: [tx({ id: "stale" })], lbpPerUsd: 90000, safeGoldEntries: [] }),
+    );
+
+    const { result } = await setup({
+      "transactions:select": () => ({ data: null, error: { message: "network" } }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await waitFor(async () => {
+      expect(await AsyncStorage.getItem(CACHE_KEY)).toBeNull();
+    });
   });
 
   it("auto-unlocks on load from the device-stored passphrase", async () => {
