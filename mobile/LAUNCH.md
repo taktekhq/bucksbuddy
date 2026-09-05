@@ -56,13 +56,9 @@ revisiting only if you want native crash reports later.
 - [ ] **App Store Connect → My Apps → New App.** Bundle ID
       `com.taktek.bucksbuddy`, primary language, and the SKU (anything; the
       bundle ID is fine).
-- [ ] **Export compliance.** App Store Connect asks about encryption on every
-      build. The app uses AES-256-GCM to protect the user's own data. Add the
-      declaration to `app.json` so you aren't asked each time:
-
-      "ios": { "infoPlist": { "ITSAppUsesNonExemptEncryption": false } }
-
-      Setting `false` asserts you only use encryption that qualifies for an
+- [x] **Export compliance.** Already declared in `app.json`
+      (`ios.infoPlist.ITSAppUsesNonExemptEncryption: false`), so App Store
+      Connect stops asking on every build. `false` asserts you only use encryption that qualifies for an
       exemption, which is the usual answer for standard crypto protecting an
       app's own data. It is your determination to make, not mine — if in doubt,
       answer the questionnaire in App Store Connect once and let it record the
@@ -147,9 +143,8 @@ revisiting only if you want native crash reports later.
 - [ ] Optional, if you want CI to build: add `EXPO_TOKEN` (Expo dashboard →
       Access Tokens) as a repository secret, then a workflow calling
       `eas build --non-interactive`.
-- [ ] Worth doing regardless: extend `.github/workflows/ci.yml` to run the
-      mobile suite (`cd mobile && npm ci && npm run coverage`) so the 100% gate
-      applies to both apps.
+- [x] `.github/workflows/ci.yml` already runs the mobile suite (type-check plus
+      the 100% coverage gate) alongside the web one.
 
 ---
 
