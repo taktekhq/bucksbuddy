@@ -1,10 +1,11 @@
-// A tiny hand-rolled area sparkline — no chart library, just two <path>s. It
-// stretches to whatever box the caller gives it (preserveAspectRatio="none"),
-// so it works both as the faded wash behind the Home hero and as the big
-// daily-spend chart on the Stats page. Path math lives in
-// @bucksbuddy/core/sparkline, shared with the native SparkArea.
+import Svg, { Path } from "react-native-svg";
+import type { StyleProp, ViewStyle } from "react-native";
+
 import { buildAreaPath, SPARKLINE_VIEW_BOX } from "@bucksbuddy/core/sparkline";
 
+// Native counterpart to src/components/ui/SparkArea.tsx — same path math
+// (@bucksbuddy/core/sparkline), rendered with react-native-svg instead of a
+// plain <svg>.
 type Props = {
   values: number[];
   /**
@@ -13,23 +14,17 @@ type Props = {
    */
   stroke?: string;
   fill: string;
-  className?: string;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function SparkArea({ values, stroke, fill, className }: Props) {
+export function SparkArea({ values, stroke, fill, style }: Props) {
   const paths = buildAreaPath(values);
   if (!paths) return null;
   return (
-    <svg
-      viewBox={SPARKLINE_VIEW_BOX}
-      preserveAspectRatio="none"
-      aria-hidden="true"
-      data-testid="spark-area"
-      className={className}
-    >
-      <path d={paths.area} fill={fill} />
+    <Svg viewBox={SPARKLINE_VIEW_BOX} preserveAspectRatio="none" style={style}>
+      <Path d={paths.area} fill={fill} />
       {stroke && (
-        <path
+        <Path
           d={paths.line}
           fill="none"
           stroke={stroke}
@@ -40,6 +35,6 @@ export function SparkArea({ values, stroke, fill, className }: Props) {
           vectorEffect="non-scaling-stroke"
         />
       )}
-    </svg>
+    </Svg>
   );
 }

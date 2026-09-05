@@ -14,10 +14,17 @@
     "./types": "./src/types.ts",
     "./stats": "./src/stats.ts",
     "./history": "./src/history.ts",
-    "./csv": "./src/csv.ts"
+    "./csv": "./src/csv.ts",
+    "./sparkline": "./src/sparkline.ts",
+    "./storagePort": "./src/storagePort.ts",
+    "./cache": "./src/cache.ts",
+    "./e2e": "./src/e2e.ts",
+    "./store": "./src/store.tsx"
   },
   "devDependencies": {
     "@noble/ciphers": "^2.4.0",
-    "@noble/hashes": "^2.4.0"
+    "@noble/hashes": "^2.4.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "@types/react": "^18.3.12"
   }
 }

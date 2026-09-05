@@ -1,7 +1,11 @@
-// The encryption "vault": bridges the crypto primitives (lib/crypto) to the
+// The encryption "vault": bridges the crypto primitives (./crypto) to the
 // Supabase `e2e_keys` table and to the per-field encrypted columns. Pure data
-// layer — no React.
-import { supabase } from "@/lib/supabase";
+// layer — no React. `supabase` and `storage` are passed in rather than
+// imported, exactly like crypto.ts's CryptoPort: each shell supplies its own
+// client and its own StoragePort (localStorage on web, AsyncStorage on
+// native), so this file has no idea which platform it's running on.
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import {
   DEFAULT_PASSPHRASE,
   checkVerifier,
@@ -11,27 +15,32 @@ import {
   makeVerifier,
   unwrapMasterKey,
   wrapMasterKey,
-} from "@/lib/crypto";
+} from "./crypto.js";
+import type { StoragePort } from "./storagePort.js";
 
 export type E2EMode = "default" | "passphrase";
 
 type KeyRow = { wrapped_key: string; wrap_type: E2EMode; verifier: string };
 
-// The passphrase is cached per-user in this browser so it survives restarts and
+// The passphrase is cached per-user on this device so it survives restarts and
 // can be shown/edited in Settings — but it never leaves the device, so the
 // server still can't read it (encryption stays end-to-end).
 const PASS_KEY = (userId: string) => `bb-e2e-pass:${userId}`;
 
-export function loadStoredPassphrase(userId: string): string | null {
-  return localStorage.getItem(PASS_KEY(userId));
+export async function loadStoredPassphrase(storage: StoragePort, userId: string): Promise<string | null> {
+  return storage.get(PASS_KEY(userId));
 }
 
-export function storeStoredPassphrase(userId: string, passphrase: string): void {
-  localStorage.setItem(PASS_KEY(userId), passphrase);
+export async function storeStoredPassphrase(
+  storage: StoragePort,
+  userId: string,
+  passphrase: string,
+): Promise<void> {
+  await storage.set(PASS_KEY(userId), passphrase);
 }
 
-export function clearStoredPassphrase(userId: string): void {
-  localStorage.removeItem(PASS_KEY(userId));
+export async function clearStoredPassphrase(storage: StoragePort, userId: string): Promise<void> {
+  await storage.remove(PASS_KEY(userId));
 }
 
 // A stable, garbled stand-in for an encrypted value: a few characters of its
@@ -53,10 +62,7 @@ async function decNumber(masterKey: CryptoKey, cipher: string): Promise<number> 
   return Number(await decryptString(masterKey, cipher));
 }
 
-function encNote(
-  masterKey: CryptoKey,
-  note: string | null | undefined,
-): Promise<string | null> {
+function encNote(masterKey: CryptoKey, note: string | null | undefined): Promise<string | null> {
   if (note === null || note === undefined) return Promise.resolve(null);
   return encryptString(masterKey, note);
 }
@@ -73,10 +79,7 @@ export type TxEnc = {
   note_enc: string | null;
 };
 
-export async function encryptTxValues(
-  masterKey: CryptoKey,
-  tx: TxPlain,
-): Promise<TxEnc> {
+export async function encryptTxValues(masterKey: CryptoKey, tx: TxPlain): Promise<TxEnc> {
   return {
     amount_usd_cents_enc: await encNumber(masterKey, tx.amount_usd_cents),
     original_amount_enc: await encNumber(masterKey, tx.original_amount),
@@ -91,8 +94,7 @@ export async function decryptTxValues(
   return {
     amount_usd_cents: await decNumber(masterKey, row.amount_usd_cents_enc),
     original_amount: await decNumber(masterKey, row.original_amount_enc),
-    note:
-      row.note_enc === null ? null : await decryptString(masterKey, row.note_enc),
+    note: row.note_enc === null ? null : await decryptString(masterKey, row.note_enc),
   };
 }
 
@@ -100,10 +102,7 @@ export async function decryptTxValues(
 export type GoldPlain = { grams: number; note?: string | null };
 export type GoldEnc = { grams_enc: string; note_enc: string | null };
 
-export async function encryptGoldValues(
-  masterKey: CryptoKey,
-  entry: GoldPlain,
-): Promise<GoldEnc> {
+export async function encryptGoldValues(masterKey: CryptoKey, entry: GoldPlain): Promise<GoldEnc> {
   return {
     grams_enc: await encNumber(masterKey, entry.grams),
     note_enc: await encNote(masterKey, entry.note),
@@ -116,12 +115,11 @@ export async function decryptGoldValues(
 ): Promise<{ grams: number; note: string | null }> {
   return {
     grams: await decNumber(masterKey, row.grams_enc),
-    note:
-      row.note_enc === null ? null : await decryptString(masterKey, row.note_enc),
+    note: row.note_enc === null ? null : await decryptString(masterKey, row.note_enc),
   };
 }
 
-async function fetchKeyRow(userId: string): Promise<KeyRow | null> {
+async function fetchKeyRow(supabase: SupabaseClient, userId: string): Promise<KeyRow | null> {
   const { data } = await supabase
     .from("e2e_keys")
     .select("wrapped_key, wrap_type, verifier")
@@ -137,8 +135,8 @@ export type VaultState =
 // Load (and, for a brand-new user, create) the vault. Default-tier users are
 // unlocked transparently with the public passphrase; passphrase-tier users come
 // back "locked" until they enter their passphrase.
-export async function loadVault(userId: string): Promise<VaultState> {
-  let row = await fetchKeyRow(userId);
+export async function loadVault(supabase: SupabaseClient, userId: string): Promise<VaultState> {
+  let row = await fetchKeyRow(supabase, userId);
   if (!row) {
     const masterKey = await generateMasterKey();
     // Idempotent create: `ignoreDuplicates` means we never clobber an existing
@@ -155,7 +153,7 @@ export async function loadVault(userId: string): Promise<VaultState> {
     );
     // Re-read: normally returns the row we just wrote; under a race it returns
     // whoever won — which we must respect instead of our now-orphaned key.
-    row = await fetchKeyRow(userId);
+    row = await fetchKeyRow(supabase, userId);
     if (!row) return { status: "unlocked", mode: "default", masterKey };
   }
   if (row.wrap_type === "default") {
@@ -168,10 +166,11 @@ export async function loadVault(userId: string): Promise<VaultState> {
 // Try to unlock a passphrase-tier vault. Returns the master key, or null if the
 // passphrase is wrong (or there's somehow no row).
 export async function unlockVault(
+  supabase: SupabaseClient,
   userId: string,
   passphrase: string,
 ): Promise<CryptoKey | null> {
-  const row = await fetchKeyRow(userId);
+  const row = await fetchKeyRow(supabase, userId);
   // Stryker disable next-line ConditionalExpression : equivalent — without this
   // guard the property read below throws into the catch, returning null just
   // the same.
@@ -187,6 +186,7 @@ export async function unlockVault(
 // Turn on E2E: re-wrap the (already known) master key under the user's
 // passphrase. Cheap — the data is untouched.
 export async function enablePassphrase(
+  supabase: SupabaseClient,
   userId: string,
   masterKey: CryptoKey,
   passphrase: string,
@@ -203,6 +203,7 @@ export async function enablePassphrase(
 // Turn off E2E: re-wrap the master key back under the public passphrase. The
 // data becomes operator-readable again, same as the default tier.
 export async function disablePassphrase(
+  supabase: SupabaseClient,
   userId: string,
   masterKey: CryptoKey,
 ): Promise<void> {

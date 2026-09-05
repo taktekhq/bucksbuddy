@@ -20,7 +20,7 @@ export default defineConfig({
     testTimeout: 20_000,
     setupFiles: ["./src/test/setup.ts"],
     // Unit/component tests live next to the source as *.test.ts(x).
-    include: ["src/**/*.test.{ts,tsx}", "packages/core/src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "packages/core/src/**/*.test.{ts,tsx}"],
     // The golden-fixture corpus (src/lib/__fixtures__) freezes absolute local
     // calendar dates into checked-in JSON, so it must generate identically
     // regardless of which machine runs it. Pinned to UTC, which is also what
@@ -34,14 +34,15 @@ export default defineConfig({
       // 100% gate and only mutation testing (nightly) would ever touch it.
       // Exclude the bits that are pure bootstrap/types/config/data with no
       // testable logic of their own.
-      include: ["src/**/*.{ts,tsx}", "packages/core/src/**/*.ts"],
+      include: ["src/**/*.{ts,tsx}", "packages/core/src/**/*.{ts,tsx}"],
       exclude: [
         "src/main.tsx", // app entry: mounts React + registers the service worker
         "src/types/**", // type-only declarations (no runtime code)
         "src/test/**", // the test harness itself
         "src/lib/__fixtures__/**", // golden-fixture generator: test infra, not app logic
         "src/**/*.test.{ts,tsx}", // the tests themselves
-        "packages/core/src/**/*.test.ts", // the tests themselves
+        "packages/core/src/**/*.test.{ts,tsx}", // the tests themselves
+        "packages/core/src/test/**", // shared test infra (e.g. supabaseMock)
         "src/vite-env.d.ts",
         "**/*.d.ts",
         "packages/core/src/crypto-vectors.ts", // frozen data, no logic

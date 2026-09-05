@@ -1,36 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { makeSupabaseMock, type Handler } from "@/test/supabaseMock";
-import {
-  generateMasterKey,
-  makeVerifier,
-  wrapMasterKey,
-} from "@/lib/crypto";
-import { encryptGoldValues, encryptTxValues } from "@/lib/e2e";
-import type { Transaction } from "@/types/db";
 
-type Res = { error: string | null };
-
-// A swappable supabase mock: each test sets `mock` before rendering.
-let mock = makeSupabaseMock();
-const authMock = vi.hoisted(() => ({
-  signOut: vi.fn(async () => ({ error: null })),
-}));
-const functionsMock = vi.hoisted(() => ({
-  invoke: vi.fn(
-    async (): Promise<{ data: unknown; error: { message: string } | null }> => ({
-      data: { ok: true },
-      error: null,
-    }),
-  ),
-}));
+// All the business logic (data loading, encryption, caching edge cases) is
+// tested against the real thing in packages/core/src/store.test.tsx. This
+// file only proves the wiring: that this shim actually hands the real web
+// supabase client, a localStorage-backed StoragePort, and a navigate-on-
+// sign-out callback to the shared core, rather than testing store behavior
+// a second time.
+// Per-table results, defaulting to an empty/null read — only the tests that
+// care about a specific table's response (e.g. a passphrase-tier e2e_keys
+// row) override that table's entry.
+const queryResults: Record<string, { data: unknown; error: { message: string } | null }> = {};
+function chain(table: string) {
+  const result = () => queryResults[table] ?? { data: null, error: null };
+  const builder: Record<string, unknown> = {
+    select: () => builder,
+    order: () => builder,
+    limit: () => builder,
+    eq: () => builder,
+    single: () => builder,
+    maybeSingle: () => builder,
+    upsert: () => builder,
+    update: () => builder,
+    insert: () => builder,
+    delete: () => builder,
+    then: (resolve: (v: ReturnType<typeof result>) => unknown) => Promise.resolve(result()).then(resolve),
+  };
+  return builder;
+}
+const signOut = vi.hoisted(() => vi.fn(async () => ({ error: null })));
 vi.mock("@/lib/supabase", () => ({
-  supabase: {
-    from: (table: string) => mock.supabase.from(table),
-    auth: authMock,
-    functions: functionsMock,
-  },
+  supabase: { from: (table: string) => chain(table), auth: { signOut } },
 }));
 
 const navigate = vi.fn();
@@ -38,618 +39,75 @@ vi.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => navigate(...a) }
 
 import { StoreProvider, useStore } from "@/lib/store";
 
-function setup(handlers: Record<string, Handler> = {}) {
-  mock = makeSupabaseMock(handlers);
+function setup() {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <StoreProvider userId="u1">{children}</StoreProvider>
   );
   return renderHook(() => useStore(), { wrapper });
 }
 
-function tx(overrides: Partial<Transaction> = {}): Transaction {
-  return {
-    id: "t1",
-    user_id: "u1",
-    is_income: false,
-    category: "groceries",
-    amount_usd_cents: 1000,
-    original_currency: "USD",
-    original_amount: 10,
-    rate_used: 89500,
-    occurred_at: new Date().toISOString(),
-    note: null,
-    created_at: new Date().toISOString(),
-    ...overrides,
-  };
-}
-
-describe("StoreProvider / useStore", () => {
+describe("store.tsx (web shim)", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
-    localStorage.clear(); // the passphrase is cached here per device
+    for (const key of Object.keys(queryResults)) delete queryResults[key];
   });
 
-  it("throws when used outside the provider", () => {
-    expect(() => renderHook(() => useStore())).toThrow(
-      /useStore must be used within StoreProvider/,
-    );
-  });
-
-  it("loads profile, transactions and gold, deriving totals", async () => {
-    const now = new Date();
-    const inMonth = tx({
-      id: "a",
-      occurred_at: now.toISOString(),
-      is_income: true,
-      amount_usd_cents: 5000,
-    });
-    const safeMove = tx({
-      id: "b",
-      category: "safe",
-      is_income: false,
-      amount_usd_cents: 2000,
-    });
-    // A safe withdrawal (income) so both arms of the safe-total sum run.
-    const safeWithdraw = tx({
-      id: "c",
-      category: "safe",
-      is_income: true,
-      amount_usd_cents: 500,
-      occurred_at: new Date("2020-01-01").toISOString(), // outside this month
-    });
-    const { result } = setup({
-      "profiles:select": () => ({ data: { lbp_per_usd: 90000 }, error: null }),
-      "transactions:select": () => ({
-        data: [inMonth, safeMove, safeWithdraw],
-        error: null,
-      }),
-      "safe_gold_entries:select": () => ({
-        data: [
-          {
-            id: "g1",
-            user_id: "u1",
-            is_deposit: true,
-            grams: 5,
-            note: null,
-            occurred_at: now.toISOString(),
-            created_at: now.toISOString(),
-          },
-          {
-            id: "g2",
-            user_id: "u1",
-            is_deposit: false,
-            grams: 2,
-            note: null,
-            occurred_at: now.toISOString(),
-            created_at: now.toISOString(),
-          },
-        ],
-        error: null,
-      }),
-    });
-
+  it("wires the real web supabase client through to the shared store", async () => {
+    const { result } = setup();
+    // If this weren't wired to the real (mocked) supabase client, the store
+    // would never leave its initial loading state.
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.lbpPerUsd).toBe(90000);
-    expect(result.current.transactions).toHaveLength(3);
-    expect(result.current.monthlyNetCents).toBe(3000); // 5000 in − 2000 safe out
-    // Running balance carries all-time: +5000 −2000 +500 (the 2020 withdrawal).
-    expect(result.current.balanceCents).toBe(3500);
-    expect(result.current.safeTotalCents).toBe(1500); // +2000 in, −500 out
-    expect(result.current.safeGoldGrams).toBe(3); // 5 deposited - 2 withdrawn
   });
 
-  it("tolerates null data and a missing profile rate", async () => {
-    const { result } = setup({
-      "profiles:select": () => ({ data: null, error: null }),
-      "transactions:select": () => ({ data: null, error: null }),
-      "safe_gold_entries:select": () => ({ data: null, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.transactions).toEqual([]);
-    expect(result.current.safeGoldEntries).toEqual([]);
-    expect(result.current.lbpPerUsd).toBe(89500); // default kept
-  });
-
-  it("adds a transaction optimistically", async () => {
-    const inserted = tx({ id: "new", amount_usd_cents: 4242 });
-    const { result } = setup({
-      "transactions:insert": () => ({ data: inserted, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    let res: { error: string | null } = { error: "x" };
-    await act(async () => {
-      res = await result.current.addTransaction({
-        is_income: false,
-        category: "groceries",
-        amount_usd_cents: 4242,
-        original_currency: "USD",
-        original_amount: 42.42,
-        rate_used: 89500,
-      });
-    });
-    expect(res.error).toBeNull();
-    expect(result.current.transactions[0].id).toBe("new");
-  });
-
-  it("returns the error message when adding fails", async () => {
-    const { result } = setup({
-      "transactions:insert": () => ({ data: null, error: { message: "nope" } }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    let res: { error: string | null } = { error: null };
-    await act(async () => {
-      res = await result.current.addTransaction({
-        is_income: false,
-        category: "groceries",
-        amount_usd_cents: 1,
-        original_currency: "USD",
-        original_amount: 0.01,
-        rate_used: 89500,
-      });
-    });
-    expect(res.error).toBe("nope");
-  });
-
-  it("updates a transaction in place, and surfaces update errors", async () => {
-    const existing = tx({ id: "t1", note: "old" });
-    const other = tx({ id: "t2", note: "keep" });
-    const updated = tx({ id: "t1", note: "new" });
-    const { result } = setup({
-      "transactions:select": () => ({ data: [existing, other], error: null }),
-      "transactions:update": () => ({ data: updated, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.updateTransaction("t1", {
-        is_income: false,
-        category: "groceries",
-        amount_usd_cents: 1000,
-        original_currency: "USD",
-        original_amount: 10,
-        rate_used: 89500,
-        note: "new",
-      });
-    });
-    expect(result.current.transactions[0].note).toBe("new");
-    expect(result.current.transactions[1].note).toBe("keep"); // untouched row
-
-    mock = makeSupabaseMock({
-      "transactions:update": () => ({ data: null, error: { message: "boom" } }),
-    });
-    let res: { error: string | null } = { error: null };
-    await act(async () => {
-      res = await result.current.updateTransaction("t1", {
-        is_income: false,
-        category: "groceries",
-        amount_usd_cents: 1000,
-        original_currency: "USD",
-        original_amount: 10,
-        rate_used: 89500,
-      });
-    });
-    expect(res.error).toBe("boom");
-  });
-
-  it("deletes a transaction, restoring it on failure", async () => {
-    const a = tx({ id: "a" });
-    const b = tx({ id: "b" });
-    const { result } = setup({
-      "transactions:select": () => ({ data: [a, b], error: null }),
-      "transactions:delete": () => ({ data: null, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.deleteTransaction("a");
-    });
-    expect(result.current.transactions.map((t) => t.id)).toEqual(["b"]);
-
-    // Now make deletion fail; the row should be restored.
-    mock = makeSupabaseMock({
-      "transactions:delete": () => ({ data: null, error: { message: "fail" } }),
-    });
-    let res: { error: string | null } = { error: null };
-    await act(async () => {
-      res = await result.current.deleteTransaction("b");
-    });
-    expect(res.error).toBe("fail");
-    expect(result.current.transactions.map((t) => t.id)).toEqual(["b"]);
-  });
-
-  it("sets the exchange rate, and surfaces rate errors", async () => {
-    const { result } = setup({
-      "profiles:update": () => ({ data: null, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.setRate(95000);
-    });
-    expect(result.current.lbpPerUsd).toBe(95000);
-
-    mock = makeSupabaseMock({
-      "profiles:update": () => ({ data: null, error: { message: "denied" } }),
-    });
-    let res: { error: string | null } = { error: null };
-    await act(async () => {
-      res = await result.current.setRate(96000);
-    });
-    expect(res.error).toBe("denied");
-  });
-
-  it("adds and deletes gold entries, restoring on delete failure", async () => {
-    const entry = {
-      id: "g1",
-      user_id: "u1",
-      is_deposit: true,
-      grams: 3,
-      note: null,
-      occurred_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    };
-    const { result } = setup({
-      "safe_gold_entries:insert": () => ({ data: entry, error: null }),
-      "safe_gold_entries:delete": () => ({ data: null, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.addSafeGoldEntry({ is_deposit: true, grams: 3 });
-    });
-    expect(result.current.safeGoldGrams).toBe(3);
-    expect(result.current.safeGoldEntries[0].note).toBeNull(); // no-note path
-
-    await act(async () => {
-      await result.current.addSafeGoldEntry({
-        is_deposit: true,
-        grams: 2,
-        note: "ring",
-      });
-    });
-    expect(result.current.safeGoldEntries[0].note).toBe("ring"); // note path
-
-    await act(async () => {
-      await result.current.deleteSafeGoldEntry("g1");
-    });
-    expect(result.current.safeGoldEntries).toEqual([]);
-  });
-
-  it("surfaces gold add errors and restores on gold delete failure", async () => {
-    const entry = {
-      id: "g1",
-      user_id: "u1",
-      is_deposit: true,
-      grams: 3,
-      note: null,
-      occurred_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    };
-    const { result } = setup({
-      "safe_gold_entries:select": () => ({ data: [entry], error: null }),
-      "safe_gold_entries:insert": () => ({
-        data: null,
-        error: { message: "gold-fail" },
-      }),
-      "safe_gold_entries:delete": () => ({
-        data: null,
-        error: { message: "del-fail" },
-      }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    let addRes: { error: string | null } = { error: null };
-    await act(async () => {
-      addRes = await result.current.addSafeGoldEntry({
-        is_deposit: true,
-        grams: 1,
-      });
-    });
-    expect(addRes.error).toBe("gold-fail");
-
-    let delRes: { error: string | null } = { error: null };
-    await act(async () => {
-      delRes = await result.current.deleteSafeGoldEntry("g1");
-    });
-    expect(delRes.error).toBe("del-fail");
-    expect(result.current.safeGoldEntries).toHaveLength(1); // restored
-  });
-
-  it("exposes refresh for manual reloads", async () => {
-    const { result } = setup({
-      "transactions:select": () => ({ data: [tx({ id: "r1" })], error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    await act(async () => {
-      await result.current.refresh();
-    });
-    expect(result.current.transactions[0].id).toBe("r1");
-  });
-
-  it("starts locked for a passphrase user and unlocks with the right one", async () => {
-    const mk = await generateMasterKey();
-    const row = {
-      wrapped_key: await wrapMasterKey(mk, "pw"),
-      wrap_type: "passphrase",
-      verifier: await makeVerifier(mk),
-    };
-    const txEnc = await encryptTxValues(mk, {
-      amount_usd_cents: 7777,
-      original_amount: 77.77,
-      note: "k",
-    });
-    const encRow = {
-      id: "enc",
-      user_id: "u1",
-      occurred_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      is_income: false,
-      category: "groceries",
-      original_currency: "USD",
-      rate_used: 89500,
-      ...txEnc,
-    };
-    const goldEnc = await encryptGoldValues(mk, { grams: 9, note: null });
-    const encGoldRow = {
-      id: "eg",
-      user_id: "u1",
-      occurred_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      is_deposit: true,
-      ...goldEnc,
-    };
-    const { result } = setup({
-      "e2e_keys:select": () => ({ data: row }),
-      "transactions:select": () => ({ data: [encRow] }),
-      "safe_gold_entries:select": () => ({ data: [encGoldRow] }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.locked).toBe(true);
-    expect(result.current.e2eMode).toBe("passphrase");
-    // Locked: rows are shown obscured (masked), not blank.
-    expect(result.current.transactions).toHaveLength(1);
-    expect(result.current.transactions[0].amountMask).toEqual(expect.any(String));
-    expect(result.current.safeGoldEntries[0].gramsMask).toEqual(expect.any(String));
-
-    let res: Res = { error: null };
-    await act(async () => {
-      res = await result.current.unlock("nope");
-    });
-    expect(res.error).toBe("Wrong passphrase.");
-    expect(result.current.locked).toBe(true);
-
-    await act(async () => {
-      res = await result.current.unlock("pw");
-    });
-    expect(res.error).toBeNull();
-    expect(result.current.locked).toBe(false);
-    expect(result.current.passphrase).toBe("pw"); // cached for display
-    expect(localStorage.getItem("bb-e2e-pass:u1")).toBe("pw"); // persisted
-    expect(result.current.transactions).toHaveLength(1);
-    expect(result.current.transactions[0].amount_usd_cents).toBe(7777);
-    expect(result.current.transactions[0].note).toBe("k");
-    expect(result.current.transactions[0].amountMask).toBeUndefined();
-    expect(result.current.safeGoldGrams).toBe(9); // decrypted gold
-  });
-
-  it("auto-unlocks on load from the device-stored passphrase", async () => {
-    const mk = await generateMasterKey();
-    const row = {
-      wrapped_key: await wrapMasterKey(mk, "pw"),
-      wrap_type: "passphrase",
-      verifier: await makeVerifier(mk),
-    };
-    localStorage.setItem("bb-e2e-pass:u1", "pw");
-    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.locked).toBe(false);
-    expect(result.current.passphrase).toBe("pw");
-  });
-
-  it("drops a stale stored passphrase and stays locked", async () => {
-    const mk = await generateMasterKey();
-    const row = {
-      wrapped_key: await wrapMasterKey(mk, "pw"),
-      wrap_type: "passphrase",
-      verifier: await makeVerifier(mk),
-    };
-    localStorage.setItem("bb-e2e-pass:u1", "old-passphrase"); // changed elsewhere
-    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.locked).toBe(true);
-    expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull(); // cleared
-  });
-
-  it("turns encryption on then off on the default tier", async () => {
-    const { result } = setup({
-      "e2e_keys:update": () => ({ data: null, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.e2eMode).toBe("default");
-
-    await act(async () => {
-      await result.current.enableEncryption("a strong passphrase!");
-    });
-    expect(result.current.e2eMode).toBe("passphrase");
-    expect(result.current.passphrase).toBe("a strong passphrase!");
-    expect(localStorage.getItem("bb-e2e-pass:u1")).toBe("a strong passphrase!");
-
-    await act(async () => {
-      await result.current.disableEncryption();
-    });
-    expect(result.current.e2eMode).toBe("default");
-    expect(result.current.passphrase).toBeNull();
-    expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull();
-  });
-
-  it("clears the cached passphrase and signs out", async () => {
-    authMock.signOut.mockClear();
-    const { result } = setup({
-      "e2e_keys:update": () => ({ data: null, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.enableEncryption("a strong passphrase!");
-    });
-    expect(localStorage.getItem("bb-e2e-pass:u1")).toBe("a strong passphrase!");
-
-    await act(async () => {
-      await result.current.signOut();
-    });
-    expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull();
-    expect(result.current.passphrase).toBeNull();
-    expect(authMock.signOut).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith("/");
-  });
-
-  it("deletes the account, then clears secrets and signs out", async () => {
-    authMock.signOut.mockClear();
-    functionsMock.invoke.mockClear();
-    functionsMock.invoke.mockResolvedValueOnce({ data: { ok: true }, error: null });
-    const { result } = setup({
-      "e2e_keys:update": () => ({ data: null, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.enableEncryption("a strong passphrase!");
-    });
-    expect(localStorage.getItem("bb-e2e-pass:u1")).toBe("a strong passphrase!");
-
-    let res: Res = { error: "x" };
-    await act(async () => {
-      res = await result.current.deleteAccount();
-    });
-    expect(res.error).toBeNull();
-    expect(functionsMock.invoke).toHaveBeenCalledWith("delete-account");
-    expect(localStorage.getItem("bb-e2e-pass:u1")).toBeNull();
-    expect(result.current.passphrase).toBeNull();
-    expect(authMock.signOut).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith("/");
-  });
-
-  it("surfaces a delete-account error without signing out", async () => {
-    authMock.signOut.mockClear();
-    functionsMock.invoke.mockResolvedValueOnce({
-      data: null,
-      error: { message: "delete failed" },
-    });
+  it("wires localStorage as the StoragePort — the passphrase persists across a re-render", async () => {
     const { result } = setup();
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    let res: Res = { error: null };
     await act(async () => {
-      res = await result.current.deleteAccount();
+      await result.current.enableEncryption("a strong passphrase!");
     });
-    expect(res.error).toBe("delete failed");
-    expect(authMock.signOut).not.toHaveBeenCalled();
+    expect(localStorage.getItem("bb-e2e-pass:u1")).toBe("a strong passphrase!");
   });
 
-  it("hydrates instantly from the cached snapshot, then refreshes", async () => {
-    // A snapshot from a previous session: the app should paint it on the first
-    // frame (no loading flash) and then overwrite it with the network read.
+  it("hydrates synchronously from a cached snapshot already in localStorage", () => {
     localStorage.setItem(
       "bb-cache:u1",
       JSON.stringify({
         v: 1,
-        transactions: [tx({ id: "cached", amount_usd_cents: 1234 })],
+        transactions: [],
         lbpPerUsd: 91000,
         safeGoldEntries: [],
       }),
     );
-    const { result } = setup({
-      "transactions:select": () => ({
-        data: [tx({ id: "fresh", amount_usd_cents: 5678 })],
-        error: null,
-      }),
-    });
-    // Synchronously available before any network round-trip resolves.
+    const { result } = setup();
+    // No waitFor: this must be true on the very first synchronous render.
     expect(result.current.loading).toBe(false);
-    expect(result.current.transactions[0].id).toBe("cached");
     expect(result.current.lbpPerUsd).toBe(91000);
-
-    // The background refresh replaces it with what the server returned.
-    await waitFor(() => expect(result.current.transactions[0].id).toBe("fresh"));
-    expect(result.current.transactions[0].amount_usd_cents).toBe(5678);
   });
 
-  it("writes a snapshot after loading so the next start is instant", async () => {
-    const { result } = setup({
-      "transactions:select": () => ({
-        data: [tx({ id: "persisted" })],
-        error: null,
-      }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    await waitFor(() => {
-      const raw = localStorage.getItem("bb-cache:u1");
-      expect(raw).not.toBeNull();
-      expect(JSON.parse(raw!).transactions[0].id).toBe("persisted");
-    });
-  });
-
-  it("clears the cache and never caches plaintext while locked", async () => {
-    const mk = await generateMasterKey();
-    const row = {
-      wrapped_key: await wrapMasterKey(mk, "pw"),
-      wrap_type: "passphrase",
-      verifier: await makeVerifier(mk),
+  it("reads a device-stored passphrase from localStorage for a passphrase-tier vault", async () => {
+    // Real crypto isn't the point here (that's core's job) — just that a
+    // passphrase-tier vault causes the shim to read localStorage for the
+    // cached passphrase rather than skip straight to the default-tier path.
+    localStorage.setItem("bb-e2e-pass:u1", "whatever's cached");
+    queryResults["e2e_keys"] = {
+      data: { wrapped_key: "garbage", wrap_type: "passphrase", verifier: "garbage" },
+      error: null,
     };
-    // A stale plaintext snapshot left on a now-locked device must be dropped.
-    localStorage.setItem(
-      "bb-cache:u1",
-      JSON.stringify({ v: 1, transactions: [tx()], lbpPerUsd: 90000, safeGoldEntries: [] }),
-    );
-    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    const { result } = setup();
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.locked).toBe(true);
-    expect(localStorage.getItem("bb-cache:u1")).toBeNull();
+    expect(result.current.e2eMode).toBe("passphrase");
   });
 
-  it("drops the cached snapshot on sign-out", async () => {
-    const { result } = setup({
-      "transactions:select": () => ({ data: [tx({ id: "x" })], error: null }),
-    });
+  it("wires onSignedOut to navigate(\"/\")", async () => {
+    const { result } = setup();
     await waitFor(() => expect(result.current.loading).toBe(false));
-    await waitFor(() => expect(localStorage.getItem("bb-cache:u1")).not.toBeNull());
 
     await act(async () => {
       await result.current.signOut();
     });
-    expect(localStorage.getItem("bb-cache:u1")).toBeNull();
-  });
-
-  it("blocks writes and key changes while locked", async () => {
-    const mk = await generateMasterKey();
-    const row = {
-      wrapped_key: await wrapMasterKey(mk, "pw"),
-      wrap_type: "passphrase",
-      verifier: await makeVerifier(mk),
-    };
-    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.locked).toBe(true);
-
-    const newTx = {
-      is_income: false,
-      category: "x",
-      amount_usd_cents: 1,
-      original_currency: "USD" as const,
-      original_amount: 0.01,
-      rate_used: 89500,
-    };
-    const results: Res[] = [];
-    await act(async () => {
-      results.push(await result.current.addTransaction(newTx));
-      results.push(await result.current.updateTransaction("z", newTx));
-      results.push(await result.current.enableEncryption("pw2"));
-      results.push(await result.current.disableEncryption());
-      results.push(
-        await result.current.addSafeGoldEntry({ is_deposit: true, grams: 1 }),
-      );
-    });
-    for (const r of results) expect(r.error).toMatch(/Locked/);
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith("/");
   });
 });
