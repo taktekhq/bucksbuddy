@@ -3,6 +3,10 @@
 // JS implementation off-device. Each is faked with the smallest thing that
 // behaves like the real one, so tests exercise our logic rather than Expo's.
 
+// Wires up RNTL's `screen` handle and its extra matchers, and registers the
+// automatic cleanup between tests.
+import "@testing-library/react-native";
+
 // --- device keystore (lib/vault) -----------------------------------------
 // An in-memory store with the same async API. Tests can reach in via
 // `mockSecureStore` to seed or assert.
