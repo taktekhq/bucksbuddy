@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "BucksBuddy",
+    "slug": "bucksbuddy",
+    "scheme": "bucksbuddy",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F2F2F7",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F2F2F7"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.taktek.bucksbuddy"
+    },
+    "android": {
+      "package": "com.taktek.bucksbuddy",
+      "adaptiveIcon": {
+        "backgroundColor": "#F2F2F7",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      ["expo-font", { "fonts": ["./assets/fonts/Grobold.ttf"] }],
+      "expo-web-browser",
+      "expo-sharing",
+      "expo-localization"
+    ]
+  }
+}
