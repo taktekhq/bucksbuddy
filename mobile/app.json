@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.taktek.bucksbuddy"
+      "bundleIdentifier": "com.taktek.bucksbuddy",
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.taktek.bucksbuddy",
@@ -23,7 +24,8 @@
         "backgroundColor": "#F2F2F7",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "versionCode": 1
     },
     "plugins": [
       [
@@ -38,6 +40,10 @@
       "expo-sharing",
       "expo-localization",
       "expo-secure-store"
-    ]
+    ],
+    "owner": "nizarmah",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
