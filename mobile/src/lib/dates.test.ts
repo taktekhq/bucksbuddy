@@ -1,4 +1,11 @@
-import { currentMonthRange, dayKey, dayLabel, isToday, monthLabel } from "@/lib/dates";
+import {
+  currentMonthRange,
+  dayKey,
+  dayLabel,
+  isToday,
+  monthAnchor,
+  monthLabel,
+} from "@/lib/dates";
 
 describe("currentMonthRange", () => {
   it("returns the first of this month and the first of next month", () => {
@@ -80,5 +87,41 @@ describe("dayLabel", () => {
 
   it("includes the year for a different year", () => {
     expect(dayLabel(new Date(2025, 11, 31, 8, 0).toISOString(), now)).toBe("Dec 31, 2025");
+  });
+
+  it("defaults to the real current date", () => {
+    expect(dayLabel(new Date().toISOString())).toBe("Today");
+  });
+});
+
+describe("monthAnchor", () => {
+  const now = new Date(2026, 5, 15, 13, 30); // 15 Jun 2026, local
+
+  it("anchors the current month at `now`, so the month is still partial", () => {
+    expect(monthAnchor(0, now)).toBe(now);
+  });
+
+  it("anchors a past month on its last day at noon", () => {
+    // Noon dodges the DST/TZ edges a midnight anchor would sit on.
+    expect(monthAnchor(-1, now)).toEqual(new Date(2026, 4, 31, 12, 0, 0, 0));
+    expect(monthAnchor(-2, now)).toEqual(new Date(2026, 3, 30, 12, 0, 0, 0));
+  });
+
+  it("walks back across the year boundary", () => {
+    expect(monthAnchor(-6, now)).toEqual(new Date(2025, 11, 31, 12, 0, 0, 0));
+  });
+
+  it("lands on the short months' real last day", () => {
+    // February 2026 has 28 days; 2024 was a leap year.
+    expect(monthAnchor(-4, now)).toEqual(new Date(2026, 1, 28, 12, 0, 0, 0));
+    expect(monthAnchor(-1, new Date(2024, 2, 10))).toEqual(
+      new Date(2024, 1, 29, 12, 0, 0, 0),
+    );
+  });
+
+  it("defaults to the real current date", () => {
+    const before = Date.now();
+    const anchor = monthAnchor(0);
+    expect(anchor.getTime()).toBeGreaterThanOrEqual(before);
   });
 });

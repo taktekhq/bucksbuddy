@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/12</span>
+                <span class='fraction'>12/12</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/12</span>
+                <span class='fraction'>12/12</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/12</span>
+                <span class='fraction'>12/12</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -135,30 +135,30 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">138x</span>
+<span class="cline-any cline-yes">138x</span>
+<span class="cline-any cline-yes">138x</span>
+<span class="cline-any cline-yes">138x</span>
+<span class="cline-any cline-yes">138x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -193,30 +193,30 @@ type Props = {
 // `grid grid-cols-3 gap-2.5` — React Native has no CSS grid, so the row wraps
 // and each tile gets an explicit width measured off the container (PORTING §4):
 // three columns with two 10px gaps between them.
-const COLS = <span class="cstat-no" title="statement not covered" >3;</span>
-const GAP = <span class="cstat-no" title="statement not covered" >10;</span> // gap-2.5
+const COLS = 3;
+const GAP = 10; // gap-2.5
 &nbsp;
 // 3-col colorful tiles: selected fills with the category color, the rest sit on
 // a soft tint of their own color. A small dot marks tiles that open into
 // subcategories (Health → Pharmacy, Fees → Mobile, …).
-export function <span class="fstat-no" title="function not covered" >CategoryGrid(</span>{ categories, selected, onSelect }: Props) {
-  const [width, setWidth] = <span class="cstat-no" title="statement not covered" >useState(0);</span>
-  const tileWidth = <span class="cstat-no" title="statement not covered" >width &gt; 0 ? (width - GAP * (COLS - 1)) / COLS : 0;</span>
+export function CategoryGrid({ categories, selected, onSelect }: Props) {
+  const [width, setWidth] = useState(0);
+  const tileWidth = width &gt; 0 ? (width - GAP * (COLS - 1)) / COLS : 0;
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  return (</span>
+  return (
     &lt;View
       className="flex-row flex-wrap gap-2.5"
-      onLayout={<span class="fstat-no" title="function not covered" >(e</span>) =&gt; <span class="cstat-no" title="statement not covered" >setWidth(e.nativeEvent.layout.width)}</span>
+      onLayout={(e) =&gt; setWidth(e.nativeEvent.layout.width)}
     &gt;
-      {categories.map(<span class="fstat-no" title="function not covered" >(c</span>) =&gt; {
-        const active = <span class="cstat-no" title="statement not covered" >c.id === selected;</span>
-        const Icon = <span class="cstat-no" title="statement not covered" >c.icon;</span>
-        const fg = <span class="cstat-no" title="statement not covered" >active ? "#FFFFFF" : c.color;</span>
-        const hasSubs = <span class="cstat-no" title="statement not covered" >(c.subcategories?.length ?? 0) &gt; 0;</span>
-<span class="cstat-no" title="statement not covered" >        return (</span>
+      {categories.map((c) =&gt; {
+        const active = c.id === selected;
+        const Icon = c.icon;
+        const fg = active ? "#FFFFFF" : c.color;
+        const hasSubs = (c.subcategories?.length ?? 0) &gt; 0;
+        return (
           &lt;Press
             key={c.id}
-            onPress={<span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >onSelect(c.id)}</span>
+            onPress={() =&gt; onSelect(c.id)}
             className="relative flex flex-col items-center justify-center gap-1.5 rounded-card py-5"
             style={{ width: tileWidth, backgroundColor: active ? c.color : `${c.color}1A` }}
           &gt;
@@ -244,7 +244,7 @@ export function <span class="fstat-no" title="function not covered" >CategoryGri
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-05T12:15:37.901Z
+                at 2026-09-05T12:29:22.472Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

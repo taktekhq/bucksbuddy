@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>8/8</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/16</span>
+                <span class='fraction'>16/16</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/5</span>
+                <span class='fraction'>5/5</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/7</span>
+                <span class='fraction'>7/7</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -195,7 +195,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -219,8 +219,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -252,8 +252,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -280,8 +280,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">26x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import type { ReactNode, Ref } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
@@ -304,8 +304,8 @@ import { colors, type Gradient } from "@/lib/theme";
 // virtualized list instead of a ScrollView (History).
 export { type Gradient };
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >GradientLayer(</span>{ gradient }: { gradient: Gradient }) {
-<span class="cstat-no" title="statement not covered" >  return (</span>
+export function GradientLayer({ gradient }: { gradient: Gradient }) {
+  return (
     &lt;LinearGradient
       pointerEvents="none"
       colors={gradient.colors}
@@ -315,12 +315,12 @@ export function <span class="fstat-no" title="function not covered" >GradientLay
   );
 }
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >ScreenFrame(</span>{
+export function ScreenFrame({
   children,
   gradient,
-  gradientFixed = <span class="branch-0 cbranch-no" title="branch not covered" >false,</span>
+  gradientFixed = false,
   floor,
-  statusBar = <span class="branch-0 cbranch-no" title="branch not covered" >"dark",</span>
+  statusBar = "dark",
 }: {
   children: ReactNode;
   gradient?: Gradient;
@@ -329,8 +329,8 @@ export function <span class="fstat-no" title="function not covered" >ScreenFrame
   floor?: string;
   statusBar?: "light" | "dark";
 }) {
-  const floorColor = <span class="cstat-no" title="statement not covered" >floor ?? gradient?.floor ?? colors.canvas;</span>
-<span class="cstat-no" title="statement not covered" >  return (</span>
+  const floorColor = floor ?? gradient?.floor ?? colors.canvas;
+  return (
     &lt;View style={{ flex: 1, backgroundColor: floorColor }}&gt;
       &lt;StatusBar style={statusBar} /&gt;
       {gradient &amp;&amp; gradientFixed &amp;&amp; &lt;GradientLayer gradient={gradient} /&gt;}
@@ -353,17 +353,17 @@ type Props = {
   scrollRef?: Ref&lt;ScrollView&gt;;
 };
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >Screen(</span>{
+export function Screen({
   children,
   gradient,
-  gradientFixed = <span class="branch-0 cbranch-no" title="branch not covered" >false,</span>
+  gradientFixed = false,
   floor,
-  statusBar = <span class="branch-0 cbranch-no" title="branch not covered" >"dark",</span>
-  className = <span class="branch-0 cbranch-no" title="branch not covered" >"",</span>
+  statusBar = "dark",
+  className = "",
   scrollRef,
 }: Props) {
-  const insets = <span class="cstat-no" title="statement not covered" >useSafeAreaInsets();</span>
-<span class="cstat-no" title="statement not covered" >  return (</span>
+  const insets = useSafeAreaInsets();
+  return (
     &lt;ScreenFrame gradient={gradient} gradientFixed={gradientFixed} floor={floor} statusBar={statusBar}&gt;
       &lt;ScrollView
         ref={scrollRef}
@@ -389,9 +389,9 @@ export function <span class="fstat-no" title="function not covered" >Screen(</sp
   );
 }
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >toLocations(</span>stops: readonly number[]): [number, number, ...number[]] {
-  const last = <span class="cstat-no" title="statement not covered" >stops[stops.length - 1] || 1;</span>
-<span class="cstat-no" title="statement not covered" >  return stops.map(<span class="fstat-no" title="function not covered" >(s</span>) =&gt; <span class="cstat-no" title="statement not covered" >s / last)</span> as [number, number, ...number[]];</span>
+export function toLocations(stops: readonly number[]): [number, number, ...number[]] {
+  const last = stops[stops.length - 1] || 1;
+  return stops.map((s) =&gt; s / last) as [number, number, ...number[]];
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -400,7 +400,7 @@ export function <span class="fstat-no" title="function not covered" >toLocations
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-05T12:15:37.901Z
+                at 2026-09-05T12:29:22.472Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

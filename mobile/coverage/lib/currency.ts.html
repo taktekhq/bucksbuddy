@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>11/11</span>
+                <span class='fraction'>0/11</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>16/16</span>
+                <span class='fraction'>0/16</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>2/2</span>
+                <span class='fraction'>0/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>9/9</span>
+                <span class='fraction'>0/9</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line low'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -100,7 +100,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -113,26 +113,26 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// All money math lives here. The DB source of truth is integer USD cents.
 // We only round at the conversion boundary (Math.round), never store floats.
 &nbsp;
 export type Currency = "USD" | "LBP";
 &nbsp;
-export const DEFAULT_LBP_PER_USD = 89500;
+export const DEFAULT_LBP_PER_USD = <span class="cstat-no" title="statement not covered" >89500;</span>
 &nbsp;
 /**
  * Convert an as-entered amount (in `currency`) to normalized USD integer cents.
@@ -140,24 +140,24 @@ export const DEFAULT_LBP_PER_USD = 89500;
  * @param currency  "USD" or "LBP"
  * @param lbpPerUsd LBP per 1 USD (only used for LBP)
  */
-export function toUsdCents(
+export function <span class="fstat-no" title="function not covered" >toUsdCents(</span>
   amount: number,
   currency: Currency,
   lbpPerUsd: number,
 ): number {
-  if (!Number.isFinite(amount) || amount &lt; 0) return 0;
-  if (currency === "USD") {
-    return Math.round(amount * 100);
+<span class="cstat-no" title="statement not covered" >  if (!Number.isFinite(amount) || amount &lt; 0) <span class="cstat-no" title="statement not covered" >return 0;</span></span>
+<span class="cstat-no" title="statement not covered" >  if (currency === "USD") {</span>
+<span class="cstat-no" title="statement not covered" >    return Math.round(amount * 100);</span>
   }
-  const rate = lbpPerUsd &gt; 0 ? lbpPerUsd : DEFAULT_LBP_PER_USD;
-  return Math.round((amount / rate) * 100);
+  const rate = <span class="cstat-no" title="statement not covered" >lbpPerUsd &gt; 0 ? lbpPerUsd : DEFAULT_LBP_PER_USD;</span>
+<span class="cstat-no" title="statement not covered" >  return Math.round((amount / rate) * 100);</span>
 }
 &nbsp;
 /** Parse a numpad display string ("12.50", "", ".") into a non-negative number. */
-export function parseAmountString(display: string): number {
-  if (!display || display === ".") return 0;
-  const n = Number.parseFloat(display);
-  return Number.isFinite(n) &amp;&amp; n &gt;= 0 ? n : 0;
+export function <span class="fstat-no" title="function not covered" >parseAmountString(</span>display: string): number {
+<span class="cstat-no" title="statement not covered" >  if (!display || display === ".") <span class="cstat-no" title="statement not covered" >return 0;</span></span>
+  const n = <span class="cstat-no" title="statement not covered" >Number.parseFloat(display);</span>
+<span class="cstat-no" title="statement not covered" >  return Number.isFinite(n) &amp;&amp; n &gt;= 0 ? n : 0;</span>
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -166,7 +166,7 @@ export function parseAmountString(display: string): number {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-05T12:15:37.901Z
+                at 2026-09-05T12:21:44.547Z
             </div>
         <script src="../prettify.js"></script>
         <script>
