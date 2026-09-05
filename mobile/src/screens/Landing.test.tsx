@@ -52,12 +52,24 @@ describe("Landing", () => {
     mockSignInWithPassword.mockResolvedValue({ error: null });
   });
 
-  it("renders the tagline and the three feature cards", async () => {
+  it("leads with the mascot, the wordmark and the tagline", async () => {
     await render(<Landing />);
+    expect(screen.getAllByLabelText("carrot").length).toBeGreaterThan(0);
     expect(screen.getByText("For wabbits with bad habits.")).toBeOnTheScreen();
-    expect(screen.getByText("Income & expenses")).toBeOnTheScreen();
-    expect(screen.getByText("Your private safe")).toBeOnTheScreen();
-    expect(screen.getByText("End-to-end encryption")).toBeOnTheScreen();
+    expect(
+      screen.getByText("On-the-go money journal for your spending."),
+    ).toBeOnTheScreen();
+  });
+
+  it("sells nothing — the store listing already did that", async () => {
+    // The web's three feature cards convinced a cold visitor on
+    // bucksbuddy.com. Anyone opening the app has already read the store
+    // listing and downloaded it, so the screen is a sign-in, not a pitch.
+    await render(<Landing />);
+    expect(screen.queryByText("Income & expenses")).toBeNull();
+    expect(screen.queryByText("Your private safe")).toBeNull();
+    expect(screen.queryByText("End-to-end encryption")).toBeNull();
+    expect(screen.getByText("Continue with Google")).toBeOnTheScreen();
   });
 
   it("links to the legal page from the Privacy and Terms button", async () => {

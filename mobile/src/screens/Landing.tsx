@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Keyboard, Text, TextInput, View } from "react-native";
 import { Input } from "@/components/ui/Input";
-import { ArrowDownUp, ArrowLeft, Lock, Vault } from "lucide-react-native";
+import { ArrowLeft } from "lucide-react-native";
 import { Carrot } from "@/components/ui/Carrot";
-import { SectionHeader } from "@/components/ui/SectionHeader";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 import { Press } from "@/components/ui/Press";
 import { Screen } from "@/components/ui/Screen";
@@ -31,26 +30,6 @@ import { colors } from "@/lib/theme";
 // one native addition: `flex` means `flex-direction: row` in a browser but
 // React Native's default is column, so a web row needs it spelled out.
 const TAPS_TO_REVEAL = 7;
-
-// Three selling points, each its own white card. All carrot-tinted: carrot is
-// the one chromatic accent in the chrome (green/red are reserved for real money).
-const FEATURES = [
-  {
-    icon: ArrowDownUp,
-    title: "Income & expenses",
-    body: "Log every buck in and out.",
-  },
-  {
-    icon: Vault,
-    title: "Your private safe",
-    body: "Tuck savings away, cash or gold.",
-  },
-  {
-    icon: Lock,
-    title: "End-to-end encryption",
-    body: "Enable so only you can read your data.",
-  },
-];
 
 export function Landing() {
   // Disables the button and shows "Redirecting…" while we leave for Google
@@ -226,29 +205,8 @@ export function Landing() {
         </Text>
       </View>
 
-      {/* Feature cards */}
-      <View className="mt-9 flex flex-col gap-2.5">
-        <SectionHeader className="mb-1">Features</SectionHeader>
-        {FEATURES.map(({ icon: Icon, title, body }) => (
-          <View
-            key={title}
-            className="flex items-center gap-3.5 rounded-card bg-surface p-4 shadow-card flex-row"
-          >
-            <View className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-carrot-soft">
-              <Icon size={20} strokeWidth={2} color={colors.carrotDark} />
-            </View>
-            {/* flex-1: the web's copy shrinks inside the row by default, RN's
-                doesn't (flexShrink is 0 here). */}
-            <View className="flex-1">
-              <Text className="text-base font-semibold text-label">{title}</Text>
-              <Text className="text-sm leading-snug text-label-secondary">{body}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {/* Primary call-to-action. */}
-      <View className="mt-9 flex flex-col items-center gap-3">
+      {/* Sign in — the whole point of this screen now. */}
+      <View className="mt-8 flex flex-col items-center gap-3">
         <Text className="text-sm text-label-secondary">Free. No ads. 🥕</Text>
         {/* Apple requires its own button component and styling, and that it
             sit at least as prominently as any other sign-in option — hence
@@ -282,27 +240,23 @@ export function Landing() {
           </Text>
         </Press>
         {error && <Text className="text-sm font-medium text-danger">{error}</Text>}
-        {/* Full-width like the sign-in button so it's an easy mobile target;
-            a white fill stands out from the grey canvas while the dark text
-            keeps it legible and clearly secondary to the carrot CTA. */}
-        <Press
-          onPress={() => navigate("/legal")}
-          className="w-full rounded-pill bg-surface py-3.5 text-base font-semibold text-label-muted"
-        >
-          <Text className="text-center text-base font-semibold text-label-muted">
-            Privacy and Terms
-          </Text>
-        </Press>
-        {/* The community half of the Stats page is public — let visitors peek
-            at what the warren is up to before signing in. */}
-        <Press
-          onPress={() => navigate("/stats")}
-          className="w-full rounded-pill bg-surface py-3.5 text-base font-semibold text-label-muted"
-        >
-          <Text className="text-center text-base font-semibold text-label-muted">
-            Community stats
-          </Text>
-        </Press>
+        {/* Secondary, and deliberately quiet: on the web these were
+            full-width buttons competing for a cold visitor's attention. Here
+            sign-in is the only thing that matters, so they sit underneath as
+            plain links. */}
+        <View className="mt-1 flex flex-row items-center gap-2">
+          <Press noScale onPress={() => navigate("/legal")}>
+            <Text className="text-sm font-semibold text-label-secondary">
+              Privacy and Terms
+            </Text>
+          </Press>
+          <Text className="text-sm text-label-secondary">·</Text>
+          <Press noScale onPress={() => navigate("/stats")}>
+            <Text className="text-sm font-semibold text-label-secondary">
+              Community stats
+            </Text>
+          </Press>
+        </View>
       </View>
 
       <View className="flex-1" />
