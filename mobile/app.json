@@ -41,7 +41,7 @@
       "expo-localization",
       "expo-secure-store"
     ],
-    "owner": "nizarmah",
+    "owner": "taktekhq",
     "runtimeVersion": {
       "policy": "appVersion"
     }
