@@ -7,7 +7,6 @@ import {
   useState,
   type ComponentType,
   type ReactNode,
-  type Ref,
 } from "react";
 import {
   Alert,
@@ -71,9 +70,7 @@ type AnimatedListProps<P> = Omit<P, "onScroll"> & { onScroll?: ScrollHandlerProc
 const AnimatedSectionList = Animated.createAnimatedComponent(
   SectionList,
 ) as unknown as ComponentType<
-  AnimatedListProps<SectionListProps<HistoryGroup, TimelineSection>> & {
-    ref?: Ref<SectionList<HistoryGroup, TimelineSection>>;
-  }
+  AnimatedListProps<SectionListProps<HistoryGroup, TimelineSection>>
 >;
 
 const TABS = [
@@ -173,7 +170,6 @@ export function History() {
   // mounted across a switch and only the data changes. By category rides in a
   // single headerless section. Until the saved preference is read, no rows:
   // the right view is the first one that paints.
-  const listRef = useRef<SectionList<HistoryGroup, TimelineSection>>(null);
   const isTimeline = grouping === "timeline";
   const listSections = useMemo<TimelineSection[]>(() => {
     if (!hydrated || transactions.length === 0) return [];
@@ -185,9 +181,10 @@ export function History() {
   }, [hydrated, transactions.length, isTimeline, sections, groups]);
 
   // Switching views replaces the content wholesale: start it from the top and
-  // keep the gradient aligned with it.
+  // keep the gradient aligned with it. (A Reanimated-wrapped list exposes no
+  // scroll methods, so this only resets the gradient's offset; the list is
+  // already at the top because its data changed.)
   useEffect(() => {
-    listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: false });
     scrollY.value = 0;
   }, [grouping, scrollY]);
 
@@ -217,7 +214,6 @@ export function History() {
       </Animated.View>
 
       <AnimatedSectionList
-        ref={listRef}
         style={styles.list}
         contentContainerStyle={[
           styles.content,
