@@ -5,7 +5,7 @@ import {
   formatUsdCents,
   netCents,
   netColorClass,
-} from "./money.js";
+} from "./money";
 
 describe("formatUsdCents", () => {
   it("formats cents as USD with no sign", () => {

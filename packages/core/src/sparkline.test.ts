@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildAreaPath } from "./sparkline.js";
+import { buildAreaPath } from "./sparkline";
 
 describe("buildAreaPath", () => {
   it("returns null when there aren't two points to connect", () => {

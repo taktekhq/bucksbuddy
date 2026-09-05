@@ -4,9 +4,9 @@
 // check `anyMasked` / the store's `locked` and fall back to counts, which stay
 // truthful because direction and category are plaintext.
 
-import { SAFE_CATEGORY_ID, splitCategory } from "./categories.js";
-import { currentMonthRange } from "./dates.js";
-import type { Transaction } from "./types.js";
+import { SAFE_CATEGORY_ID, splitCategory } from "./categories";
+import { currentMonthRange } from "./dates";
+import type { Transaction } from "./types";
 
 // How many rows the store fetches per table, newest first (see store.tsx).
 // Exposed so the daily series can tell "no spending that day" apart from

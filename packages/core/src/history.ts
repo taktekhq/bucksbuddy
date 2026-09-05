@@ -11,9 +11,9 @@
 // Totals always go through `netCents` so signing stays consistent with the rest
 // of the app (see lib/money.ts).
 
-import { dayKey, dayLabel } from "./dates.js";
-import { netCents } from "./money.js";
-import type { Transaction } from "./types.js";
+import { dayKey, dayLabel } from "./dates";
+import { netCents } from "./money";
+import type { Transaction } from "./types";
 
 export type HistoryGroup = {
   // `${is_income}:${category}` — direction and the full stored id (so +/- and

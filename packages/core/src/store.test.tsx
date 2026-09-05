@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { makeSupabaseMock, type Handler } from "./test/supabaseMock.js";
-import { generateMasterKey, makeVerifier, wrapMasterKey } from "./crypto.js";
-import { encryptGoldValues, encryptTxValues } from "./e2e.js";
-import type { CacheSnapshot } from "./cache.js";
-import type { StoragePort } from "./storagePort.js";
-import type { Transaction } from "./types.js";
-import { StoreProvider, useStore } from "./store.js";
+import { makeSupabaseMock, type Handler } from "./test/supabaseMock";
+import { generateMasterKey, makeVerifier, wrapMasterKey } from "./crypto";
+import { encryptGoldValues, encryptTxValues } from "./e2e";
+import type { CacheSnapshot } from "./cache";
+import type { StoragePort } from "./storagePort";
+import type { Transaction } from "./types";
+import { StoreProvider, useStore } from "./store";
 
 type Res = { error: string | null };
 

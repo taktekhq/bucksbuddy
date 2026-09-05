@@ -12,14 +12,14 @@ import {
   generateMasterKey,
   unwrapMasterKey,
   wrapMasterKey,
-} from "./crypto.js";
-import { CRYPTO_COMPATIBILITY_VECTORS as VECTORS } from "./crypto-vectors.js";
+} from "./crypto";
+import { CRYPTO_COMPATIBILITY_VECTORS as VECTORS } from "./crypto-vectors";
 import {
   nobleDecryptString,
   nobleEncryptString,
   nobleUnwrapMasterKey,
   nobleWrapMasterKey,
-} from "./crypto-noble.js";
+} from "./crypto-noble";
 
 describe("crypto vectors: noble referee", () => {
   it("opens the frozen default-passphrase vault", async () => {

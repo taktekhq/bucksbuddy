@@ -1,4 +1,4 @@
-import type { Currency } from "./currency.js";
+import type { Currency } from "./currency";
 
 export type Transaction = {
   id: string;

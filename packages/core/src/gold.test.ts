@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fetchGoldUsdPerGram, formatGrams } from "./gold.js";
+import { fetchGoldUsdPerGram, formatGrams } from "./gold";
 
 const TROY_OUNCE_IN_GRAMS = 31.1034768;
 

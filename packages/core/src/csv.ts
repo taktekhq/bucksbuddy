@@ -1,9 +1,9 @@
-import type { Transaction } from "./types.js";
+import type { Transaction } from "./types";
 import {
   categoryLabel,
   categorySubLabel,
   splitCategory,
-} from "./categories.js";
+} from "./categories";
 
 function escapeCsv(value: string | number): string {
   const s = String(value);

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { loadCache, saveCache, clearCache, parseCacheSnapshot, CACHE_KEY } from "./cache.js";
-import type { CacheSnapshot } from "./cache.js";
-import type { StoragePort } from "./storagePort.js";
-import type { SafeGoldEntry, Transaction } from "./types.js";
+import { loadCache, saveCache, clearCache, parseCacheSnapshot, CACHE_KEY } from "./cache";
+import type { CacheSnapshot } from "./cache";
+import type { StoragePort } from "./storagePort";
+import type { SafeGoldEntry, Transaction } from "./types";
 
 // A minimal in-memory StoragePort, so this file exercises the real
 // (async) interface store.tsx/cache.ts are written against — not

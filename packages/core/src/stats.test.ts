@@ -9,8 +9,8 @@ import {
   topCategories,
   treatTransactions,
   weekendTransactions,
-} from "./stats.js";
-import type { Transaction } from "./types.js";
+} from "./stats";
+import type { Transaction } from "./types";
 
 // Fixtures are built through the local-time Date constructor (and noon, away
 // from midnight) so the local-day bucketing is deterministic in any timezone.

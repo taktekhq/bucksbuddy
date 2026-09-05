@@ -8,8 +8,8 @@
 // (see e2e.ts) — so the snapshot is no more exposed than the key that unlocks
 // it. It's only ever written while unlocked, and it's cleared on sign-out,
 // account deletion, and whenever a device turns out to be locked.
-import type { StoragePort } from "./storagePort.js";
-import type { SafeGoldEntry, Transaction } from "./types.js";
+import type { StoragePort } from "./storagePort";
+import type { SafeGoldEntry, Transaction } from "./types";
 
 // Bump when the cached shape changes, so an old snapshot is ignored rather than
 // fed to code that no longer understands it.

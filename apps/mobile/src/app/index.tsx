@@ -1,10 +1,11 @@
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { HomeScreen } from "@/screens/HomeScreen";
 import { LoginScreen } from "@/screens/LoginScreen";
 import { ResetScreen } from "@/screens/ResetScreen";
-import { TransactionsScreen } from "@/screens/TransactionsScreen";
 import { configurationError } from "@/lib/supabase";
+import { StoreProvider } from "@/lib/store";
 import { useSession } from "@/lib/useSession";
 
 export default function IndexScreen() {
@@ -35,7 +36,13 @@ export default function IndexScreen() {
     );
   }
 
-  return session ? <TransactionsScreen userId={session.user.id} /> : <LoginScreen />;
+  if (!session) return <LoginScreen />;
+
+  return (
+    <StoreProvider userId={session.user.id}>
+      <HomeScreen />
+    </StoreProvider>
+  );
 }
 
 const styles = StyleSheet.create({

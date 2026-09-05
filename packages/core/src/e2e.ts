@@ -15,8 +15,8 @@ import {
   makeVerifier,
   unwrapMasterKey,
   wrapMasterKey,
-} from "./crypto.js";
-import type { StoragePort } from "./storagePort.js";
+} from "./crypto";
+import type { StoragePort } from "./storagePort";
 
 export type E2EMode = "default" | "passphrase";
 

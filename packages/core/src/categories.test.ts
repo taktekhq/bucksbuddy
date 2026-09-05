@@ -13,7 +13,7 @@ import {
   splitCategory,
   subcategoriesFor,
   subcategoryLabel,
-} from "./categories.js";
+} from "./categories";
 
 describe("categoriesFor", () => {
   it("returns income or expense lists by direction", () => {

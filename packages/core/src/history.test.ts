@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { groupByCategory, groupByDay } from "./history.js";
-import { netCents } from "./money.js";
-import type { Transaction } from "./types.js";
+import { groupByCategory, groupByDay } from "./history";
+import { netCents } from "./money";
+import type { Transaction } from "./types";
 
 function tx(overrides: Partial<Transaction> = {}): Transaction {
   return {

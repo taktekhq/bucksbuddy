@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { makeSupabaseMock, type Handler } from "./test/supabaseMock.js";
-import type { StoragePort } from "./storagePort.js";
+import { makeSupabaseMock, type Handler } from "./test/supabaseMock";
+import type { StoragePort } from "./storagePort";
 
 // Real crypto, mocked database. Unlike before the extraction, the mock is
 // passed to each function directly (supabase is a parameter now, not an
@@ -15,7 +15,7 @@ import {
   makeVerifier,
   unwrapMasterKey,
   wrapMasterKey,
-} from "./crypto.js";
+} from "./crypto";
 import {
   cipherMask,
   clearStoredPassphrase,
@@ -29,7 +29,7 @@ import {
   loadVault,
   storeStoredPassphrase,
   unlockVault,
-} from "./e2e.js";
+} from "./e2e";
 
 function set(handlers: Record<string, Handler> = {}) {
   mock = makeSupabaseMock(handlers);

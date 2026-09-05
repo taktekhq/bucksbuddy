@@ -10,13 +10,13 @@ import {
 } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { clearCache, saveCache, type CacheSnapshot } from "./cache.js";
-import { DEFAULT_LBP_PER_USD } from "./currency.js";
-import { currentMonthRange } from "./dates.js";
-import { netCents } from "./money.js";
-import { SAFE_CATEGORY_ID } from "./categories.js";
-import { FETCH_CAP } from "./stats.js";
-import type { StoragePort } from "./storagePort.js";
+import { clearCache, saveCache, type CacheSnapshot } from "./cache";
+import { DEFAULT_LBP_PER_USD } from "./currency";
+import { currentMonthRange } from "./dates";
+import { netCents } from "./money";
+import { SAFE_CATEGORY_ID } from "./categories";
+import { FETCH_CAP } from "./stats";
+import type { StoragePort } from "./storagePort";
 import {
   cipherMask,
   clearStoredPassphrase,
@@ -31,7 +31,7 @@ import {
   storeStoredPassphrase,
   unlockVault,
   type E2EMode,
-} from "./e2e.js";
+} from "./e2e";
 import type {
   NewSafeGoldEntry,
   NewTransaction,
@@ -39,7 +39,7 @@ import type {
   SafeGoldEntryRow,
   Transaction,
   TransactionRow,
-} from "./types.js";
+} from "./types";
 
 type Result = { error: string | null };
 
