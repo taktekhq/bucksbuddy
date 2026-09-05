@@ -1,91 +1,30 @@
-import { forwardRef, useCallback, type ReactNode } from "react";
-import {
-  Pressable,
-  type GestureResponderEvent,
-  type PressableProps,
-  type StyleProp,
-  type View,
-  type ViewStyle,
-} from "react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
-import { motion } from "@/lib/theme";
+import { forwardRef, type ReactNode } from "react";
+import { Pressable, type PressableProps, type View } from "react-native";
 
-// The web's `.press` class: transform 0.1s ease, scale(0.97) while active —
-// plus `disabled:opacity-50` when the caller asks for it. Every tappable thing
-// in the app goes through this so the feel stays uniform. The scale is driven
-// on the UI thread by Reanimated, so it eases in and out instead of snapping.
-type Props = Omit<PressableProps, "style" | "children"> & {
-  style?: StyleProp<ViewStyle>;
-  /** Extra style while pressed (the web's `active:` classes). */
-  pressedStyle?: StyleProp<ViewStyle>;
-  /** Opacity while disabled — the web's `disabled:opacity-50` = 0.5. */
-  disabledOpacity?: number;
-  /** Turn the scale feedback off (plain `<button>` on the web, no `.press`). */
+// The web's `<button className="press …">`.
+//
+// `.press` is a CSS transition plus `:active { transform: scale(0.97) }`.
+// NativeWind gives Pressable the same thing: the `active:` variant fires on
+// press, and `transition`/`duration-*` drive it. Baked in here so every call
+// site can stay as close to the web's markup as possible — a component that
+// says `className="press …"` on the web says `<Press className="…">` here.
+//
+// Pass `noScale` for the web's plain `<button>` (no `.press` class).
+type Props = Omit<PressableProps, "children"> & {
+  className?: string;
   noScale?: boolean;
   children?: ReactNode;
 };
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const EASE = Easing.inOut(Easing.ease);
+const PRESS = "transition duration-100 active:scale-[0.97]";
 
 export const Press = forwardRef<View, Props>(function Press(
-  {
-    style,
-    pressedStyle,
-    disabled,
-    disabledOpacity,
-    noScale = false,
-    children,
-    onPressIn,
-    onPressOut,
-    ...rest
-  },
+  { className = "", noScale = false, children, ...rest },
   ref,
 ) {
-  const scale = useSharedValue(1);
-  const pressed = useSharedValue(0);
-
-  const animated = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handleIn = useCallback(
-    (e: GestureResponderEvent) => {
-      if (!noScale) scale.value = withTiming(0.97, { duration: motion.press, easing: EASE });
-      pressed.value = 1;
-      onPressIn?.(e);
-    },
-    [noScale, onPressIn, pressed, scale],
-  );
-  const handleOut = useCallback(
-    (e: GestureResponderEvent) => {
-      scale.value = withTiming(1, { duration: motion.press, easing: EASE });
-      pressed.value = 0;
-      onPressOut?.(e);
-    },
-    [onPressOut, pressed, scale],
-  );
-
   return (
-    <AnimatedPressable
-      ref={ref}
-      disabled={disabled}
-      onPressIn={handleIn}
-      onPressOut={handleOut}
-      style={({ pressed: isPressed }: { pressed: boolean }) => [
-        style,
-        animated,
-        isPressed && pressedStyle,
-        disabled && disabledOpacity != null && { opacity: disabledOpacity },
-      ]}
-      {...rest}
-    >
+    <Pressable ref={ref} className={`${noScale ? "" : PRESS} ${className}`} {...rest}>
       {children}
-    </AnimatedPressable>
+    </Pressable>
   );
 });

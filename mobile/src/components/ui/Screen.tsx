@@ -1,35 +1,23 @@
 import type { ReactNode, Ref } from "react";
-import {
-  ScrollView,
-  StyleSheet,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { colors, space } from "@/lib/theme";
+import { colors, type Gradient } from "@/lib/theme";
 
-// The page shell, in two layers:
+// The page shell — what `<main class="mx-auto flex min-h-full max-w-md …">` is
+// on the web, plus the two things a browser handles for us:
 //
-//   ScreenFrame — the full-screen backdrop: floor color, status-bar style, and
-//                 (for the dark rooms) the gradient painted over the first
-//                 few hundred points. Lists that virtualize (History) use the
-//                 frame directly and bring their own SectionList/FlatList.
-//   Screen      — ScreenFrame + a ScrollView + the centered `max-w-md` column
-//                 with safe-area padding. What `<main>` is on the web.
+//   • Safe areas. The web writes `pt-[calc(1rem+var(--safe-top))]`; there is no
+//     `env()` here, so the insets come from react-native-safe-area-context and
+//     are added to the padding.
+//   • The gradient floor. The web paints the gradient on the scrolling <main>
+//     and a `fixed inset-0` floor behind it in the gradient's terminal color,
+//     so a rubber-band bounce never flashes the light canvas. Same here.
 //
-// The web's gradient trick: the gradient sits on the scrolling content and a
-// fixed "floor" in the gradient's terminal color sits behind it, so an
-// overscroll bounce never flashes the light canvas. Home's savings tint is
-// the exception — it's viewport-fixed there (`gradientFixed`).
-export type Gradient = {
-  colors: readonly [string, string, ...string[]];
-  // Pixel stops, like the web's "0px, 220px, 460px".
-  stops: readonly number[];
-  floor: string;
-};
+// `ScreenFrame` is the backdrop on its own, for pages that bring their own
+// virtualized list instead of a ScrollView (History).
+export { type Gradient };
 
 export function GradientLayer({ gradient }: { gradient: Gradient }) {
   return (
@@ -51,13 +39,14 @@ export function ScreenFrame({
 }: {
   children: ReactNode;
   gradient?: Gradient;
+  /** Home's savings tint is viewport-fixed; the dark rooms scroll with content. */
   gradientFixed?: boolean;
   floor?: string;
   statusBar?: "light" | "dark";
 }) {
   const floorColor = floor ?? gradient?.floor ?? colors.canvas;
   return (
-    <View style={[styles.root, { backgroundColor: floorColor }]}>
+    <View style={{ flex: 1, backgroundColor: floorColor }}>
       <StatusBar style={statusBar} />
       {gradient && gradientFixed && <GradientLayer gradient={gradient} />}
       {children}
@@ -70,18 +59,12 @@ type Props = {
   gradient?: Gradient;
   gradientFixed?: boolean;
   floor?: string;
-  /** `gap-*` between the column's children (web default gap-5 = 20). */
-  gap?: number;
-  /** `px-*` (web default px-4 = 16). */
-  paddingX?: number;
-  /** Top/bottom padding before safe areas (web: 1rem top, 2rem bottom). */
-  paddingTop?: number;
-  paddingBottom?: number;
-  /** "light" = white status bar text, for the dark rooms. */
   statusBar?: "light" | "dark";
-  contentStyle?: StyleProp<ViewStyle>;
-  /** Center the column vertically (Landing's email flow, Reset). */
-  center?: boolean;
+  /**
+   * The web's `<main>` classes, verbatim — gaps, padding, text color, `justify-center`.
+   * `mx-auto max-w-md` and the safe-area padding are already applied.
+   */
+  className?: string;
   scrollRef?: Ref<ScrollView>;
 };
 
@@ -90,13 +73,8 @@ export function Screen({
   gradient,
   gradientFixed = false,
   floor,
-  gap = space(5),
-  paddingX = space(4),
-  paddingTop = 16,
-  paddingBottom = 32,
   statusBar = "dark",
-  contentStyle,
-  center = false,
+  className = "",
   scrollRef,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -104,29 +82,21 @@ export function Screen({
     <ScreenFrame gradient={gradient} gradientFixed={gradientFixed} floor={floor} statusBar={statusBar}>
       <ScrollView
         ref={scrollRef}
-        style={styles.root}
-        contentContainerStyle={styles.grow}
+        className="flex-1"
+        contentContainerClassName="grow"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        // iOS: scroll the focused input into view natively, like the browser
-        // does — no KeyboardAvoidingView jump.
+        // iOS scrolls the focused input into view natively, like the browser.
         automaticallyAdjustKeyboardInsets
         contentInsetAdjustmentBehavior="never"
         showsVerticalScrollIndicator={false}
       >
         {gradient && !gradientFixed && <GradientLayer gradient={gradient} />}
         <View
-          style={[
-            styles.column,
-            center && styles.center,
-            {
-              gap,
-              paddingHorizontal: paddingX,
-              paddingTop: paddingTop + insets.top,
-              paddingBottom: paddingBottom + insets.bottom,
-            },
-            contentStyle,
-          ]}
+          className={`mx-auto w-full max-w-md grow ${className}`}
+          // pt-[calc(…+var(--safe-top))] / pb-[calc(…+var(--safe-bottom))]:
+          // the class supplies the base padding, the inset is added on top.
+          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
         >
           {children}
         </View>
@@ -139,19 +109,3 @@ export function toLocations(stops: readonly number[]): [number, number, ...numbe
   const last = stops[stops.length - 1] || 1;
   return stops.map((s) => s / last) as [number, number, ...number[]];
 }
-
-// The `max-w-md` column, exported for list screens that lay out their own
-// header/footer/rows and want the same gutters.
-export const COLUMN_MAX_WIDTH = 448;
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  grow: { flexGrow: 1 },
-  center: { justifyContent: "center" },
-  column: {
-    flexGrow: 1,
-    width: "100%",
-    maxWidth: COLUMN_MAX_WIDTH,
-    alignSelf: "center",
-  },
-});

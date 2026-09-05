@@ -1,98 +1,124 @@
 # Porting contract — web (`../src`) → mobile (`src`)
 
-The mobile app must be **visually identical** to the PWA and feel **native-smooth**.
-Every screen/component in `src/` mirrors the file of the same name in `../src/`.
-Read the web file first, then port it line by line against this contract.
+**The rule that matters: keep the class names.** Every mobile file is its web
+counterpart with the elements swapped and the `className` strings left alone.
+`tailwind.config.js` here is a copy of the web's, so a class resolves to the
+same value in both. If you find yourself typing a number that appears in the
+web file as a class, stop — you are doing it wrong.
 
-## 1. Foundation you must use (do not reinvent)
+```tsx
+// web — src/screens/Home.tsx
+<div className="relative min-h-[188px] overflow-hidden rounded-card bg-surface px-5 py-5 shadow-card">
+  <p className="mt-1 text-[13px] font-medium text-label-secondary">{monthLabel()}</p>
+</div>
 
-| Web                                  | Mobile                                                                 |
-| ------------------------------------ | ---------------------------------------------------------------------- |
-| `<main class="mx-auto max-w-md …">`  | `<Screen>` from `components/ui/Screen` (scroll + column + safe areas)  |
-| dark page gradient + fixed floor     | `<Screen gradient={…}>`; `Gradient` = `{colors, stops(px), floor}`     |
-| `<header>` back chevron + title      | `<NavHeader title dark? tint?>` — `onBack` defaults to `back()`        |
-| any `<button class="press …">`       | `<Press>` from `components/ui/Press` (Reanimated scale 0.97, 100ms)    |
-| `<button>` without `.press`          | `<Press noScale>`                                                      |
-| `disabled:opacity-50`                | `<Press disabled disabledOpacity={0.5}>`                               |
-| `active:bg-…`                        | `<Press pressedStyle={{ backgroundColor }}>`                           |
-| `navigate("/x")`                     | `navigate("/x")` from `lib/router` (native stack push; "/" pops to root)|
-| back to previous page                | `back()` from `lib/router` (NavHeader does this by default)            |
-| `window.confirm(msg)`                | `Alert.alert(msg, undefined, [Cancel, {Delete, destructive}])`         |
-| tokens: colors/radius/space/text     | `lib/theme.ts` — `colors`, `radius`, `space(n)`, `text.sm`, `weight`   |
-| `shadow-card` / `shadow-segment` / `shadow-carrot` | `boxShadow: shadows.card` etc. (string; layered CSS shadow)  |
-| `ring-1 ring-inset ring-white/5`     | `boxShadow: shadows.ringWhite5` (inset — never a `borderWidth`)        |
-| `font-display uppercase`             | `...display` (never add `fontWeight` to Grobold)                       |
-| `font-numeric tabular-nums`          | `...numeric`                                                           |
-| `text-white/55`, `bg-black/25`       | `white(0.55)`, `black(0.25)`                                           |
-| `${color}1A` / `${color}26` / `${color}33` | `withAlpha(color, 0.1 / 0.15 / 0.2)`                              |
-| `tracking-wide`                      | `letterSpacing: trackingWide(fontSize)`                                |
-| `leading-none/tight/snug/relaxed`    | `lineHeight: leading.tight(fontSize)` etc.                             |
-| lucide-react icon `className="h-5 w-5" strokeWidth={2}` | `<Icon size={20} strokeWidth={2} color={…} />`      |
-| `<svg>`                              | `react-native-svg`                                                     |
-| `Intl`/`toLocaleDateString`          | unchanged (Hermes has Intl)                                            |
+// mobile — same classes, different elements
+<View className="relative min-h-[188px] overflow-hidden rounded-card bg-surface px-5 py-5 shadow-card">
+  <Text className="mt-1 text-[13px] font-medium text-label-secondary">{monthLabel()}</Text>
+</View>
+```
 
-## 2. Spacing and type — exact Tailwind values
+## 1. Element mapping
 
-- `p-N` = `N*4` pt (`p-3.5` = 14, `p-1.5` = 6, `gap-2.5` = 10).
-- Text sizes: `text-xs` 12/16, `text-sm` 14/20, `text-base` 16/24, `text-lg` 18/28,
-  `text-xl` 20/28, `text-2xl` 24/32, `text-3xl` 30/36, `text-4xl` 36/40,
-  `text-5xl` 48/48, `text-6xl` 60/60. Arbitrary `text-[13px]` → `text["13"]`.
-  Use the `text.*` objects from theme so fontSize + lineHeight come together.
-- Weights: `font-medium` 500, `font-semibold` 600, `font-bold` 700 (never on Grobold).
-- `rounded-card` 22, `rounded-pill` 9999, `rounded-t-[28px]` 28, `rounded-lg` 8.
-- `max-w-md` 448 — `Screen` handles it.
-- `h-9 w-9` 36, `h-10 w-10` 40, `h-8 w-8` 32, `h-11 w-11` 44, `h-7 w-7` 28.
-- Two-column grids (`grid-cols-2 gap-2`): measure the container with `onLayout`
-  and compute `(width - gap) / 2` — do not guess percentages.
+| Web | Mobile | Notes |
+| --- | --- | --- |
+| `<div>` | `<View>` | |
+| `<p> <span> <h1> <h2> <h3>` | `<Text>` | all text must be inside a `Text` |
+| `<button>` | `<Press>` (`components/ui/Press`) | carries the `.press` scale |
+| `<button>` without `.press` | `<Press noScale>` | |
+| `<input>` | `<TextInput>` | |
+| `<form onSubmit>` | no element — call the handler from `onSubmitEditing` / the button | |
+| `<ul> <li>` | `<View>` | |
+| `<a href>` | `<Text onPress={() => Linking.openURL(href)}>` | keep the same classes |
+| `<main>` | `<Screen className="…">` | pass `<main>`'s classes through |
+| `<svg>` | `react-native-svg` | |
+| `onClick` | `onPress` | |
+| `aria-label` | `accessibilityLabel` | |
+| `disabled` | `disabled` (works on Press) | |
+| `window.confirm(msg)` | `Alert.alert(msg, undefined, [Cancel, {Delete, destructive}])` | |
+| `localStorage` | already ported in `lib/` | don't touch |
 
-## 3. Shadows, rings, clipping — the rules that were wrong before
+## 2. The five things that are not a straight swap
 
-- Shadows are `boxShadow` **strings** from `theme.shadows`. Never `shadowColor`/`elevation`.
-- A view that clips (`overflow: "hidden"`) must not also carry the shadow: put the
-  shadow on a wrapper **around** the clipping view, both with the same `borderRadius`
-  and the wrapper with the card's `backgroundColor`.
-- **Swipe rows**: the outer frame is `overflow: hidden` + `borderRadius: radius.card`.
-  The action buttons (edit/delete) are absolutely positioned, full-height rectangles
-  behind. The sliding content is a **rectangle with no borderRadius** — the frame
-  clips it. (On the web: `relative overflow-hidden rounded-card` outer, plain
-  `motion.div` inner.) The old port put a radius on the content and left gaps.
-- Rings are inset `boxShadow`s, not borders, so they don't change layout.
+**a. Text styles do not inherit.** On the web, `<main className="text-white">`
+colors every `<p>` inside it. React Native only inherits from `Text` to nested
+`Text`. So when a container carries a text class (`text-white`, `text-label`,
+`font-numeric`, `text-sm`…), copy that class onto each `Text` inside it. Keep it
+on the container too — harmless, and it keeps the diff against the web small.
 
-## 4. Motion — what "smooth" means here
+**b. Icons take props, not classes.** `lucide-react-native` sizes and colors
+through props:
 
-- Press feedback: `<Press>` (already animated). Use it for every button.
-- Segmented toggles with the web's `transition` class: animate the active
-  background with Reanimated (`interpolateColor` over `motion.transition` = 150ms),
-  not an instant swap.
-- Swipe rows: gesture-handler `Pan` + Reanimated `translateX` on the UI thread; snap
-  with `withTiming(target, {duration: motion.snap, easing: Easing.bezier(...motion.snapEase)})`;
-  auto-close after 2000ms; velocity projection `x + vx * 0.08`; clamp to ±76 with
-  0.06 elasticity past the limit. A tap on an open row closes it.
-- Expand/collapse (HistoryStack): `Animated.View layout={LinearTransition.duration(220)}`
-  plus `entering={FadeIn.duration(220)}` on revealed rows.
-- Sheets: slide from bottom 250ms with `Easing.bezier(0.2, 0.8, 0.2, 1)`, scrim
-  fades, drag-down to dismiss (>120px or velocity >600).
-- Never use `LayoutAnimation` from RN; use Reanimated layout animations.
+```tsx
+// web
+<ChevronLeft className="h-6 w-6" strokeWidth={2.5} />        // color from text-carrot on the parent
+// mobile
+<ChevronLeft size={24} strokeWidth={2.5} color={colors.carrot} />
+```
+`h-N w-N` → `size={N * 4}`. The color comes from `colors` in `lib/theme` (or a
+per-category value the web already computes in JS).
+
+**c. `framer-motion` → `react-native-reanimated`.** `motion.div` with
+`initial/animate/exit` → `Animated.View` with `entering/exiting/layout`
+(`FadeIn`, `FadeOut`, `LinearTransition`). Drag (`drag="x"`, `dragConstraints`)
+→ `react-native-gesture-handler` `Gesture.Pan()` driving a shared value. Timings
+and easings are in `lib/theme`'s `motion`. Swipe rows and the category sheet are
+the only places this comes up.
+
+**d. Safe areas.** `var(--safe-top)` / `env(safe-area-inset-*)` don't exist.
+`Screen` already adds the insets; anywhere else use `useSafeAreaInsets()`.
+
+**e. Fixed positioning.** `fixed inset-0` (the gradient floors) is handled by
+`Screen`/`ScreenFrame` — pass `gradient` and, for Home's savings tint,
+`gradientFixed`. Don't hand-roll it.
+
+## 3. Foundation — use it, don't rebuild it
+
+- `components/ui/Screen` — `Screen` (scroll + centered column + safe areas +
+  gradient) and `ScreenFrame` (backdrop only, for list screens). `GradientLayer`
+  if you need the gradient inside your own list.
+- `components/ui/Press` — every tappable thing.
+- `lib/router` — `navigate("/x")` and `back()`, same routes as the web's hash
+  router, on a native stack (`App.tsx`). Native push/pop and swipe-back come free.
+- `lib/theme` — `colors` (for icon/gradient/placeholder **props** only),
+  the four `Gradient`s, `motion` durations, `withAlpha`.
+- Everything in `lib/` other than that is the web's logic, already ported. Don't
+  edit it.
+
+## 4. Classes that need care
+
+- `shadow-card` / `shadow-segment` / `shadow-carrot` — defined in our config,
+  they work. Don't substitute `boxShadow` or `elevation`.
+- `ring-1 ring-inset ring-white/5` — NativeWind maps ring to a box shadow. If a
+  ring doesn't render over an opaque child, use `border` + a matching inset,
+  and say so in a comment.
+- `backdrop-blur` — not supported. Skip it (the Safe's cards look fine without).
+- `divide-y` — not supported. Put `border-t border-separator` on each row after
+  the first.
+- `truncate` → `numberOfLines={1}` on the `Text` (keep the class too).
+- `outline-none`, `cursor-*`, `select-none`, `-webkit-*` — browser-only, drop.
+- `transition` / `duration-*` / `active:*` — supported, keep them.
+- Percentage widths inside a `flex-wrap` grid (`grid-cols-2 gap-2`): React Native
+  has no CSS grid. Use `flex-row flex-wrap` and give children an explicit width
+  measured with `onLayout` — `(width - gap) / 2` — or `flex-1` in explicit rows.
 
 ## 5. Performance
 
-- Long lists (History, 500 rows) must virtualize: `SectionList`/`FlatList` with
-  `ListHeaderComponent`, inside `ScreenFrame` (not `Screen`). Rows must be
-  memoized (`React.memo`) and keyed by id. `initialNumToRender` ≈ 12.
-- Never create Reanimated shared values per row *outside* the row component.
-- Keep `useMemo` on grouping/aggregation exactly as the web does.
+- The History page renders every transaction (up to 500) — it must virtualize
+  (`SectionList`/`FlatList`), not map over an array. Rows `React.memo`'d,
+  `keyExtractor` stable, callbacks `useCallback`'d.
+- Everything else maps like the web does; the lists are short.
 
 ## 6. Copy and behaviour
 
-- Every string, placeholder, label, empty state and error message is copied
-  verbatim from the web file (including "Nothin' here yet, Doc.").
-- Every conditional (locked, masked, loading, empty, LBP hint…) is preserved.
-- Analytics: same `posthog.capture` events with the same properties.
-- Status bar: dark rooms pass `statusBar="light"` to `Screen`/`ScreenFrame`.
+Every string, placeholder, empty state and error message comes over verbatim
+("Nothin' here yet, Doc."). Every conditional (locked, masked, loading, LBP
+hint) is preserved. Same `posthog.capture` events with the same properties.
 
 ## 7. Done means
 
-- `npx tsc --noEmit` passes in `mobile/`.
-- No `shadowColor`, `elevation`, `borderWidth`-as-ring, or `KeyboardAvoidingView`.
-- A reader comparing the web file and the mobile file side by side finds the
-  same elements in the same order with the same numbers.
+- `npx tsc --noEmit` passes.
+- No `StyleSheet.create` for anything a class can express. (`StyleSheet` is fine
+  for gradient layers, absolute fills, and measured widths.)
+- Reading the web file and the mobile file side by side, the `className` strings
+  match line for line.
