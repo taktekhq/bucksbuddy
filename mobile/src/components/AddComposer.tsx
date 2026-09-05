@@ -1,11 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
-import Animated, {
-  interpolateColor,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import { Text, TextInput, View } from "react-native";
 import { ChevronRight, StickyNote, Tag } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
 import { CategorySheet } from "@/components/ui/CategorySheet";
@@ -14,16 +8,7 @@ import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
 import { formatUsdCents } from "@/lib/money";
 import posthog from "@/lib/posthog";
-import {
-  colors,
-  motion,
-  numeric,
-  radius,
-  space,
-  text,
-  trackingWide,
-  weight,
-} from "@/lib/theme";
+import { colors } from "@/lib/theme";
 import type { Transaction } from "@/types/db";
 
 const INCOME_COLOR = "#34C759";
@@ -86,19 +71,6 @@ export function AddComposer({
   const usdCents = toUsdCents(amount, currency, lbpPerUsd);
   const canSave = category !== null && amount > 0 && !saving;
 
-  // The CTA's `transition`: blend bg-separator ↔ bg-carrot (and the label's
-  // grey ↔ white) over 150ms instead of flipping.
-  const ready = useSharedValue(canSave ? 1 : 0);
-  useEffect(() => {
-    ready.value = withTiming(canSave ? 1 : 0, { duration: motion.transition });
-  }, [canSave, ready]);
-  const ctaStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(ready.value, [0, 1], [colors.separator, colors.carrot]),
-  }));
-  const ctaLabelStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(ready.value, [0, 1], [colors.labelSecondary, colors.white]),
-  }));
-
   function changeDirection(next: boolean) {
     setIsIncome(next);
     setCategory(null);
@@ -112,7 +84,9 @@ export function AddComposer({
   async function save() {
     // Defensive guard: the CTA is disabled unless canSave, so this never
     // returns in practice — it's here for safety and to narrow `category`.
+    /* v8 ignore start */
     if (!canSave || category === null) return;
+    /* v8 ignore stop */
     setSaving(true);
     setError(null);
 
@@ -143,7 +117,8 @@ export function AddComposer({
         currency,
       });
       onClearEdit();
-    } else {
+    }
+    else {
       posthog.capture("transaction_added", {
         category,
         is_income: isIncome,
@@ -170,11 +145,11 @@ export function AddComposer({
       : `${editing ? "Save" : "Add"} ${amountLabel}`;
 
   return (
-    <View style={styles.composer}>
+    <View className="flex flex-col gap-3 px-4 pb-5 pt-4">
       {/* AMOUNT — always visible, edited with the native keyboard. */}
-      <View style={[styles.field, styles.fieldRoomy]}>
-        <View style={[styles.badge, styles.badgeSoft]}>
-          <Text style={styles.symbol}>{SYMBOL[currency]}</Text>
+      <View className="flex flex-row items-center gap-3 rounded-card border border-separator px-4 py-3.5">
+        <View className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-base font-bold text-carrot">
+          <Text className="text-base font-bold text-carrot">{SYMBOL[currency]}</Text>
         </View>
         <TextInput
           keyboardType="decimal-pad"
@@ -183,49 +158,62 @@ export function AddComposer({
           placeholder="0.00"
           placeholderTextColor={colors.labelSecondary}
           accessibilityLabel="Amount"
-          style={styles.amount}
+          className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-label placeholder:text-label-secondary"
         />
         <Press
           onPress={() => setCurrency((c) => (c === "USD" ? "LBP" : "USD"))}
           accessibilityLabel="Switch currency"
-          style={styles.currency}
-          pressedStyle={styles.currencyPressed}
+          className="shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-grouped"
         >
-          <Text style={styles.currencyText}>{currency}</Text>
+          <Text className="text-sm font-bold text-label-secondary">{currency}</Text>
         </Press>
       </View>
       {currency === "LBP" && amount > 0 && (
-        <Text style={styles.approx}>≈ {formatUsdCents(usdCents)}</Text>
+        <Text className="-mt-1 px-1 text-xs text-label-secondary">
+          ≈ {formatUsdCents(usdCents)}
+        </Text>
       )}
 
       {/* CATEGORY — wide card; opens the sheet. Shows the pick + direction. */}
       {category && SelectedIcon ? (
-        <View style={styles.field}>
-          <View style={[styles.badge, { backgroundColor: catColor }]}>
+        <View className="flex flex-row items-center gap-3 rounded-card border border-separator px-4 py-3">
+          <View
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
+            style={{ backgroundColor: catColor }}
+          >
             <SelectedIcon size={20} strokeWidth={2} color={colors.white} />
           </View>
-          <View style={styles.body}>
-            <Text style={[styles.direction, { color: dirColor }]}>
+          <View className="min-w-0 flex-1">
+            <Text
+              className="text-[11px] font-semibold uppercase tracking-wide"
+              style={{ color: dirColor }}
+            >
               {isIncome ? "Income" : "Expense"}
             </Text>
-            <Text style={styles.strong} numberOfLines={1}>
+            <Text className="truncate font-bold text-label" numberOfLines={1}>
               {categoryLabel(category)}
             </Text>
           </View>
-          <Press onPress={() => setSheetOpen(true)} style={styles.change}>
-            <Text style={styles.changeText}>Change ›</Text>
+          <Press
+            onPress={() => setSheetOpen(true)}
+            className="shrink-0 rounded-pill border border-carrot px-3 py-1 text-sm font-semibold text-carrot"
+          >
+            <Text className="text-sm font-semibold text-carrot">Change ›</Text>
           </Press>
         </View>
       ) : (
-        <Press onPress={() => setSheetOpen(true)} style={styles.addCategory}>
-          <View style={[styles.badge, styles.badgeSoft]}>
+        <Press
+          onPress={() => setSheetOpen(true)}
+          className="flex w-full flex-row items-center gap-3 rounded-card border border-dashed border-carrot/40 bg-carrot-soft/40 px-4 py-3.5"
+        >
+          <View className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-carrot">
             <Tag size={20} strokeWidth={2} color={colors.carrot} />
           </View>
-          <View>
-            <Text style={styles.strong}>Add Category</Text>
-            <Text style={styles.hint}>Income or expense</Text>
+          <View className="text-left">
+            <Text className="font-bold text-label">Add Category</Text>
+            <Text className="text-sm text-label-secondary">Income or expense</Text>
           </View>
-          <View style={styles.trailing}>
+          <View className="ml-auto shrink-0">
             <ChevronRight size={20} strokeWidth={2} color={colors.labelSecondary} />
           </View>
         </Press>
@@ -233,7 +221,7 @@ export function AddComposer({
 
       {/* NOTE — optional, available once a category is chosen. */}
       {category && (
-        <View style={styles.field}>
+        <View className="flex flex-row items-center gap-3 rounded-card border border-separator px-4 py-3">
           <StickyNote size={20} strokeWidth={2} color={colors.labelSecondary} />
           <TextInput
             value={note}
@@ -242,23 +230,35 @@ export function AddComposer({
             placeholderTextColor={colors.labelSecondary}
             accessibilityLabel="Note"
             maxLength={140}
-            style={styles.note}
+            className="min-w-0 flex-1 bg-transparent text-base text-label placeholder:text-label-secondary"
           />
         </View>
       )}
 
       {/* CTA — contextual, shows the amount when ready. */}
-      <Press onPress={save} disabled={!canSave} style={styles.ctaPress}>
-        <Animated.View style={[styles.cta, ctaStyle]}>
-          <Animated.Text style={[styles.ctaText, ctaLabelStyle]}>{cta}</Animated.Text>
-        </Animated.View>
+      <Press
+        onPress={save}
+        disabled={!canSave}
+        className={`mt-1 w-full rounded-pill py-3.5 text-lg font-semibold text-white transition ${
+          canSave ? "bg-carrot" : "bg-separator text-label-secondary"
+        }`}
+      >
+        <Text
+          className={`text-center text-lg font-semibold transition ${
+            canSave ? "text-white" : "text-label-secondary"
+          }`}
+        >
+          {cta}
+        </Text>
       </Press>
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <Text className="text-center text-sm font-medium text-danger">{error}</Text>
+      )}
       {editing && (
-        <View style={styles.center}>
-          <Press onPress={onClearEdit} style={styles.cancel}>
-            <Text style={styles.cancelText}>Cancel edit</Text>
+        <View className="text-center">
+          <Press onPress={onClearEdit} className="py-1 text-sm text-carrot">
+            <Text className="text-center text-sm text-carrot">Cancel edit</Text>
           </Press>
         </View>
       )}
@@ -274,128 +274,3 @@ export function AddComposer({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  // flex flex-col gap-3 px-4 pb-5 pt-4
-  composer: {
-    gap: space(3),
-    paddingHorizontal: space(4),
-    paddingBottom: space(5),
-    paddingTop: space(4),
-  },
-  // flex items-center gap-3 rounded-card border border-separator px-4 py-3
-  field: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space(3),
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.separator,
-    paddingHorizontal: space(4),
-    paddingVertical: space(3),
-  },
-  // py-3.5 (the amount field)
-  fieldRoomy: { paddingVertical: space(3.5) },
-  // h-10 w-10 rounded-full
-  badge: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeSoft: { backgroundColor: colors.carrotSoft },
-  // text-base font-bold text-carrot
-  symbol: { ...text.base, fontWeight: weight.bold, color: colors.carrot },
-  // min-w-0 flex-1 font-numeric text-3xl font-bold tabular-nums text-label
-  amount: {
-    ...numeric,
-    ...text["3xl"],
-    flex: 1,
-    minWidth: 0,
-    fontWeight: weight.bold,
-    color: colors.label,
-    padding: 0,
-  },
-  // rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-grouped
-  currency: {
-    borderRadius: radius.lg,
-    paddingHorizontal: space(2),
-    paddingVertical: space(1),
-  },
-  currencyPressed: { backgroundColor: colors.grouped },
-  currencyText: { ...text.sm, fontWeight: weight.bold, color: colors.labelSecondary },
-  // -mt-1 px-1 text-xs text-label-secondary
-  approx: {
-    marginTop: -space(1),
-    paddingHorizontal: space(1),
-    ...text.xs,
-    color: colors.labelSecondary,
-  },
-  body: { flex: 1, minWidth: 0 },
-  // text-[11px] font-semibold uppercase tracking-wide
-  direction: {
-    ...text["11"],
-    fontWeight: weight.semibold,
-    textTransform: "uppercase",
-    letterSpacing: trackingWide(11),
-  },
-  // font-bold text-label
-  strong: { ...text.base, fontWeight: weight.bold, color: colors.label },
-  // text-sm text-label-secondary
-  hint: { ...text.sm, color: colors.labelSecondary },
-  // rounded-pill border border-carrot px-3 py-1 text-sm font-semibold text-carrot
-  change: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.carrot,
-    paddingHorizontal: space(3),
-    paddingVertical: space(1),
-  },
-  changeText: { ...text.sm, fontWeight: weight.semibold, color: colors.carrot },
-  // flex w-full items-center gap-3 rounded-card border border-dashed
-  // border-carrot/40 bg-carrot-soft/40 px-4 py-3.5
-  addCategory: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space(3),
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "rgba(245,99,0,0.4)",
-    backgroundColor: "rgba(255,241,230,0.4)",
-    paddingHorizontal: space(4),
-    paddingVertical: space(3.5),
-  },
-  trailing: { marginLeft: "auto" },
-  // min-w-0 flex-1 text-base text-label
-  note: {
-    ...text.base,
-    flex: 1,
-    minWidth: 0,
-    color: colors.label,
-    padding: 0,
-  },
-  // mt-1 w-full rounded-pill
-  ctaPress: { marginTop: space(1), width: "100%", borderRadius: radius.pill },
-  // py-3.5, bg animated
-  cta: {
-    borderRadius: radius.pill,
-    paddingVertical: space(3.5),
-    alignItems: "center",
-  },
-  // text-lg font-semibold
-  ctaText: { ...text.lg, fontWeight: weight.semibold },
-  // text-center text-sm font-medium text-danger
-  error: {
-    ...text.sm,
-    textAlign: "center",
-    fontWeight: weight.medium,
-    color: colors.danger,
-  },
-  center: { alignItems: "center" },
-  // py-1 text-sm text-carrot
-  cancel: { paddingVertical: space(1) },
-  cancelText: { ...text.sm, color: colors.carrot },
-});

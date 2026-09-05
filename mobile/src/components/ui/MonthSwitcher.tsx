@@ -1,8 +1,7 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
-import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { Press } from "@/components/ui/Press";
-import { colors, display, motion, radius, text, trackingWide, white } from "@/lib/theme";
+import { colors } from "@/lib/theme";
 
 // Pages a month-scoped view between months: a left chevron that walks back as
 // far as there's data, a centered month label, and a right chevron that returns
@@ -22,70 +21,30 @@ export function MonthSwitcher({
   canNext: boolean;
 }) {
   return (
-    <View style={styles.bar}>
-      <Chevron enabled={canPrev} onPress={onPrev} accessibilityLabel="Previous month">
+    // The web's `flex` is a row; React Native's default axis is the column, so
+    // `flex-row` rides along with it wherever the web meant a row.
+    <View className="flex flex-row items-center justify-between rounded-card bg-white/10 px-2 py-1.5">
+      <Press
+        onPress={onPrev}
+        disabled={!canPrev}
+        accessibilityLabel="Previous month"
+        className="-m-1 p-2 text-carrot transition disabled:opacity-25"
+      >
+        {/* `h-5 w-5` → size={20}; the color the web took from `text-carrot`
+            on the button is a prop here (PORTING §2b). */}
         <ChevronLeft size={20} strokeWidth={2.5} color={colors.carrot} />
-      </Chevron>
-      <Text style={styles.label}>{label}</Text>
-      <Chevron enabled={canNext} onPress={onNext} accessibilityLabel="Next month">
+      </Press>
+      <Text className="font-display text-sm font-bold uppercase tracking-wide text-white/90">
+        {label}
+      </Text>
+      <Press
+        onPress={onNext}
+        disabled={!canNext}
+        accessibilityLabel="Next month"
+        className="-m-1 p-2 text-carrot transition disabled:opacity-25"
+      >
         <ChevronRight size={20} strokeWidth={2.5} color={colors.carrot} />
-      </Chevron>
+      </Press>
     </View>
   );
 }
-
-// `press -m-1 p-2 text-carrot transition disabled:opacity-25` — the disabled
-// fade eases over the web's `transition` (150ms) instead of snapping, so
-// paging to the present dims the right chevron smoothly.
-function Chevron({
-  enabled,
-  onPress,
-  accessibilityLabel,
-  children,
-}: {
-  enabled: boolean;
-  onPress: () => void;
-  accessibilityLabel: string;
-  children: React.ReactNode;
-}) {
-  const fade = useAnimatedStyle(
-    () => ({
-      opacity: withTiming(enabled ? 1 : 0.25, { duration: motion.transition }),
-    }),
-    [enabled],
-  );
-  return (
-    <Animated.View style={[styles.slot, fade]}>
-      <Press
-        onPress={onPress}
-        disabled={!enabled}
-        accessibilityLabel={accessibilityLabel}
-        accessibilityState={{ disabled: !enabled }}
-        hitSlop={6}
-        style={styles.button}
-      >
-        {children}
-      </Press>
-    </Animated.View>
-  );
-}
-
-const styles = StyleSheet.create({
-  bar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: radius.card,
-    backgroundColor: white(0.1),
-    paddingHorizontal: 8, // px-2
-    paddingVertical: 6, // py-1.5
-  },
-  slot: { margin: -4 }, // -m-1
-  button: { padding: 8 }, // p-2
-  label: {
-    ...display,
-    ...text.sm,
-    letterSpacing: trackingWide(14),
-    color: white(0.9),
-  },
-});

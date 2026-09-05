@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -10,25 +10,23 @@ import Animated, {
 } from "react-native-reanimated";
 import { Trash2 } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
-import { colors, motion, radius } from "@/lib/theme";
+import { colors, motion } from "@/lib/theme";
 
 // Swipe a row left to reveal a Delete action — same mechanic as the main
 // HistoryList, but delete-only (no edit). The content must be opaque so the
-// action stays hidden until revealed. `style` is the web's `className` on the
-// sliding content: keep it a plain rectangle (background, padding, ring) —
-// the frame does the rounding and clipping.
+// action stays hidden until revealed.
 const ACTION_W = 76; // px revealed
 const AUTO_RESET_MS = 2000; // close an open row if no action is taken
 const SNAP = { duration: motion.snap, easing: Easing.bezier(...motion.snapEase) };
 
 export function SwipeToDelete({
   onDelete,
-  style,
+  className = "",
   deleteColor = "#FF3B30",
   children,
 }: {
   onDelete: () => void;
-  style?: StyleProp<ViewStyle>;
+  className?: string;
   deleteColor?: string;
   children: ReactNode;
 }) {
@@ -72,6 +70,8 @@ export function SwipeToDelete({
       x.value = withTiming(target, SNAP);
       runOnJS(armResetTimer)(target);
     };
+    // The offsets keep the row usable inside a scrolling page: horizontal
+    // intent activates the pan, vertical drift fails it back to the scroll.
     const pan = Gesture.Pan()
       .activeOffsetX([-8, 8])
       .failOffsetY([-10, 10])
@@ -83,7 +83,8 @@ export function SwipeToDelete({
       })
       .onUpdate((e) => {
         const next = startX.value + e.translationX;
-        // dragConstraints { left: -ACTION_W, right: 0 }, dragElastic 0.06.
+        // dragConstraints { left: -ACTION_W, right: 0 }, dragElastic 0.06,
+        // no momentum.
         const clamped = Math.max(-ACTION_W, Math.min(0, next));
         x.value = clamped + (next - clamped) * 0.06;
       })
@@ -93,11 +94,14 @@ export function SwipeToDelete({
         else snap(0);
       })
       .onFinalize((_e, success) => {
+        // A drag cancelled mid-way (the page took the touch) must not leave
+        // the row hanging between positions.
         if (success) return;
         const v = x.value;
         if (v === 0 || v === -ACTION_W) return;
         snap(v <= -ACTION_W / 2 ? -ACTION_W : 0);
       });
+    // The web's `onClick` on the content: a tap on an open row closes it.
     const tap = Gesture.Tap().onEnd(() => {
       if (x.value !== 0) snap(0);
     });
@@ -109,7 +113,7 @@ export function SwipeToDelete({
   }));
 
   return (
-    <View style={styles.frame}>
+    <View className="relative overflow-hidden rounded-card">
       {/* Delete revealed by swiping left. */}
       <Press
         noScale
@@ -118,29 +122,19 @@ export function SwipeToDelete({
           snapTo(0);
           onDelete();
         }}
-        style={[styles.action, { backgroundColor: deleteColor }]}
+        className="absolute inset-y-0 right-0 flex items-center justify-center text-white"
+        style={{ width: ACTION_W, backgroundColor: deleteColor }}
       >
         <Trash2 size={20} strokeWidth={2} color={colors.white} />
       </Press>
 
+      {/* The sliding content is the last child, so the frame's clipping keeps
+          the action hidden behind it until it moves. */}
       <GestureDetector gesture={gesture}>
-        <Animated.View style={[style, sliding]}>{children}</Animated.View>
+        <Animated.View style={sliding} className={`relative ${className}`}>
+          {children}
+        </Animated.View>
       </GestureDetector>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  // relative overflow-hidden rounded-card
-  frame: { position: "relative", overflow: "hidden", borderRadius: radius.card },
-  // absolute inset-y-0 right-0 flex items-center justify-center text-white
-  action: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    right: 0,
-    width: ACTION_W,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});

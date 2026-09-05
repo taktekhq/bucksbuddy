@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -13,7 +20,6 @@ import { ChevronLeft } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
 import { InOutToggle } from "@/components/ui/InOutToggle";
 import { CategoryGrid } from "@/components/ui/CategoryGrid";
-import { COLUMN_MAX_WIDTH } from "@/components/ui/Screen";
 import {
   categoriesFor,
   categoryColor,
@@ -23,17 +29,7 @@ import {
   splitCategory,
   subcategoriesFor,
 } from "@/lib/categories";
-import {
-  black,
-  colors,
-  motion,
-  radius,
-  shadows,
-  space,
-  text,
-  weight,
-  withAlpha,
-} from "@/lib/theme";
+import { colors, motion } from "@/lib/theme";
 
 type Props = {
   open: boolean;
@@ -54,6 +50,11 @@ const ELASTIC_BOTTOM = 0.6;
 // toggle pinned at the bottom. Step 2 (only for categories that have them): the
 // subcategory picker, reached by tapping a category with a dot. Drag down to
 // dismiss.
+//
+// framer-motion's AnimatePresence is a Modal that stays mounted a beat after
+// `open` flips off so the exit slide can play; the scrim and the sheet are
+// Animated.Views carrying nothing but opacity/translateY, with every class name
+// on a plain View inside them (Reanimated's views aren't className-aware).
 export function CategorySheet({
   open,
   isIncome,
@@ -66,11 +67,9 @@ export function CategorySheet({
   const win = useWindowDimensions();
   // Which parent's subcategories are currently shown (null = the grid step).
   const [expanded, setExpanded] = useState<string | null>(null);
-  // The Modal stays mounted a beat after `open` flips off so the exit slide
-  // can play — AnimatePresence's job on the web.
   const [mounted, setMounted] = useState(open);
 
-  // `y: "100%"` — the sheet's own height. Until it's measured, the window
+  // `y: "100%"` is the sheet's own height; until it's measured the window
   // height is a safe "offscreen".
   const sheetHeight = useSharedValue(win.height);
   const y = useSharedValue(win.height);
@@ -91,9 +90,9 @@ export function CategorySheet({
     }
   }, [open, scrim, sheetHeight, y]);
 
-  // drag="y" with constraints {top: 0, bottom: 0}: no travel above the resting
-  // point, rubber-band below. Release past 120px (or flicking faster than
-  // 600px/s) dismisses; otherwise it snaps home.
+  // drag="y" with dragConstraints {top: 0, bottom: 0}: no travel above the
+  // resting point, rubber-band below. Release past 120px — or flicking faster
+  // than 600px/s — dismisses; otherwise it snaps home.
   const drag = Gesture.Pan()
     .activeOffsetY(8)
     .onUpdate((e) => {
@@ -104,9 +103,7 @@ export function CategorySheet({
       else y.value = withTiming(0, SLIDE);
     });
 
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: y.value }],
-  }));
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   const scrimStyle = useAnimatedStyle(() => ({ opacity: scrim.value }));
 
   function pickCategory(baseId: string) {
@@ -123,46 +120,55 @@ export function CategorySheet({
 
   return (
     <Modal transparent visible animationType="none" statusBarTranslucent onRequestClose={onClose}>
-      {/* Gestures inside a Modal need their own root on Android. */}
+      {/* Gestures inside a Modal need their own root on Android. Not a class:
+          GestureHandlerRootView isn't className-aware. */}
       <GestureHandlerRootView style={styles.root}>
-        {/* fixed inset-0 bg-black/30 */}
-        <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+        <Animated.View style={[StyleSheet.absoluteFill, scrimStyle]} pointerEvents="box-none">
+          <Pressable
+            className="absolute inset-0 z-40 bg-black/30"
+            onPress={onClose}
+            accessibilityLabel="Close"
+          />
         </Animated.View>
-        {/* fixed inset-x-0 bottom-0 mx-auto max-w-md */}
-        <View pointerEvents="box-none" style={styles.dock}>
+        <View className="absolute inset-x-0 bottom-0 z-50" pointerEvents="box-none">
           <GestureDetector gesture={drag}>
             <Animated.View
+              style={sheetStyle}
               onLayout={(e) => {
                 sheetHeight.value = e.nativeEvent.layout.height;
               }}
-              style={[styles.sheet, { paddingBottom: space(6) + insets.bottom }, sheetStyle]}
             >
-              {/* Grabber. */}
-              <View style={styles.grabber} />
+              <View className="mx-auto w-full max-w-md rounded-t-[28px] bg-surface px-4 pb-6 pt-2 shadow-card">
+                {/* pb-[calc(1.5rem+var(--safe-bottom))]: `pb-6` is the class
+                    above, the inset is added here (PORTING §2d). */}
+                <View style={{ paddingBottom: insets.bottom }}>
+                  {/* Grabber. */}
+                  <View className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-grouped" />
 
-              {expanded ? (
-                <SubcategoryStep
-                  baseId={expanded}
-                  selected={selected}
-                  onBack={() => setExpanded(null)}
-                  onSelect={onSelect}
-                />
-              ) : (
-                <>
-                  {/* Categories on top (variable height). */}
-                  <CategoryGrid
-                    categories={categoriesFor(isIncome)}
-                    selected={selectedBase}
-                    onSelect={pickCategory}
-                  />
+                  {expanded ? (
+                    <SubcategoryStep
+                      baseId={expanded}
+                      selected={selected}
+                      onBack={() => setExpanded(null)}
+                      onSelect={onSelect}
+                    />
+                  ) : (
+                    <>
+                      {/* Categories on top (variable height). */}
+                      <CategoryGrid
+                        categories={categoriesFor(isIncome)}
+                        selected={selectedBase}
+                        onSelect={pickCategory}
+                      />
 
-                  {/* In/Out pinned at the bottom. */}
-                  <View style={styles.toggle}>
-                    <InOutToggle isIncome={isIncome} onChange={onChangeDirection} />
-                  </View>
-                </>
-              )}
+                      {/* In/Out pinned at the bottom. */}
+                      <View className="mt-4">
+                        <InOutToggle isIncome={isIncome} onChange={onChangeDirection} />
+                      </View>
+                    </>
+                  )}
+                </View>
+              </View>
             </Animated.View>
           </GestureDetector>
         </View>
@@ -171,9 +177,10 @@ export function CategorySheet({
   );
 }
 
-// grid-cols-2 gap-2.5
+// `grid grid-cols-2 gap-2.5` — no CSS grid here, so the chips wrap and take a
+// width measured off the container (PORTING §4).
 const CHIP_COLS = 2;
-const CHIP_GAP = space(2.5);
+const CHIP_GAP = 10; // gap-2.5
 
 // Step 2: a back header that doubles as "use the parent only", then the
 // subcategory chips tinted with the parent's color.
@@ -196,38 +203,41 @@ function SubcategoryStep({
     ? splitCategory(selected)
     : { base: null, sub: null };
 
-  // Two columns, measured — `(width - gap) / 2`, never a guessed percentage.
   const [width, setWidth] = useState(0);
   const chipWidth = width > 0 ? (width - CHIP_GAP * (CHIP_COLS - 1)) / CHIP_COLS : 0;
 
-  const justParent = selBase === baseId && !selSub;
-
   return (
     <View>
-      <View style={styles.subHeader}>
-        <Press
-          onPress={onBack}
-          accessibilityLabel="Back to categories"
-          style={styles.subBack}
-        >
+      <View className="mb-3 flex flex-row items-center gap-2">
+        <Press onPress={onBack} accessibilityLabel="Back to categories" className="-m-2 p-2 text-label-secondary">
           <ChevronLeft size={20} strokeWidth={2.5} color={colors.labelSecondary} />
         </Press>
-        <View style={[styles.subBadge, { backgroundColor: color }]}>
+        <View
+          className="flex h-8 w-8 items-center justify-center rounded-full text-white"
+          style={{ backgroundColor: color }}
+        >
           <Icon size={16} strokeWidth={2} color={colors.white} />
         </View>
-        <Text style={styles.subTitle}>{label}</Text>
+        <Text className="font-bold text-label">{label}</Text>
       </View>
 
-      <View style={styles.chips} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      <View
+        className="flex-row flex-wrap gap-2.5"
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      >
         {/* "Just the parent" — no subcategory. */}
         <Press
           onPress={() => onSelect(composeCategory(baseId, null))}
-          style={[
-            styles.chip,
-            { width: chipWidth, backgroundColor: justParent ? color : withAlpha(color, 0.1) },
-          ]}
+          className="rounded-card px-3 py-3.5 text-sm font-medium"
+          style={{
+            width: chipWidth,
+            backgroundColor: selBase === baseId && !selSub ? color : `${color}1A`,
+          }}
         >
-          <Text style={[styles.chipLabel, { color: justParent ? colors.white : color }]}>
+          <Text
+            className="text-center text-sm font-medium"
+            style={{ color: selBase === baseId && !selSub ? "#FFFFFF" : color }}
+          >
             Just {label}
           </Text>
         </Press>
@@ -237,12 +247,16 @@ function SubcategoryStep({
             <Press
               key={s.id}
               onPress={() => onSelect(composeCategory(baseId, s.id))}
-              style={[
-                styles.chip,
-                { width: chipWidth, backgroundColor: active ? color : withAlpha(color, 0.1) },
-              ]}
+              className="rounded-card px-3 py-3.5 text-sm font-medium"
+              style={{
+                width: chipWidth,
+                backgroundColor: active ? color : `${color}1A`,
+              }}
             >
-              <Text style={[styles.chipLabel, { color: active ? colors.white : color }]}>
+              <Text
+                className="text-center text-sm font-medium"
+                style={{ color: active ? "#FFFFFF" : color }}
+              >
                 {s.label}
               </Text>
             </Press>
@@ -254,57 +268,6 @@ function SubcategoryStep({
 }
 
 const styles = StyleSheet.create({
+  // The Modal's own root — GestureHandlerRootView takes no className.
   root: { flex: 1 },
-  scrim: { backgroundColor: black(0.3) },
-  dock: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  sheet: {
-    width: "100%",
-    maxWidth: COLUMN_MAX_WIDTH,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
-    backgroundColor: colors.surface,
-    paddingHorizontal: space(4),
-    paddingTop: space(2),
-    boxShadow: shadows.card,
-  },
-  grabber: {
-    alignSelf: "center",
-    marginBottom: space(4),
-    height: 6, // h-1.5
-    width: 40, // w-10
-    borderRadius: radius.pill,
-    backgroundColor: colors.grouped,
-  },
-  toggle: { marginTop: space(4) },
-  subHeader: {
-    marginBottom: space(3),
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space(2),
-  },
-  subBack: { margin: -space(2), padding: space(2) },
-  subBadge: {
-    width: 32, // h-8 w-8
-    height: 32,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  subTitle: { ...text.base, fontWeight: weight.bold, color: colors.label },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: CHIP_GAP },
-  chip: {
-    borderRadius: radius.card,
-    paddingHorizontal: space(3),
-    paddingVertical: space(3.5),
-    alignItems: "center",
-  },
-  chipLabel: { ...text.sm, fontWeight: weight.medium, textAlign: "center" },
 });

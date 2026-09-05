@@ -1,19 +1,24 @@
 import { memo, useCallback, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { Press } from "@/components/ui/Press";
 import { SwipeRow } from "@/components/SwipeRow";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
-import { amountColor, formatSignedUsdCents } from "@/lib/money";
-import { colors, motion, numeric, radius, shadows, text, weight, white, withAlpha } from "@/lib/theme";
+import { formatSignedUsdCents } from "@/lib/money";
+import { motion } from "@/lib/theme";
 import type { HistoryGroup } from "@/lib/history";
 import type { Transaction } from "@/types/db";
 
-// The web's `height: 0 → auto` tween, 0.22s cubic-bezier(0.2, 0.8, 0.2, 1):
-// the always-mounted wrapper clips (`overflow-hidden`) and its frame grows
-// through a layout transition while the revealed rows fade in.
+// The web's `height: 0 → auto` tween over 0.22s cubic-bezier(0.2, 0.8, 0.2, 1):
+// the opened list grows through a layout transition while the revealed rows
+// fade in, which is the same read as the browser's height animation.
 const EXPAND = LinearTransition.duration(motion.pop);
 const REVEAL = FadeIn.duration(motion.pop);
+
+// See lib/money — the mobile copy still returns a hex, so the class version
+// lives here until it's put back.
+const amountColorClass = (isIncome: boolean) =>
+  isIncome ? "text-income" : "text-expense";
 
 // One category's worth of history on the dark full-history page. A single entry
 // is just a plain row. Two or more render as a stacked card (with charcoal
@@ -22,9 +27,13 @@ const REVEAL = FadeIn.duration(motion.pop);
 // room below the front card (the `pb`), so the stack reads clearly without
 // crowding the next item in the list.
 //
-// `open`/`onOpen`/`stackKey` are optional: the virtualized History list keeps
-// the open set itself so a stack stays open even after its cell is recycled
-// off-screen. Without them the stack owns its state, as on the web.
+// `open`/`onOpen`/`stackKey` are optional: the full-history page virtualizes
+// the list, so a cell scrolled far away is unmounted and the page has to keep
+// the open set — otherwise a stack you opened would fold back up behind your
+// back. Without them the stack owns the state, exactly as on the web.
+//
+// `flex-row` is the one class added to the web's strings: the web's `flex` is a
+// row by default, React Native's is a column.
 export const HistoryStack = memo(function HistoryStack({
   group,
   onEdit,
@@ -63,7 +72,7 @@ export const HistoryStack = memo(function HistoryStack({
 
   if (isOpen) {
     return (
-      <Animated.View layout={EXPAND} style={styles.list}>
+      <Animated.View layout={EXPAND} className="flex flex-col gap-1.5 overflow-hidden">
         {group.rows.map((tx) => (
           <Animated.View key={tx.id} entering={mountedOpen.current ? undefined : REVEAL}>
             <SwipeRow tx={tx} onEdit={onEdit} onDelete={onDelete} dark />
@@ -74,85 +83,43 @@ export const HistoryStack = memo(function HistoryStack({
   }
 
   return (
-    <Animated.View layout={EXPAND} style={styles.clip}>
-      <Press
-        accessibilityRole="button"
-        accessibilityState={{ expanded: false }}
-        accessibilityLabel={`${label}, ${group.count} entries`}
-        onPress={handleOpen}
-        style={styles.stack}
-      >
-        {/* Two charcoal layers peeking out below the front card to read as a
-            stack. Each is a touch darker and narrower than the one in front; the
-            button's pb-3 reserves the 12px they drop into so they never crowd the
-            next list item. */}
-        <View accessibilityElementsHidden style={[styles.layer, styles.layerBack]} />
-        <View accessibilityElementsHidden style={[styles.layer, styles.layerMid]} />
-        {/* Front card. */}
-        <View style={styles.front}>
-          <View style={[styles.badge, { backgroundColor: withAlpha(color, 0.2) }]}>
-            <Icon size={20} strokeWidth={2} color={color} />
-          </View>
-          <View style={styles.body}>
-            <Text style={styles.label}>{label}</Text>
-            <Text style={styles.count}>{group.count} entries</Text>
-          </View>
-          <Text style={[styles.total, { color: amountColor(group.isIncome) }]}>{total}</Text>
+    <Press
+      accessibilityRole="button"
+      aria-expanded={false}
+      accessibilityLabel={`${label}, ${group.count} entries`}
+      onPress={handleOpen}
+      className="relative block w-full pb-3 text-left"
+    >
+      {/* Two charcoal layers peeking out below the front card to read as a
+          stack. Each is a touch darker and narrower than the one in front; the
+          button's pb-3 reserves the 12px they drop into so they never crowd the
+          next list item. */}
+      <View
+        aria-hidden
+        className="absolute inset-x-0 bottom-3 top-0 translate-y-3 scale-x-[0.90] rounded-card bg-[#2E2E30] ring-1 ring-inset ring-white/5"
+      />
+      <View
+        aria-hidden
+        className="absolute inset-x-0 bottom-3 top-0 translate-y-1.5 scale-x-[0.95] rounded-card bg-[#343436] ring-1 ring-inset ring-white/5"
+      />
+      {/* Front card. */}
+      <View className="relative flex flex-row items-center gap-3 rounded-card bg-[#3A3A3C] px-4 py-3.5 ring-1 ring-inset ring-white/5">
+        <View
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill"
+          style={{ backgroundColor: `${color}33` }}
+        >
+          <Icon size={20} strokeWidth={2} color={color} />
         </View>
-      </Press>
-    </Animated.View>
+        <View className="min-w-0 flex-1">
+          <Text className="block font-medium text-white">{label}</Text>
+          <Text className="block text-xs text-white/55">{group.count} entries</Text>
+        </View>
+        <Text
+          className={`font-numeric font-medium tabular-nums ${amountColorClass(group.isIncome)}`}
+        >
+          {total}
+        </Text>
+      </View>
+    </Press>
   );
-});
-
-const styles = StyleSheet.create({
-  // flex flex-col gap-1.5 overflow-hidden
-  list: { gap: 6, overflow: "hidden" },
-  clip: { overflow: "hidden" },
-  // press relative block w-full pb-3 text-left
-  stack: { position: "relative", width: "100%", paddingBottom: 12 },
-  // absolute inset-x-0 bottom-3 top-0 rounded-card ring-1 ring-inset ring-white/5
-  layer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 12,
-    borderRadius: radius.card,
-    boxShadow: shadows.ringWhite5,
-  },
-  // translate-y-3 scale-x-[0.90] bg-[#2E2E30]
-  layerBack: {
-    backgroundColor: "#2E2E30",
-    transform: [{ translateY: 12 }, { scaleX: 0.9 }],
-  },
-  // translate-y-1.5 scale-x-[0.95] bg-[#343436]
-  layerMid: {
-    backgroundColor: "#343436",
-    transform: [{ translateY: 6 }, { scaleX: 0.95 }],
-  },
-  // relative flex items-center gap-3 rounded-card bg-[#3A3A3C] px-4 py-3.5 ring-1 ring-inset ring-white/5
-  front: {
-    position: "relative",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: radius.card,
-    backgroundColor: "#3A3A3C",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    boxShadow: shadows.ringWhite5,
-  },
-  // h-10 w-10 shrink-0 rounded-pill
-  badge: {
-    width: 40,
-    height: 40,
-    flexShrink: 0,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  body: { flex: 1, minWidth: 0 },
-  label: { ...text.base, fontWeight: weight.medium, color: colors.white },
-  count: { ...text.xs, color: white(0.55) },
-  total: { ...numeric, ...text.base, fontWeight: weight.medium },
 });

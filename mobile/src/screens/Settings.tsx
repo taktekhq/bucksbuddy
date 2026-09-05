@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
-import Animated, { Easing, FadeIn, LinearTransition } from "react-native-reanimated";
-import { Download, Eye, EyeOff, Lock, ShieldCheck, Trash2 } from "lucide-react-native";
+import { Text, TextInput, View } from "react-native";
+import {
+  ChevronLeft,
+  Download,
+  Eye,
+  EyeOff,
+  Lock,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react-native";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { Press } from "@/components/ui/Press";
 import { Screen } from "@/components/ui/Screen";
-import { NavHeader } from "@/components/ui/NavHeader";
 import { RateEditor } from "@/components/RateEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
@@ -14,24 +20,7 @@ import { navigate } from "@/lib/router";
 import { transactionsToCsv } from "@/lib/csv";
 import { useStore } from "@/lib/store";
 import posthog from "@/lib/posthog";
-import {
-  colors,
-  leading,
-  motion,
-  radius,
-  shadows,
-  space,
-  text,
-  weight,
-  withAlpha,
-} from "@/lib/theme";
-
-// The danger-zone card swaps a row for a confirm block; the card's height and
-// whatever sits below it glide (0.22s, the stack's pop curve) instead of
-// snapping, and the revealed content fades in.
-const POP_EASE = Easing.bezier(...motion.popEase);
-const LAYOUT = LinearTransition.duration(motion.pop).easing(POP_EASE);
-const FADE = FadeIn.duration(motion.pop).easing(POP_EASE);
+import { colors } from "@/lib/theme";
 
 export function Settings() {
   const [email, setEmail] = useState("");
@@ -64,23 +53,45 @@ export function Settings() {
   }
 
   return (
-    <Screen gap={space(6)}>
+    // <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4
+    //   pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
+    // `mx-auto max-w-md` and the safe-area halves of the padding are Screen's.
+    <Screen className="flex min-h-full flex-col gap-6 px-4 pb-8 pt-4">
       {/* Plain iOS nav: back chevron + centered title. */}
-      <NavHeader title="Settings" onBack={() => navigate("/")} />
+      <View className="relative flex flex-row items-center justify-center py-1">
+        <Press
+          onPress={() => navigate("/")}
+          accessibilityLabel="Back"
+          className="absolute left-0 -m-2 p-2 text-carrot"
+        >
+          <ChevronLeft size={24} strokeWidth={2.5} color={colors.carrot} />
+        </Press>
+        <Text className="font-display text-base font-bold uppercase text-label-muted">
+          Settings
+        </Text>
+      </View>
 
       {/* ACCOUNT */}
-      <View style={styles.section}>
+      <View className="flex flex-col gap-2">
         <SectionHeader>Account</SectionHeader>
-        <View style={styles.card}>
-          <View style={styles.clip}>
-            <View style={[styles.row, styles.rowBetween]}>
-              <Text style={styles.rowLabel}>Signed in</Text>
-              <Text style={styles.rowValue} numberOfLines={1}>
+        {/* `divide-y divide-separator` isn't supported (PORTING.md §4): every
+            row after the first carries `border-t border-separator` instead.
+            `overflow-hidden` in the same string clips the card's own shadow
+            away on native, so the shadow stays out here and the clip moves to
+            the inner view with the same rounding. */}
+        <View className="rounded-card bg-surface shadow-card">
+          <View className="overflow-hidden rounded-card">
+            <View className="flex flex-row items-center justify-between gap-4 px-4 py-3.5">
+              <Text className="text-base text-label">Signed in</Text>
+              <Text className="truncate text-sm text-label-secondary" numberOfLines={1}>
                 {email || "—"}
               </Text>
             </View>
-            <Press onPress={signOut} style={[styles.row, styles.divide]}>
-              <Text style={[styles.rowAction, { color: colors.expense }]}>Sign out</Text>
+            <Press
+              onPress={signOut}
+              className="flex w-full flex-row items-center px-4 py-3.5 text-base font-medium text-expense border-t border-separator"
+            >
+              <Text className="text-base font-medium text-expense">Sign out</Text>
             </Press>
           </View>
         </View>
@@ -90,23 +101,22 @@ export function Settings() {
       <EncryptionCard />
 
       {/* EXCHANGE RATE */}
-      <View style={styles.section}>
+      <View className="flex flex-col gap-2">
         <SectionHeader>Exchange rate</SectionHeader>
         <RateEditor />
       </View>
 
       {/* DATA */}
-      <View style={styles.section}>
+      <View className="flex flex-col gap-2">
         <SectionHeader>Data</SectionHeader>
-        <View style={styles.card}>
-          <View style={styles.clip}>
+        <View className="rounded-card bg-surface shadow-card">
+          <View className="overflow-hidden rounded-card">
             <Press
               onPress={exportCsv}
               disabled={locked}
-              disabledOpacity={0.5}
-              style={[styles.row, styles.rowBetween]}
+              className="flex w-full flex-row items-center justify-between px-4 py-3.5 text-base font-medium text-label disabled:opacity-50"
             >
-              <Text style={[styles.rowAction, { color: colors.label }]}>Export CSV</Text>
+              <Text className="text-base font-medium text-label">Export CSV</Text>
               <Download size={20} strokeWidth={2} color={colors.labelSecondary} />
             </Press>
           </View>
@@ -116,9 +126,9 @@ export function Settings() {
       {/* DANGER ZONE */}
       <DeleteAccountCard />
 
-      <Animated.Text layout={LAYOUT} style={styles.footer}>
+      <Text className="mt-2 text-center text-xs text-label-secondary">
         That's all, folks. 🥕
-      </Animated.Text>
+      </Text>
     </Screen>
   );
 }
@@ -132,8 +142,6 @@ function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  // Only fade content in once the user has toggled — never on first paint.
-  const [armed, setArmed] = useState(false);
 
   async function remove() {
     setBusy(true);
@@ -148,23 +156,23 @@ function DeleteAccountCard() {
   }
 
   return (
-    <View style={styles.section}>
+    <View className="flex flex-col gap-2">
       <SectionHeader>Danger zone</SectionHeader>
-      <Animated.View layout={LAYOUT} style={styles.card}>
-        <Animated.View layout={LAYOUT} style={styles.clip}>
+      {/* The shadow rides the wrapper; `overflow-hidden` clips on the inside. */}
+      <View className="rounded-card bg-surface shadow-card">
+        <View className="overflow-hidden rounded-card">
           {confirming ? (
-            <Animated.View key="confirm" entering={armed ? FADE : undefined} style={styles.confirm}>
-              <Text style={styles.confirmText}>
+            <View className="flex flex-col gap-3 p-4">
+              <Text className="text-sm text-label">
                 This permanently deletes your account and all your data. This
                 can't be undone.
               </Text>
               <Press
                 onPress={remove}
                 disabled={busy}
-                disabledOpacity={0.5}
-                style={[styles.pill, { backgroundColor: colors.expense }]}
+                className="rounded-pill bg-expense py-3 text-base font-semibold text-surface transition disabled:opacity-50"
               >
-                <Text style={[styles.pillText, { color: colors.surface }]}>
+                <Text className="w-full text-center text-base font-semibold text-surface">
                   {busy ? "Deleting…" : "Delete everything"}
                 </Text>
               </Press>
@@ -174,32 +182,33 @@ function DeleteAccountCard() {
                   setErr(null);
                 }}
                 disabled={busy}
-                disabledOpacity={0.5}
-                style={[styles.pill, { backgroundColor: colors.grouped }]}
+                className="rounded-pill bg-grouped py-3 text-base font-semibold text-label transition disabled:opacity-50"
               >
-                <Text style={[styles.pillText, { color: colors.label }]}>Cancel</Text>
+                <Text className="w-full text-center text-base font-semibold text-label">
+                  Cancel
+                </Text>
               </Press>
-              {err && <Text style={styles.error}>{err}</Text>}
-            </Animated.View>
+              {err && <Text className="px-1 text-sm font-medium text-danger">{err}</Text>}
+            </View>
           ) : (
-            <Animated.View key="row" entering={armed ? FADE : undefined}>
-              <Press
-                onPress={() => {
-                  setArmed(true);
-                  setConfirming(true);
-                }}
-                style={[styles.row, styles.rowBetween]}
-              >
-                <Text style={[styles.rowAction, { color: colors.expense }]}>Delete account</Text>
-                <Trash2 size={20} strokeWidth={2} color={colors.expense} />
-              </Press>
-            </Animated.View>
+            <Press
+              onPress={() => setConfirming(true)}
+              className="flex w-full flex-row items-center justify-between px-4 py-3.5 text-base font-medium text-expense"
+            >
+              <Text className="text-base font-medium text-expense">Delete account</Text>
+              <Trash2 size={20} strokeWidth={2} color={colors.expense} />
+            </Press>
           )}
-        </Animated.View>
-      </Animated.View>
+        </View>
+      </View>
     </View>
   );
 }
+
+// `outline-none` is browser-only and dropped (PORTING.md §4); everything else
+// comes over as-is.
+const inputClass =
+  "w-full rounded-pill border border-separator bg-surface px-4 py-3 text-base text-label ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary";
 
 // The encryption card — a prominent on/off card (styled like the Safe balance
 // card), with the passphrase shown in plain text so it's easy to read, change,
@@ -214,8 +223,6 @@ function EncryptionCard() {
   const [err, setErr] = useState<string | null>(null);
   // Once a passphrase is saved we mask it, with an eye to reveal on demand.
   const [reveal, setReveal] = useState(false);
-  // The web's `focus:ring-2` — a 2px carrot ring while the field is focused.
-  const [focused, setFocused] = useState(false);
 
   // Keep the field in sync when the stored passphrase changes (unlock / save /
   // turn off), so it always shows the current one.
@@ -257,12 +264,18 @@ function EncryptionCard() {
         : "Turn on encryption";
 
   return (
-    <View style={styles.section}>
+    <View className="flex flex-col gap-2">
       <SectionHeader>Encryption</SectionHeader>
-      <View style={[styles.encCard, on ? styles.encOn : styles.encOff]}>
-        <View style={styles.encHead}>
+      <View
+        className={`flex flex-col gap-3 rounded-card p-4 shadow-card ${
+          on ? "bg-income/20 ring-1 ring-income/40" : "bg-surface"
+        }`}
+      >
+        <View className="flex flex-row items-center gap-3">
           <View
-            style={[styles.encBadge, { backgroundColor: on ? colors.income : colors.grouped }]}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+              on ? "bg-income text-surface" : "bg-grouped text-label-secondary"
+            }`}
           >
             {on ? (
               <ShieldCheck size={20} strokeWidth={2} color={colors.surface} />
@@ -270,10 +283,14 @@ function EncryptionCard() {
               <Lock size={20} strokeWidth={2} color={colors.labelSecondary} />
             )}
           </View>
-          <View style={styles.encBody}>
-            <Text style={styles.encTitle}>End-to-end encryption</Text>
+          <View className="min-w-0 flex-1">
+            <Text className="text-base font-semibold leading-tight text-label">
+              End-to-end encryption
+            </Text>
             <Text
-              style={[styles.encStatus, { color: on ? colors.income : colors.labelSecondary }]}
+              className={`mt-0.5 text-sm font-medium ${
+                on ? "text-income" : "text-label-secondary"
+              }`}
             >
               {on ? (locked ? "On · locked on this device" : "On") : "Off"}
             </Text>
@@ -281,11 +298,15 @@ function EncryptionCard() {
         </View>
 
         {!on && (
-          <Text style={styles.encBlurb}>Turn it on so no one else can see your data.</Text>
+          <Text className="text-sm text-label">
+            Turn it on so no one else can see your data.
+          </Text>
         )}
 
-        <View style={styles.form}>
-          <View style={styles.inputWrap}>
+        {/* <form onSubmit={submit}> — no element on native; the keyboard's
+            return key and the button below both call the handler. */}
+        <View className="flex flex-col gap-2">
+          <View className="relative">
             <TextInput
               secureTextEntry={saved && !reveal}
               autoComplete="off"
@@ -293,24 +314,17 @@ function EncryptionCard() {
               autoCorrect={false}
               value={pass}
               onChangeText={setPass}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
               onSubmitEditing={submit}
               returnKeyType="done"
               placeholder="Passphrase"
-              placeholderTextColor={colors.labelSecondary}
               selectionColor={colors.carrot}
-              style={[
-                styles.input,
-                focused && styles.inputFocused,
-                saved && { paddingRight: focused ? space(12) - 1 : space(12) },
-              ]}
+              className={`${inputClass} ${saved ? "pr-12" : ""}`}
             />
             {saved && (
               <Press
                 onPress={() => setReveal((v) => !v)}
                 accessibilityLabel={reveal ? "Hide passphrase" : "Show passphrase"}
-                style={styles.eye}
+                className="absolute inset-y-0 right-0 flex flex-row items-center px-3.5 text-label-secondary"
               >
                 {reveal ? (
                   <EyeOff size={20} strokeWidth={2} color={colors.labelSecondary} />
@@ -323,10 +337,11 @@ function EncryptionCard() {
           <Press
             onPress={submit}
             disabled={busy}
-            disabledOpacity={0.5}
-            style={[styles.pill, { backgroundColor: colors.label }]}
+            className="rounded-pill bg-label py-3 text-base font-semibold text-surface transition disabled:opacity-50"
           >
-            <Text style={[styles.pillText, { color: colors.surface }]}>{buttonLabel}</Text>
+            <Text className="w-full text-center text-base font-semibold text-surface">
+              {buttonLabel}
+            </Text>
           </Press>
         </View>
 
@@ -334,124 +349,19 @@ function EncryptionCard() {
           <Press
             onPress={turnOff}
             disabled={busy}
-            disabledOpacity={0.5}
-            style={[styles.pill, { backgroundColor: withAlpha(colors.expense, 0.1) }]}
+            className="rounded-pill bg-expense/10 py-3 text-base font-semibold text-expense transition disabled:opacity-50"
           >
-            <Text style={[styles.pillText, { color: colors.expense }]}>Turn off encryption</Text>
+            <Text className="w-full text-center text-base font-semibold text-expense">
+              Turn off encryption
+            </Text>
           </Press>
         )}
 
-        <Text style={styles.encNote}>
+        <Text className="px-1 text-xs text-label-secondary">
           If you forget this passphrase, the data cannot be recovered.
         </Text>
-        {err && <Text style={styles.error}>{err}</Text>}
+        {err && <Text className="px-1 text-sm font-medium text-danger">{err}</Text>}
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  // section: flex flex-col gap-2
-  section: { gap: space(2) },
-  // rounded-card bg-surface shadow-card — the shadow lives on this wrapper…
-  card: {
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    boxShadow: shadows.card,
-  },
-  // …and overflow-hidden on the inner view, so clipping never eats the shadow.
-  clip: { borderRadius: radius.card, overflow: "hidden" },
-  // flex items-center gap-4 px-4 py-3.5
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space(4),
-    paddingHorizontal: space(4),
-    paddingVertical: space(3.5),
-  },
-  rowBetween: { justifyContent: "space-between" },
-  // divide-y divide-separator — a hairline above every row but the first.
-  divide: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.separator },
-  // text-base text-label
-  rowLabel: { ...text.base, color: colors.label },
-  // truncate text-sm text-label-secondary
-  rowValue: { flexShrink: 1, ...text.sm, color: colors.labelSecondary },
-  // text-base font-medium
-  rowAction: { ...text.base, fontWeight: weight.medium },
-  // mt-2 text-center text-xs text-label-secondary
-  footer: { marginTop: space(2), textAlign: "center", ...text.xs, color: colors.labelSecondary },
-  // flex flex-col gap-3 p-4
-  confirm: { gap: space(3), padding: space(4) },
-  // text-sm text-label
-  confirmText: { ...text.sm, color: colors.label },
-  // rounded-pill py-3 text-base font-semibold
-  pill: { borderRadius: radius.pill, paddingVertical: space(3), alignItems: "center" },
-  pillText: { ...text.base, fontWeight: weight.semibold },
-  // px-1 text-sm font-medium text-danger
-  error: { paddingHorizontal: space(1), ...text.sm, fontWeight: weight.medium, color: colors.danger },
-  // flex flex-col gap-3 rounded-card p-4 shadow-card
-  encCard: { gap: space(3), borderRadius: radius.card, padding: space(4) },
-  // bg-income/20 ring-1 ring-income/40 (+ shadow-card, layered in one string)
-  encOn: {
-    backgroundColor: withAlpha(colors.income, 0.2),
-    boxShadow: `${shadows.card}, ${shadows.ringIncome40}`,
-  },
-  encOff: { backgroundColor: colors.surface, boxShadow: shadows.card },
-  // flex items-center gap-3
-  encHead: { flexDirection: "row", alignItems: "center", gap: space(3) },
-  // h-10 w-10 shrink-0 rounded-full
-  encBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  encBody: { flex: 1, minWidth: 0 },
-  // text-base font-semibold leading-tight text-label
-  encTitle: {
-    fontSize: 16,
-    lineHeight: leading.tight(16),
-    fontWeight: weight.semibold,
-    color: colors.label,
-  },
-  // mt-0.5 text-sm font-medium
-  encStatus: { marginTop: space(0.5), ...text.sm, fontWeight: weight.medium },
-  // text-sm text-label
-  encBlurb: { ...text.sm, color: colors.label },
-  // form: flex flex-col gap-2
-  form: { gap: space(2) },
-  inputWrap: { position: "relative" },
-  // w-full rounded-pill border border-separator bg-surface px-4 py-3 text-base text-label
-  // — 24px line + 12px padding + 1px border each side = 50 tall.
-  input: {
-    width: "100%",
-    height: 50,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.separator,
-    backgroundColor: colors.surface,
-    paddingHorizontal: space(4),
-    paddingVertical: 0,
-    fontSize: 16,
-    color: colors.label,
-    textAlignVertical: "center",
-  },
-  // focus:ring-2 ring-carrot/40 — 2px ring; padding gives back the extra pixel.
-  inputFocused: {
-    borderWidth: 2,
-    borderColor: "rgba(245,99,0,0.4)",
-    paddingHorizontal: space(4) - 1,
-  },
-  // absolute inset-y-0 right-0 flex items-center px-3.5
-  eye: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
-    paddingHorizontal: space(3.5),
-  },
-  // px-1 text-xs text-label-secondary
-  encNote: { paddingHorizontal: space(1), ...text.xs, color: colors.labelSecondary },
-});

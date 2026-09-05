@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -11,24 +11,21 @@ import Animated, {
 import { Pencil, Trash2 } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
-import { amountColor, formatUsdCents } from "@/lib/money";
-import {
-  colors,
-  motion,
-  numeric,
-  radius,
-  shadows,
-  text,
-  weight,
-  white,
-  withAlpha,
-} from "@/lib/theme";
+import { formatUsdCents } from "@/lib/money";
+import { colors, motion } from "@/lib/theme";
 import type { Transaction } from "@/types/db";
 
 const ACTION_W = 76; // px revealed per side
 const AUTO_RESET_MS = 2000; // close an open row if no action is taken
-// Light, crisp snap — quick tween, no springy overshoot.
+// Light, crisp snap — quick tween, no springy overshoot. (The web's
+// `{ type: "tween", duration: 0.16, ease: [0.2, 0, 0, 1] }`.)
 const SNAP = { duration: motion.snap, easing: Easing.bezier(...motion.snapEase) };
+
+// The web imports this from `@/lib/money`; the mobile copy of that module still
+// returns a hex from the pre-NativeWind port, so the class version lives here
+// until it's put back (see the porting notes). Same one-liner as the web's.
+const amountColorClass = (isIncome: boolean) =>
+  isIncome ? "text-income" : "text-expense";
 
 function dateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -42,11 +39,10 @@ function dateLabel(iso: string): string {
 // full-history page (dark) — `dark` swaps the white card for a charcoal one
 // that reads on the deep-grey "rabbit hole" page.
 //
-// Layout, in three layers (see PORTING.md §3): a shadow shell (the card's
-// colour + `shadow-card`, never clipped), a clipping frame (`overflow hidden`,
-// rounded-card) with the two action panels pinned to its edges, and the
-// sliding content — a plain rectangle the frame clips, so it never leaves a
-// gap against the panels. Memoized: it lives inside a virtualized list.
+// Two class names are added to the web's strings, both because a browser
+// default isn't React Native's: `flex-row` wherever the web's `flex` laid out
+// a row (RN's default direction is column), and `shadow-card` moves one level
+// out (see the wrapper's comment). Everything else is the web's, verbatim.
 export const SwipeRow = memo(function SwipeRow({
   tx,
   onEdit,
@@ -67,18 +63,22 @@ export const SwipeRow = memo(function SwipeRow({
   // Light (white card on the grey canvas) vs dark (charcoal card on the
   // full-history page). On dark the category tint needs a touch more alpha to
   // read over charcoal, and a faint inset ring gives the card an edge.
+  // `shell` isn't on the web: it's the card colour again on the shadow wrapper,
+  // so iOS has an opaque body to cast `shadow-card` from.
   const tone = dark
     ? {
-        card: "#3A3A3C",
-        label: colors.white,
-        meta: white(0.55),
-        iconAlpha: 0.2, // `${color}33`
+        card: "bg-[#3A3A3C] ring-1 ring-inset ring-white/5",
+        shell: "bg-[#3A3A3C]",
+        label: "text-white",
+        meta: "text-white/55",
+        iconAlpha: "33",
       }
     : {
-        card: colors.surface,
-        label: colors.label,
-        meta: colors.labelSecondary,
-        iconAlpha: 0.1, // `${color}1A`
+        card: "bg-surface",
+        shell: "bg-surface",
+        label: "text-label",
+        meta: "text-label-secondary",
+        iconAlpha: "1A",
       };
 
   const clearResetTimer = useCallback(() => {
@@ -104,7 +104,7 @@ export const SwipeRow = memo(function SwipeRow({
     [clearResetTimer, x],
   );
 
-  // `snapTo` for the JS side (the action buttons).
+  // `snapTo` for the JS side (the two action buttons).
   const snapTo = useCallback(
     (target: number) => {
       x.value = withTiming(target, SNAP);
@@ -117,13 +117,16 @@ export const SwipeRow = memo(function SwipeRow({
   useEffect(() => clearResetTimer, [clearResetTimer]);
 
   const gesture = useMemo(() => {
-    // `snapTo` for the UI thread: the tween runs here, only the timer hops
-    // over to JS.
+    // `snapTo` for the UI thread: the tween runs in the worklet, only the
+    // timer hops over to JS.
     const snap = (target: number) => {
       "worklet";
       x.value = withTiming(target, SNAP);
       runOnJS(armResetTimer)(target);
     };
+    // The offsets are what let the row live inside a scrolling list: the pan
+    // only takes over once the finger has committed to horizontal movement,
+    // and gives up the moment it drifts vertically.
     const pan = Gesture.Pan()
       .activeOffsetX([-8, 8])
       .failOffsetY([-10, 10])
@@ -135,7 +138,8 @@ export const SwipeRow = memo(function SwipeRow({
       })
       .onUpdate((e) => {
         const next = startX.value + e.translationX;
-        // dragConstraints ±ACTION_W with a little give past them (dragElastic 0.06).
+        // dragConstraints ±ACTION_W, with a little give past them (dragElastic
+        // 0.06) and no momentum.
         const clamped = Math.max(-ACTION_W, Math.min(ACTION_W, next));
         x.value = clamped + (next - clamped) * 0.06;
       })
@@ -154,8 +158,8 @@ export const SwipeRow = memo(function SwipeRow({
         if (v === 0 || v === ACTION_W || v === -ACTION_W) return;
         snap(v <= -ACTION_W / 2 ? -ACTION_W : v >= ACTION_W / 2 ? ACTION_W : 0);
       });
-    // A tap on an open row closes it; a tap on a closed row does nothing (the
-    // content isn't a button on the web either).
+    // The web's `onClick` on the sliding content: a tap on an open row closes
+    // it, a tap on a closed row does nothing.
     const tap = Gesture.Tap().onEnd(() => {
       if (x.value !== 0) snap(0);
     });
@@ -167,8 +171,12 @@ export const SwipeRow = memo(function SwipeRow({
   }));
 
   return (
-    <View style={[styles.shell, { backgroundColor: tone.card }]}>
-      <View style={styles.frame}>
+    // The web writes `relative overflow-hidden rounded-card shadow-card` on one
+    // element. On iOS a clipping view masks its own shadow away, so `shadow-card`
+    // moves out here — same rounding, and the card colour so the shadow has a
+    // body to fall from. The frame below is otherwise the web's element.
+    <View className={`rounded-card shadow-card ${tone.shell}`}>
+      <View className="relative overflow-hidden rounded-card">
         {/* Edit revealed by swiping right. */}
         <Press
           noScale
@@ -177,7 +185,8 @@ export const SwipeRow = memo(function SwipeRow({
             snapTo(0);
             onEdit(tx);
           }}
-          style={[styles.action, styles.actionLeft]}
+          className="absolute inset-y-0 left-0 flex items-center justify-center bg-carrot text-white"
+          style={{ width: ACTION_W }}
         >
           <Pencil size={20} strokeWidth={2} color={colors.white} />
         </Press>
@@ -189,89 +198,48 @@ export const SwipeRow = memo(function SwipeRow({
             snapTo(0);
             onDelete(tx);
           }}
-          style={[styles.action, styles.actionRight]}
+          className="absolute inset-y-0 right-0 flex items-center justify-center bg-expense text-white"
+          style={{ width: ACTION_W }}
         >
           <Trash2 size={20} strokeWidth={2} color={colors.white} />
         </Press>
 
+        {/* The sliding content is the last child and opaque, so the frame's
+            clipping keeps the two actions hidden until it moves off them. */}
         <GestureDetector gesture={gesture}>
-          <Animated.View style={[styles.content, { backgroundColor: tone.card }, sliding]}>
-            <View style={[styles.badge, { backgroundColor: withAlpha(color, tone.iconAlpha) }]}>
+          <Animated.View
+            style={sliding}
+            className={`relative flex flex-row items-center gap-3 px-4 py-3.5 ${tone.card}`}
+          >
+            <View
+              className="flex h-10 w-10 items-center justify-center rounded-pill"
+              style={{ backgroundColor: `${color}${tone.iconAlpha}` }}
+            >
               <Icon size={20} strokeWidth={2} color={color} />
             </View>
-            <View style={styles.body}>
-              <Text style={[styles.label, { color: tone.label }]}>
-                {categoryLabel(tx.category)}
-              </Text>
+            <View className="min-w-0 flex-1">
+              <Text className={`font-medium ${tone.label}`}>{categoryLabel(tx.category)}</Text>
               {tx.note ? (
-                <Text numberOfLines={1} style={[styles.meta, { color: tone.meta }]}>
+                <Text numberOfLines={1} className={`truncate text-xs ${tone.meta}`}>
                   {tx.note}
                 </Text>
               ) : null}
-              <Text style={[styles.meta, { color: tone.meta }]}>
+              <Text className={`text-xs ${tone.meta}`}>
                 {dateLabel(tx.occurred_at)}
                 {tx.original_currency === "LBP" && " · LBP"}
               </Text>
             </View>
-            <Text style={[styles.amount, { color: amountColor(tx.is_income) }]}>
+            <Text
+              className={`font-numeric font-medium tabular-nums ${amountColorClass(tx.is_income)}`}
+            >
               {tx.is_income ? "+" : "-"}
-              {tx.amountMask != null ? `$${tx.amountMask}` : formatUsdCents(tx.amount_usd_cents)}
+              {tx.amountMask != null
+                ? `$${tx.amountMask}`
+                : formatUsdCents(tx.amount_usd_cents)}
             </Text>
           </Animated.View>
         </GestureDetector>
-
-        {/* `ring-1 ring-inset ring-white/5`: drawn on the frame, above the
-            content (an inset shadow on the frame itself would be painted
-            under the opaque content), so it follows the rounded corners. */}
-        {dark && <View pointerEvents="none" style={styles.ring} />}
       </View>
     </View>
   );
-});
-
-const styles = StyleSheet.create({
-  // shadow-card — on the shell, outside the clipping frame.
-  shell: { borderRadius: radius.card, boxShadow: shadows.card },
-  // relative overflow-hidden rounded-card
-  frame: { position: "relative", overflow: "hidden", borderRadius: radius.card },
-  // absolute inset-y-0 flex items-center justify-center, `width: ACTION_W`
-  action: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: ACTION_W,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionLeft: { left: 0, backgroundColor: colors.carrot },
-  actionRight: { right: 0, backgroundColor: colors.expense },
-  // relative flex items-center gap-3 px-4 py-3.5 — a rectangle, no radius.
-  content: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  // h-10 w-10 rounded-pill
-  badge: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  body: { flex: 1, minWidth: 0 },
-  label: { ...text.base, fontWeight: weight.medium },
-  meta: { ...text.xs },
-  amount: { ...numeric, ...text.base, fontWeight: weight.medium },
-  ring: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: radius.card,
-    boxShadow: shadows.ringWhite5,
-  },
 });

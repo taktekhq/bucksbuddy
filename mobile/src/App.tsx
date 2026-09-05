@@ -1,3 +1,7 @@
+// NativeWind: the compiled stylesheet. Importing it is what puts the class
+// definitions into the bundle — without this line no className resolves.
+import "../global.css";
+
 import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";

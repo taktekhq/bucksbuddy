@@ -1,16 +1,15 @@
-/** @type {import('tailwindcss').Config} */
-// The web's tailwind.config.ts, carried over so every class name in the ported
-// screens resolves to exactly the same value it does in the browser. Keep the
-// two in sync: if a token changes in ../tailwind.config.ts, change it here.
+// Design tokens — a COPY of ../tailwind.config.ts, so every class name in the
+// ported screens resolves to exactly the value it does in the browser. Keep the
+// two in step: if a token changes over there, change it here.
 //
-// Only three things differ, and only because a phone isn't a browser:
+// Three things differ, and only because a phone isn't a browser:
 //   • `content` points at this app's sources, and the NativeWind preset is on.
-//   • `fontFamily` holds real font names, not CSS fallback stacks — React
-//     Native picks one family, so each slot names the single face to use.
+//   • `fontFamily` names single faces, not CSS fallback stacks — React Native
+//     picks one family per slot.
 //   • The `safe-*` spacing tokens are gone: `env(safe-area-inset-*)` is CSS.
 //     Safe areas come from react-native-safe-area-context (see ui/Screen).
 //
-// Concept: "an Apple app, hijacked by Bugs Bunny". The base is a plain,
+// Concept: "an Apple app, hijacked by Bugs Bunny." The base is a plain,
 // grouped-iOS surface (light gray canvas, white cards, SF type). The Looney
 // Tunes energy comes from one loud accent — CARROT ORANGE — the Grobold cartoon
 // display font on headers/branding, and money that finally gets to be green &
@@ -45,13 +44,14 @@ module.exports = {
         danger: "#FF3B30", // real errors (shares red)
       },
       fontFamily: {
-        // Body / UI chrome = the platform face (the web's -apple-system stack).
+        // Body / UI chrome = plain Apple.
         sans: ["System"],
         // Display = the cartoon hijack (Looney Tunes "Grobold"), reserved for
-        // headers, the wordmark, and button labels. Loaded in App.tsx.
+        // headers, the wordmark, and button labels. Falls back to a rounded
+        // system face while the self-hosted font loads.
         display: ["Grobold"],
-        // Numeric = all money/digits. The platform face; `tabular-nums` (see
-        // fontVariant in the components) keeps columns from jittering.
+        // Numeric = all money/digits. Stays Apple — friendly SF Pro Rounded with
+        // real tabular figures so columns line up and nothing jitters or ghosts.
         numeric: ["System"],
       },
       borderRadius: {

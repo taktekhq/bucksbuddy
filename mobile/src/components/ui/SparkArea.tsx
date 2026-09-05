@@ -1,9 +1,13 @@
+import { StyleSheet } from "react-native";
+import Svg, { Path } from "react-native-svg";
+
 // A tiny hand-rolled area sparkline — no chart library, just two <Path>s. It
 // stretches to whatever box the caller gives it (preserveAspectRatio="none"),
 // so it works both as the faded wash behind the Home hero and as the big
 // daily-spend chart on the Stats page.
-import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
-import Svg, { Path } from "react-native-svg";
+//
+// `buildAreaPath` is the web's, character for character — the curve has to be
+// the same shape in both apps.
 
 const VIEW_W = 100;
 const VIEW_H = 32;
@@ -57,24 +61,34 @@ type Props = {
    */
   stroke?: string;
   fill: string;
-  /** Extra style on top of the default `absolute inset-0 h-full w-full`. */
-  style?: StyleProp<ViewStyle>;
+  className?: string;
 };
 
-// The web's `pointer-events-none absolute inset-0 h-full w-full` is baked in:
-// every caller draws this behind something tappable, and the parent card's
-// `overflow: hidden` + rounded corners clip it, exactly like the browser.
-export function SparkArea({ values, stroke, fill, style }: Props) {
+// The web's `<svg className="pointer-events-none absolute inset-0 h-full w-full">`.
+// The class string still comes across from the call site, but the absolute fill
+// is *also* pinned with StyleSheet.absoluteFill (one of the two things PORTING
+// lets a StyleSheet do): react-native-svg's <Svg> is a third-party component,
+// so we don't want the chart's position depending on it being css-interop'd.
+// `pointer-events-none` is the `pointerEvents` prop — every caller draws this
+// behind something tappable.
+export function SparkArea({
+  values,
+  stroke,
+  fill,
+  className = "pointer-events-none absolute inset-0 h-full w-full",
+}: Props) {
   const paths = buildAreaPath(values);
   if (!paths) return null;
   return (
     <Svg
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       preserveAspectRatio="none"
+      className={className}
+      style={StyleSheet.absoluteFill}
       pointerEvents="none"
+      // aria-hidden="true"
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-      style={[StyleSheet.absoluteFill, style]}
     >
       <Path d={paths.area} fill={fill} />
       {stroke && (

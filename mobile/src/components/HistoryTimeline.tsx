@@ -1,8 +1,7 @@
 import { memo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { HistoryStack } from "@/components/HistoryStack";
-import { formatSignedUsdCents, netColor } from "@/lib/money";
-import { display, numeric, text, trackingWide, weight, white } from "@/lib/theme";
+import { formatSignedUsdCents } from "@/lib/money";
 import type { HistoryGroup, TimelineDay } from "@/lib/history";
 import type { Transaction } from "@/types/db";
 
@@ -11,15 +10,18 @@ import type { Transaction } from "@/types/db";
 // Back-to-back entries of the same category collapse into a HistoryStack; a lone
 // entry is just a row. This is the "did I log everything yesterday?" view.
 //
-// The full-history page virtualizes this through a SectionList, so the pieces
-// are exported on their own: `toSections` turns the days into sections and
-// `DayHeader` is the `<header>` of each. `HistoryTimeline` below is the plain,
-// non-virtualized composition of the same parts.
+// The full-history page has up to 500 rows, so it feeds these same pieces to a
+// SectionList instead of mapping over them (PORTING.md §5): `toSections` turns
+// the days into its sections and `DayHeader` is each section's `<header>`.
+// `HistoryTimeline` below is the plain composition, identical to the web's.
 
-/** `gap-5` between day sections. */
-export const SECTION_GAP = 20;
-/** `gap-1.5` between a day's header and its rows, and between rows. */
-export const ROW_GAP = 6;
+// See lib/money — the mobile copy still returns a hex, so the class version
+// lives here until it's put back.
+const netColorClass = (cents: number) => {
+  if (cents > 0) return "text-income";
+  if (cents < 0) return "text-expense";
+  return "text-label";
+};
 
 export type TimelineSection = TimelineDay & {
   data: HistoryGroup[];
@@ -31,24 +33,21 @@ export function toSections(days: TimelineDay[]): TimelineSection[] {
   return days.map((day, i) => ({ ...day, data: day.groups, first: i === 0 }));
 }
 
-// <header class="flex items-baseline justify-between px-1">
-export const DayHeader = memo(function DayHeader({
-  day,
-  first = true,
-}: {
-  day: TimelineDay;
-  first?: boolean;
-}) {
+// The web's `<header className="flex items-baseline justify-between px-1">`
+// (`flex-row` added — a browser's `flex` is a row, React Native's is a column).
+export const DayHeader = memo(function DayHeader({ day }: { day: TimelineDay }) {
   return (
-    <View style={[styles.header, !first && { marginTop: SECTION_GAP }]}>
-      <Text style={styles.label} accessibilityRole="header">
+    <View className="flex flex-row items-baseline justify-between px-1">
+      <Text
+        accessibilityRole="header"
+        className="font-display text-xs font-bold uppercase tracking-wide text-white/55"
+      >
         {day.label}
       </Text>
       <Text
-        style={[
-          styles.total,
-          { color: day.totalCents === 0 ? white(0.55) : netColor(day.totalCents) },
-        ]}
+        className={`font-numeric text-sm font-medium tabular-nums ${
+          day.totalCents === 0 ? "text-white/55" : netColorClass(day.totalCents)
+        }`}
       >
         {day.masked ? "••••" : formatSignedUsdCents(day.totalCents)}
       </Text>
@@ -66,19 +65,18 @@ export function HistoryTimeline({
   onDelete: (tx: Transaction) => void;
 }) {
   return (
-    <View style={styles.days}>
+    <View className="flex flex-col gap-5">
       {days.map((day) => (
-        <View key={day.key} style={styles.day}>
+        <View key={day.key} className="flex flex-col gap-1.5">
           <DayHeader day={day} />
-          <View style={styles.list}>
-            {day.groups.map((g, i) => (
-              <HistoryStack
-                key={`${day.key}:${i}`}
-                group={g}
-                stackKey={`${day.key}:${i}`}
-                onEdit={onEdit}
-                onDelete={onDelete}
-              />
+          <View className="flex flex-col gap-1.5">
+            {day.groups.map((g) => (
+              // Keyed by the run's category and its newest row, never by index,
+              // so a delete above a run doesn't re-key it (or hand its open
+              // state to a neighbour).
+              <View key={`${day.key}:${g.key}:${g.rows[0].id}`}>
+                <HistoryStack group={g} onEdit={onEdit} onDelete={onDelete} />
+              </View>
             ))}
           </View>
         </View>
@@ -86,28 +84,3 @@ export function HistoryTimeline({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  // flex flex-col gap-5
-  days: { gap: SECTION_GAP },
-  // flex flex-col gap-1.5 — the header carries the gap to the first row.
-  day: {},
-  header: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    paddingHorizontal: 4, // px-1
-    marginBottom: ROW_GAP,
-  },
-  // font-display text-xs font-bold uppercase tracking-wide text-white/55
-  label: {
-    ...display,
-    ...text.xs,
-    letterSpacing: trackingWide(12),
-    color: white(0.55),
-  },
-  // font-numeric text-sm font-medium tabular-nums
-  total: { ...numeric, ...text.sm, fontWeight: weight.medium },
-  // flex flex-col gap-1.5
-  list: { gap: ROW_GAP },
-});

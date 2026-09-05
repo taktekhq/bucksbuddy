@@ -1,50 +1,56 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { ChevronLeft } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { back } from "@/lib/router";
-import { colors, display, text, trackingWide, white } from "@/lib/theme";
+import { colors } from "@/lib/theme";
 
-// The plain iOS nav bar every sub-page shares: a back chevron pinned left
-// (`absolute left-0 -m-2 p-2`) and a centered Grobold title. `dark` is the
-// version for the dark rooms (white title, wider tracking); `tint` recolors
-// the chevron (the Safe uses gold). Back pops the native stack by default.
+// The plain iOS nav bar every sub-page repeats verbatim on the web —
+// `<header class="relative flex items-center justify-center py-1">` with a
+// back chevron pinned left and a centered title. It has no component of its
+// own there; each page inlines it. Here it's one component, with the web's
+// three title looks:
+//
+//   • Legal / Contact — the title is a `<SectionHeader>` (`section`).
+//   • Settings — `font-display text-base font-bold uppercase text-label-muted`.
+//   • The dark rooms (History / Stats / Receipts / Safe) — `dark`, which adds
+//     `tracking-wide text-white/90`.
+//
+// `tint` recolors the chevron (the Safe's is gold; everywhere else carrot,
+// the web's `text-carrot`). Back pops the native stack by default.
 export function NavHeader({
   title,
   onBack = back,
   dark = false,
   tint = colors.carrot,
+  section = false,
 }: {
   title: string;
   onBack?: () => void;
   dark?: boolean;
   tint?: string;
+  /** Legal/Contact title the web renders as a `<SectionHeader>`. */
+  section?: boolean;
 }) {
   return (
-    <View style={styles.bar}>
-      <Press onPress={onBack} accessibilityLabel="Back" style={styles.back} hitSlop={8}>
+    <View className="relative flex items-center justify-center py-1">
+      {/* `text-carrot` is the chevron's color, which lucide takes as a prop. */}
+      <Press onPress={onBack} accessibilityLabel="Back" className="absolute left-0 -m-2 p-2" hitSlop={8}>
         <ChevronLeft size={24} strokeWidth={2.5} color={tint} />
       </Press>
-      <Text style={[styles.title, dark ? styles.dark : styles.light]}>{title}</Text>
+      {section ? (
+        <SectionHeader>{title}</SectionHeader>
+      ) : (
+        <Text
+          className={
+            dark
+              ? "font-display text-base font-bold uppercase tracking-wide text-white/90"
+              : "font-display text-base font-bold uppercase text-label-muted"
+          }
+        >
+          {title}
+        </Text>
+      )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  bar: {
-    position: "relative",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 4, // py-1
-  },
-  back: {
-    position: "absolute",
-    left: -8, // -m-2
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
-    padding: 8, // p-2
-  },
-  title: { ...display, ...text.base },
-  light: { color: colors.labelMuted },
-  dark: { color: white(0.9), letterSpacing: trackingWide(16) },
-});

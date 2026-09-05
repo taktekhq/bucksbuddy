@@ -92,13 +92,12 @@ export function Screen({
         showsVerticalScrollIndicator={false}
       >
         {gradient && !gradientFixed && <GradientLayer gradient={gradient} />}
-        <View
-          className={`mx-auto w-full max-w-md grow ${className}`}
-          // pt-[calc(…+var(--safe-top))] / pb-[calc(…+var(--safe-bottom))]:
-          // the class supplies the base padding, the inset is added on top.
-          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
-        >
-          {children}
+        {/* The web writes `pt-[calc(1rem+var(--safe-top))]`, i.e. base padding
+            PLUS the inset. An inline style would beat the class rather than add
+            to it, so the insets go on a wrapper and the screen's own `pt-*` /
+            `pb-*` classes stack on top of them. */}
+        <View className="grow" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
+          <View className={`mx-auto w-full max-w-md grow ${className}`}>{children}</View>
         </View>
       </ScrollView>
     </ScreenFrame>

@@ -21,8 +21,24 @@ export function formatSignedUsdCents(cents: number): string {
 }
 
 /**
- * Text color for a net value. Money is green when you're up, red when you're
- * down, neutral at exactly zero. (The web's `netColorClass`, as a hex.)
+ * Tailwind text-color class for a net value. Money is green when you're up,
+ * red when you're down, neutral at exactly zero. The carrot hijack lets money
+ * be colorful again. Same as the web's — the markup uses this one.
+ */
+export function netColorClass(cents: number): string {
+  if (cents > 0) return "text-income";
+  if (cents < 0) return "text-expense";
+  return "text-label";
+}
+
+/** Tailwind text-color class for a single entry by direction (in = green, out = red). */
+export function amountColorClass(isIncome: boolean): string {
+  return isIncome ? "text-income" : "text-expense";
+}
+
+/**
+ * The same net color as a hex, for the places React Native takes a color as a
+ * prop (a lucide icon's `color=`) rather than a class.
  */
 export function netColor(cents: number): string {
   if (cents > 0) return colors.income;
