@@ -26,10 +26,18 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
-      ["expo-font", { "fonts": ["./assets/fonts/Grobold.ttf"] }],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Grobold.ttf"
+          ]
+        }
+      ],
       "expo-web-browser",
       "expo-sharing",
-      "expo-localization"
+      "expo-localization",
+      "expo-secure-store"
     ]
   }
 }
