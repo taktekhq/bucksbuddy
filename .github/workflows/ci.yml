@@ -33,3 +33,25 @@ jobs:
       - run: npm run build
       # Enforces the 100% coverage thresholds from vitest.config.ts.
       - run: npm run coverage
+
+  mobile:
+    name: Mobile unit & coverage (Jest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      # The port must type-check as strictly as the web does.
+      - run: npx tsc --noEmit
+      # Enforces the 100% coverage thresholds from mobile/jest.config.js.
+      - run: npm run coverage
+      # Proves the native crypto still reads and writes the same envelopes the
+      # browser does — the rows in Supabase were encrypted there.
+      - run: npm run test:interop

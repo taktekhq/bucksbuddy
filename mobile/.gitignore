@@ -1,0 +1,20 @@
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.env
+.env.local
+.DS_Store
+
+# test coverage output
+coverage/
+
+# per-developer agent tooling, like the repo root
+.claude/
