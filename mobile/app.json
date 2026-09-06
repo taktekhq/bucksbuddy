@@ -41,7 +41,8 @@
       "expo-web-browser",
       "expo-sharing",
       "expo-localization",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-apple-authentication"
     ],
     "owner": "taktekhq",
     "extra": {
