@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.taktek.bucksbuddy",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.taktek.bucksbuddy",
