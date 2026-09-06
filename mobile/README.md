@@ -36,8 +36,8 @@ Two things the script does that matter for how the app *feels*:
 | Web                         | Mobile                                                              |
 | --------------------------- | ------------------------------------------------------------------- |
 | hash router, no transitions | `@react-navigation/native-stack` — native push/pop, edge swipe-back; `navigate("/x")` API kept (`lib/router.ts`) |
-| Tailwind classes            | `StyleSheet` + `lib/theme.ts` (exact values; see `PORTING.md`)      |
-| `shadow-card`, rings        | CSS `boxShadow` strings (new-architecture RN renders them verbatim)  |
+| Tailwind classes            | the same classes, via NativeWind; `tailwind.config.js` is a copy of the web's (see `PORTING.md`) |
+| `shadow-card`               | the same class; rings became real borders (a spread-only shadow renders as corners on RN) |
 | `.press` / `transition`     | Reanimated on the UI thread: `Press` scale, sliding segment highlights, color tweens, layout transitions |
 | framer-motion swipes/sheet  | gesture-handler `Pan` + Reanimated (`SwipeRow`, `SwipeToDelete`, `CategorySheet`) |
 | `<ul>` of 500 rows          | virtualized `SectionList` / `FlatList` (History)                    |
@@ -47,30 +47,36 @@ Two things the script does that matter for how the app *feels*:
 | Google OAuth redirect       | `expo-web-browser` auth session (`lib/oauth.ts`)                     |
 | CSV download                | expo-file-system + share sheet                                       |
 | `window.confirm`            | `Alert.alert`                                                        |
-| WebCrypto (`lib/e2e.ts`)    | **stubbed** — see below                                              |
+| WebCrypto (`lib/e2e.ts`)    | pure-JS AES-GCM via `@noble` (`lib/crypto.ts`), byte-compatible      |
 
 `PORTING.md` is the contract every screen was ported against; keep it in
 sync when a rule changes.
 
-### Encryption is stubbed (on purpose)
+### Encryption
 
-Expo Go has no WebCrypto, so `lib/vault.ts` exposes the crypto seam as a
-`Vault` port and ships an Expo Go implementation that reports every account
-as *locked*. That is the exact state the web app shows on a device that
-hasn't been unlocked yet: rows load with plaintext labels and a cipher
-fragment where the amount would be, stats wear the cipher, and writes are
-refused with a clear message. Every screen renders and navigates; nothing
-decrypts.
+Expo Go has no WebCrypto, so `lib/crypto.ts` implements the same AES-GCM and
+PBKDF2 in pure JavaScript with `@noble`. The envelopes are byte-compatible
+with what the browser wrote, which matters because the rows already in
+Supabase were encrypted there —
+`scripts/crypto-interop.test.mts` proves it in both directions.
 
-The last step of the port — a real `Vault` (native WebCrypto in a dev build,
-or a pure-JS AES-GCM/PBKDF2) — swaps that one export. Nothing else changes.
+Cold start never derives a key. The web repeats 600k PBKDF2 rounds on every
+page load, which WebCrypto absorbs in native code and pure JS cannot. It also
+isn't needed: a master key is generated once and only ever re-wrapped, so this
+device derives it once and keeps it in the OS keystore (`lib/vault.ts`),
+checked against the account verifier on load. Later launches are a keystore
+read. Both that key and the cached passphrase are wiped on sign-out and
+account deletion.
 
-### Google sign-in
+### Sign-in
 
-Supabase must allow the redirect back into the app: **Auth → URL
-Configuration → Redirect URLs**, add `exp://**` for Expo Go and
-`bucksbuddy://**` for the native build. The hidden email/password sign-in
-(tap the carrot 7 times on the landing page) works without any of that.
+Google and Apple, plus a hidden email/password path (tap the carrot 7 times).
+
+Google needs the redirect allow-listed in Supabase: **Auth → URL
+Configuration → Redirect URLs**, `exp://**` for Expo Go and `bucksbuddy://**`
+for native builds. Apple needs none of that — iOS returns an identity token
+that Supabase exchanges directly — but it does need a dev build, since the
+entitlement isn't in Expo Go.
 
 ## Layout
 
