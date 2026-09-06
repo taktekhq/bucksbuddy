@@ -47,6 +47,11 @@
     "owner": "taktekhq",
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fd6e1661-5b7f-4109-a22e-e7f2725247a4"
+      }
     }
   }
 }
