@@ -133,6 +133,12 @@ revisiting only if you want native crash reports later.
       same project with the same key.
 - [x] Every mobile event carries `platform` (`ios` / `android`); web events
       have none, so the three separate cleanly in one project.
+- [x] **Error tracking is wired up**: an error boundary catches render crashes,
+      a global handler catches everything thrown outside React, and both report
+      through `posthog.captureException`. Connect the EAS integration
+      (`eas integrations:posthog:connect`) with a personal API key using the
+      "Source map upload" preset so a stack trace names real files instead of
+      `index.bundle:1:284719`.
 - [ ] If you ever enable session replay on mobile, revisit §7 — it records far
       more than eight events and changes what you must disclose.
 

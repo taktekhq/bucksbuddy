@@ -7,6 +7,7 @@
 // reaches for `jest.requireActual` to get the real module.
 
 const mockCapture = jest.fn();
+const mockCaptureException = jest.fn();
 const mockIdentify = jest.fn();
 const mockReset = jest.fn();
 const mockConstruct = jest.fn();
@@ -15,12 +16,18 @@ jest.mock("posthog-react-native", () => ({
   __esModule: true,
   default: function PostHog(...args: unknown[]) {
     mockConstruct(...args);
-    return { capture: mockCapture, identify: mockIdentify, reset: mockReset };
+    return {
+      capture: mockCapture,
+      captureException: mockCaptureException,
+      identify: mockIdentify,
+      reset: mockReset,
+    };
   },
 }));
 
 type Analytics = {
   capture: (event: string, properties?: Record<string, unknown>) => void;
+  captureException: (error: unknown, properties?: Record<string, unknown>) => void;
   identify: (id: string, properties?: Record<string, unknown>) => void;
   reset: () => void;
 };
@@ -69,6 +76,14 @@ describe("posthog", () => {
     posthog.capture("csv_exported");
     expect(mockCapture).toHaveBeenCalledWith("csv_exported", { platform: "ios" });
 
+    // Crashes carry the platform too, so an iOS-only bug reads as one.
+    const boom = new Error("kaboom");
+    posthog.captureException(boom, { source: "render" });
+    expect(mockCaptureException).toHaveBeenCalledWith(boom, {
+      source: "render",
+      platform: "ios",
+    });
+
     posthog.identify("u1", { email: "x@y.com" });
     expect(mockIdentify).toHaveBeenCalledWith("u1", { email: "x@y.com" });
 
@@ -94,10 +109,12 @@ describe("posthog", () => {
 
     expect(() => {
       posthog.capture("signed_in");
+      posthog.captureException(new Error("kaboom"));
       posthog.identify("u1");
       posthog.reset();
     }).not.toThrow();
     expect(mockCapture).not.toHaveBeenCalled();
+    expect(mockCaptureException).not.toHaveBeenCalled();
     expect(mockIdentify).not.toHaveBeenCalled();
     expect(mockReset).not.toHaveBeenCalled();
   });

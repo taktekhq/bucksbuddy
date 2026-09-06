@@ -32,7 +32,12 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
 // --- analytics: a no-op that still records calls -------------------------
 jest.mock("@/lib/posthog", () => ({
   __esModule: true,
-  default: { capture: jest.fn(), identify: jest.fn(), reset: jest.fn() },
+  default: {
+    capture: jest.fn(),
+    captureException: jest.fn(),
+    identify: jest.fn(),
+    reset: jest.fn(),
+  },
 }));
 
 // --- Reanimated ----------------------------------------------------------

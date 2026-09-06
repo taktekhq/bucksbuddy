@@ -4,6 +4,8 @@ import "../global.css";
 
 import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import posthog from "@/lib/posthog";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
@@ -117,6 +119,16 @@ function Root() {
   );
 }
 
+// Errors thrown outside React — in a promise, a timer, a native callback —
+// never reach the boundary below. React Native routes them here instead, and
+// without this they die in a console nobody can read once the app is on a
+// tester's phone.
+const defaultHandler = ErrorUtils.getGlobalHandler();
+ErrorUtils.setGlobalHandler((error, isFatal) => {
+  posthog.captureException(error, { source: "uncaught", fatal: Boolean(isFatal) });
+  defaultHandler?.(error, isFatal);
+});
+
 export default function App() {
   // Grobold is the cartoon hijack; everything else is the platform font. Hold
   // the splash until it's in so the wordmark never flashes a fallback.
@@ -126,7 +138,9 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaProvider>{fontsLoaded ? <Root /> : <Splash />}</SafeAreaProvider>
+      <SafeAreaProvider>
+        <ErrorBoundary>{fontsLoaded ? <Root /> : <Splash />}</ErrorBoundary>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

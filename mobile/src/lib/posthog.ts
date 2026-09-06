@@ -15,16 +15,30 @@ type Props = Record<string, string | number | boolean | null | undefined> | unde
 
 type Analytics = {
   capture: (event: string, properties?: Props) => void;
+  /**
+   * Report a crash. Without it, a tester saying "it broke" leaves nothing to
+   * look at — their console isn't reachable. Paired with the source maps EAS
+   * uploads, the stack trace names real files rather than
+   * `index.bundle:1:284719`.
+   */
+  captureException: (error: unknown, properties?: Props) => void;
   identify: (distinctId: string, properties?: Props) => void;
   reset: () => void;
 };
 
-const noop: Analytics = { capture() {}, identify() {}, reset() {} };
+const noop: Analytics = {
+  capture() {},
+  captureException() {},
+  identify() {},
+  reset() {},
+};
 
 function real(client: PostHog): Analytics {
   return {
     capture: (event, properties) =>
       client.capture(event, { ...properties, platform: Platform.OS } as never),
+    captureException: (error, properties) =>
+      client.captureException(error, { ...properties, platform: Platform.OS } as never),
     identify: (distinctId, properties) => client.identify(distinctId, properties as never),
     reset: () => client.reset(),
   };

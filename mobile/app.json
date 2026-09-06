@@ -34,6 +34,9 @@
         "expo-font",
         {
           "fonts": [
+            "./assets/fonts/Grobold.ttf",
+            "./assets/fonts/Grobold.ttf",
+            "./assets/fonts/Grobold.ttf",
             "./assets/fonts/Grobold.ttf"
           ]
         }
@@ -42,7 +45,9 @@
       "expo-sharing",
       "expo-localization",
       "expo-secure-store",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-sqlite",
+      "posthog-react-native/expo"
     ],
     "owner": "taktekhq",
     "extra": {
