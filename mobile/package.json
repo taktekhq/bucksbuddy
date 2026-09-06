@@ -62,5 +62,8 @@
     "coverage": "jest --coverage",
     "test:interop": "node --experimental-strip-types scripts/crypto-interop.test.mts"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "@react-native/metro-config": "0.86.3"
+  }
 }
