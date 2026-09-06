@@ -34,9 +34,6 @@
         "expo-font",
         {
           "fonts": [
-            "./assets/fonts/Grobold.ttf",
-            "./assets/fonts/Grobold.ttf",
-            "./assets/fonts/Grobold.ttf",
             "./assets/fonts/Grobold.ttf"
           ]
         }
