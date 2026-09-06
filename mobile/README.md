@@ -4,6 +4,9 @@ The native port of the PWA in the parent directory. Same screens, same
 design tokens, same copy, same data layer; React Native instead of the DOM.
 It runs in **Expo Go** today — no native build needed.
 
+New machine? `SETUP.md` has the full clone-to-running path, the env values,
+and the service accounts involved.
+
 ## Run it (remote workspace → phone)
 
 ```sh
