@@ -104,7 +104,8 @@ export function Screen({
   );
 }
 
-export function toLocations(stops: readonly number[]): [number, number, ...number[]] {
+// Internal: pixel stops → the 0..1 fractions LinearGradient wants.
+function toLocations(stops: readonly number[]): [number, number, ...number[]] {
   const last = stops[stops.length - 1] || 1;
   return stops.map((s) => s / last) as [number, number, ...number[]];
 }

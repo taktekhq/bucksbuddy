@@ -2,12 +2,10 @@
 // the web's assertions verbatim (minus the vitest import); the hex helpers are
 // this app's addition, for the places React Native takes a color as a prop.
 import {
-  amountColor,
   amountColorClass,
   formatSignedUsdCents,
   formatUsdCents,
   netCents,
-  netColor,
   netColorClass,
 } from "@/lib/money";
 import { colors } from "@/lib/theme";
@@ -45,21 +43,6 @@ describe("amountColorClass", () => {
   it("returns income green or expense red", () => {
     expect(amountColorClass(true)).toBe("text-income");
     expect(amountColorClass(false)).toBe("text-expense");
-  });
-});
-
-describe("netColor", () => {
-  it("is the same three-way split as netColorClass, as a hex", () => {
-    expect(netColor(5)).toBe(colors.income);
-    expect(netColor(-5)).toBe(colors.expense);
-    expect(netColor(0)).toBe(colors.label);
-  });
-});
-
-describe("amountColor", () => {
-  it("is amountColorClass as a hex", () => {
-    expect(amountColor(true)).toBe(colors.income);
-    expect(amountColor(false)).toBe(colors.expense);
   });
 });
 

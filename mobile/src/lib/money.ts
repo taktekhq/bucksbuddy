@@ -1,6 +1,5 @@
 // Display + coloring helpers. Every money sign/color in the UI should come from
 // here so styling stays consistent (see docs/DESIGN_SYSTEM.md).
-import { colors } from "@/lib/theme";
 
 const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -34,21 +33,6 @@ export function netColorClass(cents: number): string {
 /** Tailwind text-color class for a single entry by direction (in = green, out = red). */
 export function amountColorClass(isIncome: boolean): string {
   return isIncome ? "text-income" : "text-expense";
-}
-
-/**
- * The same net color as a hex, for the places React Native takes a color as a
- * prop (a lucide icon's `color=`) rather than a class.
- */
-export function netColor(cents: number): string {
-  if (cents > 0) return colors.income;
-  if (cents < 0) return colors.expense;
-  return colors.label;
-}
-
-/** Text color for a single entry by direction (in = green, out = red). */
-export function amountColor(isIncome: boolean): string {
-  return isIncome ? colors.income : colors.expense;
 }
 
 /** Sum transactions into a signed net in USD cents. */

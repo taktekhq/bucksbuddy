@@ -6,7 +6,7 @@ import type { ReactElement } from "react";
 import { Text } from "react-native";
 import { render, screen } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { GradientLayer, Screen, ScreenFrame, toLocations } from "@/components/ui/Screen";
+import { GradientLayer, Screen, ScreenFrame } from "@/components/ui/Screen";
 import { colors, OBSERVATORY, RABBIT_HOLE, SAVINGS, VAULT } from "@/lib/theme";
 
 const METRICS = {
@@ -33,24 +33,22 @@ function withSafeArea(ui: ReactElement) {
 const style = (node: Node | undefined) =>
   (node?.props.style ?? {}) as Record<string, unknown>;
 
-describe("toLocations", () => {
-  it("normalizes the web's pixel offsets to 0..1", () => {
-    expect(toLocations([0, 220, 460])).toEqual([0, 220 / 460, 1]);
-    expect(toLocations([0, 260])).toEqual([0, 1]);
-  });
-
-  it("falls back to a unit scale when the last stop is 0", () => {
-    // Nothing to divide by — dividing would give NaN and blank the gradient.
-    expect(toLocations([0, 0])).toEqual([0, 0]);
-  });
-});
-
 describe("GradientLayer", () => {
   it("paints the gradient's colors at its normalized stops", async () => {
     await render(<GradientLayer gradient={RABBIT_HOLE} />);
     const layer = find("LinearGradient")[0];
     expect(layer.props.colors).toEqual(RABBIT_HOLE.colors);
-    expect(layer.props.locations).toEqual(toLocations(RABBIT_HOLE.stops));
+    // Pixel stops become 0..1 fractions of the gradient's own height.
+    expect(layer.props.locations).toEqual([0, 220 / 460, 1]);
+  });
+
+  it("survives a gradient whose stops end at zero", async () => {
+    // Nonsense input, but dividing by that last stop would produce NaN
+    // locations and a blank screen rather than an error.
+    await render(
+      <GradientLayer gradient={{ colors: ["#000", "#fff"], stops: [0, 0], floor: "#000" }} />,
+    );
+    expect(find("LinearGradient")[0].props.locations).toEqual([0, 0]);
   });
 
   it("is as tall as the gradient's last stop and never eats a touch", async () => {
