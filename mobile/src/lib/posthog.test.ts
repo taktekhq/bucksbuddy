@@ -58,8 +58,16 @@ describe("posthog", () => {
       host: "https://eu.i.posthog.com",
     });
 
+    // Every event is stamped with the platform so the two apps stay apart in
+    // a PostHog project that also receives the web's events.
     posthog.capture("signed_in", { plan: "free" });
-    expect(mockCapture).toHaveBeenCalledWith("signed_in", { plan: "free" });
+    expect(mockCapture).toHaveBeenCalledWith("signed_in", {
+      plan: "free",
+      platform: "ios",
+    });
+
+    posthog.capture("csv_exported");
+    expect(mockCapture).toHaveBeenCalledWith("csv_exported", { platform: "ios" });
 
     posthog.identify("u1", { email: "x@y.com" });
     expect(mockIdentify).toHaveBeenCalledWith("u1", { email: "x@y.com" });

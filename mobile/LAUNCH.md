@@ -127,9 +127,8 @@ revisiting only if you want native crash reports later.
 
 - [ ] Nothing is strictly required — `posthog-react-native` reports into the
       same project with the same key.
-- [ ] **Recommended:** add a `platform` property (`web` / `ios` / `android`) so
-      the two products don't blur together in the same funnels. One line where
-      the client is created.
+- [x] Every mobile event carries `platform` (`ios` / `android`); web events
+      have none, so the three separate cleanly in one project.
 - [ ] If you ever enable session replay on mobile, revisit §7 — it records far
       more than eight events and changes what you must disclose.
 
