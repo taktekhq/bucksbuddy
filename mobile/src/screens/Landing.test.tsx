@@ -78,6 +78,12 @@ describe("Landing", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/legal");
   });
 
+  it("links to the contact page, which the app has no other way into", async () => {
+    await render(<Landing />);
+    await fireEvent.press(screen.getByText("Contact"));
+    expect(mockNavigate).toHaveBeenCalledWith("/contact");
+  });
+
   it("links to the public stats page from Community stats", async () => {
     await render(<Landing />);
     await fireEvent.press(screen.getByText("Community stats"));

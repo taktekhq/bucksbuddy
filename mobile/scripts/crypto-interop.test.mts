@@ -39,12 +39,6 @@ async function webDeriveWrap(pass: string, salt: Uint8Array) {
     base, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"],
   );
 }
-async function webWrap(rawMaster: Uint8Array, pass: string) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const wrapKey = await webDeriveWrap(pass, salt);
-  return `v1.${toB64(salt)}.${await webEncrypt(wrapKey, "")}`.replace(/\.$/, "");
-}
-
 let failures = 0;
 const check = (name: string, ok: boolean) => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);

@@ -98,7 +98,6 @@ import {
   LOCKED_MSG,
   cipherMask,
   clearDeviceSecrets,
-  clearStoredPassphrase,
   loadStoredPassphrase,
   maskedGold,
   maskedTransaction,
@@ -194,7 +193,7 @@ describe("vault: device secrets", () => {
     expect(setItem).toHaveBeenCalledWith(PASS_KEY, "hunter2", {
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
-    await clearStoredPassphrase("u1"); // the alias the store still calls
+    await clearDeviceSecrets("u1"); // the alias the store still calls
     expect(await loadStoredPassphrase("u1")).toBeNull();
   });
 

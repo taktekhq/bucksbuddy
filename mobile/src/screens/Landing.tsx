@@ -17,7 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
 
 // The public marketing landing page — succinct and on-brand: the static carrot
-// mascot, the Grobold wordmark, a cheeky tagline, three feature cards, and a big
+// mascot, the Grobold wordmark, a cheeky tagline, and a big
 // "Continue with Google" call-to-action. It's the entry point for signed-out
 // visitors (route "/") and owns the Google + email sign-in flows.
 //
@@ -254,6 +254,14 @@ export function Landing() {
           <Press noScale onPress={() => navigate("/stats")}>
             <Text className="text-sm font-semibold text-label-secondary">
               Community stats
+            </Text>
+          </Press>
+          <Text className="text-sm text-label-secondary">·</Text>
+          {/* The web reached Contact by URL; in an app it needs a way in, and
+              the stores want a visible support route. */}
+          <Press noScale onPress={() => navigate("/contact")}>
+            <Text className="text-sm font-semibold text-label-secondary">
+              Contact
             </Text>
           </Press>
         </View>

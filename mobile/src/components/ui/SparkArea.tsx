@@ -75,7 +75,7 @@ export function SparkArea({
   values,
   stroke,
   fill,
-  className = "pointer-events-none absolute inset-0 h-full w-full",
+  className,
 }: Props) {
   const paths = buildAreaPath(values);
   if (!paths) return null;

@@ -20,23 +20,23 @@ Create `mobile/.env`. It is gitignored, so it never travels with the clone.
 
 ```sh
 EXPO_PUBLIC_SUPABASE_URL=https://bucksbuddy.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lemFlaWVhZHRtcmZyZXZsa2JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjQyNDcsImV4cCI6MjA5NTkwMDI0N30.HxqVi8xC2W4U7pvVeFDPB-fve0M2iz5P8f8EL8VP3gA
-EXPO_PUBLIC_POSTHOG_KEY=phc_wPsgmETULTTK7Uo66noRhKTzXeF3Hgf6imWydgLokHzc
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<Supabase → Project Settings → API → anon key>
+EXPO_PUBLIC_POSTHOG_KEY=<PostHog → Project Settings → Project API Key>
 EXPO_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
 ```
 
-`bucksbuddy.supabase.co` is the project's vanity domain; the generated
-`oezaeieadtmrfrevlkbh.supabase.co` resolves to the same project and either
-works. None of these four are secret — the anon key is protected by row-level
-security and already ships inside the web bundle — but all four must exist at
-build time or the app cannot reach Supabase.
-
-Or pull them from EAS instead of retyping:
+Faster, and the reason the values aren't written out here — pull them from EAS,
+which already has all three environments:
 
 ```sh
 npx eas-cli login
 npx eas-cli env:pull --environment production   # writes .env
 ```
+
+`bucksbuddy.supabase.co` is the project's vanity domain; the generated
+`oezaeieadtmrfrevlkbh.supabase.co` reaches the same project. The two Supabase
+values are required — without them the app cannot sign in. The PostHog pair is
+optional: analytics degrade to a silent no-op when the key is unset.
 
 ## 3. Run it
 
@@ -53,7 +53,7 @@ production mode is the default.
 ## 4. Tests
 
 ```sh
-npm test          # 549 tests
+npm test          # unit suite
 npm run coverage  # adds the 100% gate CI enforces
 npx tsc --noEmit  # strict type-check
 ```

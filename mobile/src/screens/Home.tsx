@@ -176,6 +176,7 @@ export function Home() {
             // SparkArea bakes in the web's
             // `pointer-events-none absolute inset-0 h-full w-full`.
             <SparkArea
+              className="pointer-events-none absolute inset-0 h-full w-full"
               values={sparkValues}
               stroke="rgba(245, 99, 0, 0.4)"
               fill="rgba(245, 99, 0, 0.1)"

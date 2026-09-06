@@ -34,17 +34,15 @@ export function ScreenFrame({
   children,
   gradient,
   gradientFixed = false,
-  floor,
   statusBar = "dark",
 }: {
   children: ReactNode;
   gradient?: Gradient;
   /** Home's savings tint is viewport-fixed; the dark rooms scroll with content. */
   gradientFixed?: boolean;
-  floor?: string;
   statusBar?: "light" | "dark";
 }) {
-  const floorColor = floor ?? gradient?.floor ?? colors.canvas;
+  const floorColor = gradient?.floor ?? colors.canvas;
   return (
     <View style={{ flex: 1, backgroundColor: floorColor }}>
       <StatusBar style={statusBar} />
@@ -58,7 +56,6 @@ type Props = {
   children: ReactNode;
   gradient?: Gradient;
   gradientFixed?: boolean;
-  floor?: string;
   statusBar?: "light" | "dark";
   /**
    * The web's `<main>` classes, verbatim — gaps, padding, text color, `justify-center`.
@@ -72,14 +69,13 @@ export function Screen({
   children,
   gradient,
   gradientFixed = false,
-  floor,
   statusBar = "dark",
   className = "",
   scrollRef,
 }: Props) {
   const insets = useSafeAreaInsets();
   return (
-    <ScreenFrame gradient={gradient} gradientFixed={gradientFixed} floor={floor} statusBar={statusBar}>
+    <ScreenFrame gradient={gradient} gradientFixed={gradientFixed} statusBar={statusBar}>
       <ScrollView
         ref={scrollRef}
         className="flex-1"

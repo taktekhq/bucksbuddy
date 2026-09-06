@@ -113,9 +113,6 @@ export async function clearDeviceSecrets(userId: string): Promise<void> {
   await Promise.all([deleteSecure(PASS_KEY(userId)), deleteSecure(CACHED_KEY(userId))]);
 }
 
-/** Kept for the store's existing call sites; clears both secrets. */
-export const clearStoredPassphrase = clearDeviceSecrets;
-
 async function loadCachedKey(userId: string): Promise<MasterKey | null> {
   const b64 = await readSecure(CACHED_KEY(userId));
   if (!b64) return null;

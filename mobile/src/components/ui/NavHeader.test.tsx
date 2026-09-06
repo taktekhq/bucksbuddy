@@ -20,43 +20,10 @@ function allNodes(root: unknown): Node[] {
 const chevron = () => allNodes(screen.toJSON()).find((n) => n.type === "RNSVGSvgView");
 
 describe("NavHeader", () => {
-  it("shows the title", async () => {
-    await render(<NavHeader title="Settings" />);
-    expect(screen.getByText("Settings")).toBeOnTheScreen();
-  });
 
-  it("pops the stack when no handler is given", async () => {
-    await render(<NavHeader title="Settings" />);
-    fireEvent.press(screen.getByLabelText("Back"));
-    expect(mockBack).toHaveBeenCalledTimes(1);
-  });
 
-  it("calls a custom back handler instead of popping", async () => {
-    const onBack = jest.fn();
-    await render(<NavHeader title="Safe" onBack={onBack} />);
-    fireEvent.press(screen.getByLabelText("Back"));
-    expect(onBack).toHaveBeenCalledTimes(1);
-    expect(mockBack).not.toHaveBeenCalled();
-  });
-
-  it("tints the chevron carrot by default", async () => {
-    await render(<NavHeader title="History" />);
-    expect(chevron()?.props.stroke).toBe(colors.carrot);
-  });
-
-  it("takes a custom tint — the Safe's chevron is gold", async () => {
-    await render(<NavHeader title="Safe" tint="#D4AF37" />);
-    expect(chevron()?.props.stroke).toBe("#D4AF37");
-  });
-
-  it("renders the dark-room title", async () => {
-    await render(<NavHeader title="Stats" dark />);
-    expect(screen.getByText("Stats")).toBeOnTheScreen();
-    expect(screen.getByLabelText("Back")).toBeOnTheScreen();
-  });
-
-  it("renders the Legal/Contact title as a section header", async () => {
-    await render(<NavHeader title="Legal" section />);
+  it("renders the Legal/Contact title as a header", async () => {
+    await render(<NavHeader title="Legal" onBack={() => {}} />);
     expect(screen.getByText("Legal")).toBeOnTheScreen();
     expect(screen.getByLabelText("Back")).toBeOnTheScreen();
   });

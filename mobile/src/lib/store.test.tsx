@@ -117,7 +117,7 @@ jest.mock("@/lib/vault", () => {
     },
     loadStoredPassphrase: (...a: unknown[]) => (mockLoadStoredPassphrase as (...x: unknown[]) => unknown)(...a),
     storeStoredPassphrase: (...a: unknown[]) => (mockStoreStoredPassphrase as (...x: unknown[]) => unknown)(...a),
-    clearStoredPassphrase: (...a: unknown[]) => (mockClearStoredPassphrase as (...x: unknown[]) => unknown)(...a),
+    clearDeviceSecrets: (...a: unknown[]) => (mockClearStoredPassphrase as (...x: unknown[]) => unknown)(...a),
   };
 });
 

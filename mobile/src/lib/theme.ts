@@ -1,5 +1,9 @@
 // The handful of token values that can't be expressed as a class name.
 //
+// This is NOT a copy of the palette — tailwind.config.js is the palette, and
+// everything that can be a class already is one. Only colours the app hands to
+// a *prop* live here.
+//
 // Styling lives in class names now (see tailwind.config.js, shared with the
 // web), so this file is deliberately small: it exists for the places React
 // Native takes a color as a *prop* rather than a style — lucide icons
@@ -10,19 +14,11 @@
 export const colors = {
   canvas: "#F2F2F7",
   surface: "#FFFFFF",
-  grouped: "#E9E9EF",
-  label: "#1C1C1E",
   labelMuted: "#48484A",
   labelSecondary: "#8E8E93",
-  separator: "rgba(60,60,67,0.12)",
   carrot: "#F56300",
-  carrotLight: "#FF8A3D",
-  carrotSoft: "#FFF1E6",
-  carrotDark: "#C44E00",
-  carrotLeaf: "#5AA82F",
   income: "#34C759",
   expense: "#FF3B30",
-  danger: "#FF3B30",
   white: "#FFFFFF",
 } as const;
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { Input } from "@/components/ui/Input";
 import { Check } from "lucide-react-native";
 import { useStore } from "@/lib/store";

@@ -17,7 +17,7 @@ import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import { FETCH_CAP } from "@/lib/stats";
 import {
-  clearStoredPassphrase,
+  clearDeviceSecrets,
   loadStoredPassphrase,
   maskedGold,
   maskedTransaction,
@@ -82,8 +82,6 @@ type Store = {
 
 const StoreContext = createContext<Store | null>(null);
 
-const LOCKED_MSG = "Locked — unlock with your passphrase first.";
-
 // The plaintext-label columns written on every (encrypted) transaction row.
 function txLabels(tx: NewTransaction) {
   return {
@@ -112,8 +110,8 @@ function txInMemory(row: TransactionRow, tx: NewTransaction): Transaction {
   };
 }
 
-// While the vault can't produce a key (Expo Go), the write paths explain why
-// instead of the generic "unlock first" nudge.
+// Every write path needs an unlocked master key. The message comes from the
+// vault so the two can't drift apart.
 function lockedError(): Result {
   return { error: vault.lockedMessage };
 }
@@ -235,7 +233,7 @@ export function StoreProvider({
           setLocked(false);
           setPassphrase(stored);
         } else {
-          if (stored) await clearStoredPassphrase(userId); // stale (changed elsewhere)
+          if (stored) await clearDeviceSecrets(userId); // stale (changed elsewhere)
           masterKey.current = null;
           setLocked(true);
           setPassphrase(null);
@@ -289,7 +287,7 @@ export function StoreProvider({
     const key = masterKey.current;
     if (!key) return lockedError();
     await vault.disablePassphrase(userId, key);
-    await clearStoredPassphrase(userId);
+    await clearDeviceSecrets(userId);
     setPassphrase(null);
     setE2eMode("default");
     return { error: null };
@@ -300,7 +298,7 @@ export function StoreProvider({
     // whoever signs in next. The in-memory key goes too. The auth listener in
     // App flips back to the landing once the session ends; reset the route so
     // it doesn't stay stuck on the page they signed out from.
-    await clearStoredPassphrase(userId);
+    await clearDeviceSecrets(userId);
     await clearCache(userId);
     masterKey.current = null;
     setPassphrase(null);
@@ -316,7 +314,7 @@ export function StoreProvider({
     if (error) return { error: error.message };
     // The account is gone server-side; drop the cached secrets and end the
     // session so the app falls back to the landing page.
-    await clearStoredPassphrase(userId);
+    await clearDeviceSecrets(userId);
     await clearCache(userId);
     masterKey.current = null;
     setPassphrase(null);

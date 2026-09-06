@@ -23,7 +23,7 @@ import { Receipts } from "@/screens/Receipts";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
 import { Reset } from "@/screens/Reset";
-import { colors } from "@/lib/theme";
+import { OBSERVATORY, RABBIT_HOLE, VAULT, colors } from "@/lib/theme";
 
 // One native stack per signed-in / signed-out world; the session decides which
 // is mounted. Screen names are the PWA's routes (see lib/router.ts), so
@@ -53,7 +53,7 @@ const theme = {
 
 function Splash() {
   return (
-    <View style={styles.splash}>
+    <View className="flex-1 items-center justify-center bg-canvas">
       <StatusBar style="dark" />
       <Carrot size={60} />
     </View>
@@ -67,7 +67,7 @@ function PublicStack() {
       <Stack.Screen name="/" component={Landing} />
       <Stack.Screen name="/legal" component={Legal} />
       <Stack.Screen name="/contact" component={Contact} />
-      <Stack.Screen name="/stats" options={dark("#141428")}>
+      <Stack.Screen name="/stats" options={dark(OBSERVATORY.floor)}>
         {() => <Stats signedIn={false} />}
       </Stack.Screen>
     </Stack.Navigator>
@@ -82,15 +82,15 @@ function AppStack({ userId }: { userId: string }) {
       <Stack.Navigator screenOptions={screenOptions} initialRouteName="/">
         <Stack.Screen name="/" component={Home} />
         <Stack.Screen name="/settings" component={Settings} />
-        <Stack.Screen name="/safe" component={Safe} options={dark("#06281E")} />
-        <Stack.Screen name="/history" component={History} options={dark("#1C1C1E")} />
-        <Stack.Screen name="/stats" options={dark("#141428")}>
+        <Stack.Screen name="/safe" component={Safe} options={dark(VAULT.floor)} />
+        <Stack.Screen name="/history" component={History} options={dark(RABBIT_HOLE.floor)} />
+        <Stack.Screen name="/stats" options={dark(OBSERVATORY.floor)}>
           {() => <Stats signedIn />}
         </Stack.Screen>
-        <Stack.Screen name="/stats/treats" options={dark("#141428")}>
+        <Stack.Screen name="/stats/treats" options={dark(OBSERVATORY.floor)}>
           {() => <Receipts kind="treats" />}
         </Stack.Screen>
-        <Stack.Screen name="/stats/weekend" options={dark("#141428")}>
+        <Stack.Screen name="/stats/weekend" options={dark(OBSERVATORY.floor)}>
           {() => <Receipts kind="weekend" />}
         </Stack.Screen>
         <Stack.Screen name="/legal" component={Legal} />
@@ -133,10 +133,4 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
-  splash: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.canvas,
-  },
 });

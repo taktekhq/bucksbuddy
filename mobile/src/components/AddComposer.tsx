@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { Input } from "@/components/ui/Input";
 import { ChevronRight, StickyNote, Tag } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";

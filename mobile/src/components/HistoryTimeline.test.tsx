@@ -56,7 +56,7 @@ jest.mock("react-native-gesture-handler", () => {
 });
 
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import { DayHeader, HistoryTimeline, toSections } from "@/components/HistoryTimeline";
+import { DayHeader, toSections } from "@/components/HistoryTimeline";
 import { groupByCategory } from "@/lib/history";
 import type { TimelineDay } from "@/lib/history";
 import type { Transaction } from "@/types/db";
@@ -89,87 +89,31 @@ function day(overrides: Partial<TimelineDay> = {}): TimelineDay {
   };
 }
 
-describe("HistoryTimeline", () => {
-  it("renders a day header and its entries", async () => {
-    await render(
-      <HistoryTimeline days={[day()]} onEdit={() => {}} onDelete={() => {}} />,
-    );
-    expect(screen.getByRole("header", { name: "Jun 1" })).toBeTruthy();
-    // The day's net, and the one entry that makes it up.
-    expect(screen.getAllByText("-$12.50")).toHaveLength(2);
-    expect(screen.getByText("Groceries")).toBeTruthy();
+describe("DayHeader", () => {
+  // History feeds these two to a SectionList rather than rendering a
+  // composition, so they are what the app depends on.
+  it("shows the day's label and its signed total", async () => {
+    await render(<DayHeader day={day()} />);
+    expect(screen.getByText("Jun 1")).toBeOnTheScreen();
+    expect(screen.getByText("-$12.50")).toBeOnTheScreen();
   });
 
-  it("renders every day, each with its own entries", async () => {
-    const days = [
-      day({
-        key: "2026-06-02",
-        label: "Jun 2",
-        totalCents: 5000,
-        groups: groupByCategory([
-          tx({ id: "a", is_income: true, category: "salary", amount_usd_cents: 5000 }),
-        ]),
-      }),
-      day({ key: "2026-06-01", label: "Jun 1" }),
-    ];
-    await render(
-      <HistoryTimeline days={days} onEdit={() => {}} onDelete={() => {}} />,
-    );
-    expect(screen.getByRole("header", { name: "Jun 2" })).toBeTruthy();
-    expect(screen.getByText("$50.00")).toBeTruthy(); // Jun 2's net
-    expect(screen.getByText("+$50.00")).toBeTruthy(); // its one entry
-    expect(screen.getByRole("header", { name: "Jun 1" })).toBeTruthy();
-    expect(screen.getAllByText("-$12.50")).toHaveLength(2);
-    expect(screen.getAllByLabelText("Edit")).toHaveLength(2);
+  it("masks the total when any row on that day is obscured", async () => {
+    await render(<DayHeader day={day({ masked: true })} />);
+    expect(screen.getByText("••••")).toBeOnTheScreen();
+    expect(screen.queryByText("-$12.50")).toBeNull();
   });
 
-  it("passes edit and delete down to the rows", async () => {
-    const onEdit = jest.fn();
-    const onDelete = jest.fn();
-    const row = tx();
-    await render(
-      <HistoryTimeline
-        days={[day({ groups: groupByCategory([row]) })]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-      />,
-    );
-    await fireEvent.press(screen.getByLabelText("Edit"));
-    expect(onEdit).toHaveBeenCalledWith(row);
-    await fireEvent.press(screen.getByLabelText("Delete"));
-    expect(onDelete).toHaveBeenCalledWith(row);
-  });
-
-  it("renders an even day's zero total plainly", async () => {
+  it("shows a zero day without colouring it green or red", async () => {
     await render(<DayHeader day={day({ totalCents: 0 })} />);
-    expect(screen.getByText("$0.00")).toBeTruthy();
+    expect(screen.getByText("$0.00")).toBeOnTheScreen();
   });
+});
 
-  it("shows a positive day's total with no minus", async () => {
-    await render(<DayHeader day={day({ totalCents: 9900 })} />);
-    expect(screen.getByText("$99.00")).toBeTruthy();
-  });
-
-  it("masks the day total when any entry is obscured", async () => {
-    await render(<DayHeader day={day({ totalCents: 1250, masked: true })} />);
-    expect(screen.getByText("••••")).toBeTruthy();
-    expect(screen.queryByText("$12.50")).toBeNull();
-  });
-
-  it("survives a day total that isn't a number", async () => {
-    // The only input that reaches the neutral fallback in this file's local
-    // copy of netColorClass: the header short-circuits on `=== 0`, so a real
-    // zero never gets there. See the note in the port's review — the web
-    // imports netColorClass from lib/money instead of copying it.
-    await render(<DayHeader day={day({ totalCents: Number.NaN })} />);
-    expect(screen.getByText("$NaN")).toBeTruthy();
-  });
-
+describe("toSections", () => {
   it("turns days into sections, flagging only the first", () => {
-    const days = [day({ key: "a" }), day({ key: "b" })];
-    const sections = toSections(days);
-    expect(sections).toHaveLength(2);
-    expect(sections[0]).toMatchObject({ key: "a", first: true, data: days[0].groups });
-    expect(sections[1]).toMatchObject({ key: "b", first: false, data: days[1].groups });
+    const sections = toSections([day(), day({ key: "2026-06-02", label: "Jun 2" })]);
+    expect(sections.map((x) => x.first)).toEqual([true, false]);
+    expect(sections[0].data).toBe(sections[0].groups);
   });
 });

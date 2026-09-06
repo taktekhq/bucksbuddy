@@ -80,15 +80,6 @@ describe("ScreenFrame", () => {
     expect(style(find("View")[0]).backgroundColor).toBe(OBSERVATORY.floor);
   });
 
-  it("takes an explicit floor over the gradient's", async () => {
-    await render(
-      <ScreenFrame gradient={OBSERVATORY} floor="#000000">
-        <Text>dark</Text>
-      </ScreenFrame>,
-    );
-    expect(style(find("View")[0]).backgroundColor).toBe("#000000");
-  });
-
   it("leaves a scrolling gradient to the Screen's scroller", async () => {
     await render(
       <ScreenFrame gradient={SAVINGS}>
@@ -180,7 +171,7 @@ describe("Screen", () => {
   it("takes a light status bar for the dark rooms", async () => {
     await render(
       withSafeArea(
-        <Screen gradient={OBSERVATORY} statusBar="light" floor="#141428">
+        <Screen gradient={OBSERVATORY} statusBar="light">
           <Text>stats</Text>
         </Screen>,
       ),

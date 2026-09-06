@@ -50,7 +50,7 @@ export function Legal() {
     // var(--safe-top))` — the padding here, the inset added by Screen.
     <Screen className="flex flex-col gap-6 px-4 pb-8 pt-4">
       {/* Plain iOS nav: back chevron + centered title — matches Settings. */}
-      <NavHeader title="Legal" section onBack={() => navigate("/")} />
+      <NavHeader title="Legal" onBack={() => navigate("/")} />
 
       <View className="flex flex-col gap-2">
         <SectionHeader>Privacy</SectionHeader>

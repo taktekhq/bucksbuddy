@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Text, TextInput, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { Input } from "@/components/ui/Input";
 import {
   ArrowDownToLine,

@@ -17,7 +17,7 @@ export function Contact() {
     // var(--safe-top))` — the padding here, the inset added by Screen.
     <Screen className="flex flex-col gap-6 px-4 pb-8 pt-4">
       {/* Plain iOS nav: back chevron + centered title — matches Settings/Legal. */}
-      <NavHeader title="Contact" section onBack={() => navigate("/")} />
+      <NavHeader title="Contact" onBack={() => navigate("/")} />
 
       <View className="flex flex-col gap-2">
         <View className="flex flex-col gap-4 rounded-card bg-surface p-5 text-[15px] leading-relaxed text-label shadow-card">

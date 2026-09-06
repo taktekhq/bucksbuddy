@@ -52,3 +52,6 @@ jobs:
       - run: npx tsc --noEmit
       # Enforces the 100% coverage thresholds from mobile/jest.config.js.
       - run: npm run coverage
+      # Proves the native crypto still reads and writes the same envelopes the
+      # browser does — the rows in Supabase were encrypted there.
+      - run: npm run test:interop

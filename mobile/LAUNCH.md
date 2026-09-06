@@ -27,16 +27,14 @@ now says.
 
 Run from `mobile/`.
 
-- [ ] `npx eas-cli init` — creates the project under the **taktekhq** org
+- [x] `npx eas-cli init` — creates the project under the **taktekhq** org
       (set in `app.json`) and writes `extra.eas.projectId` back into it. Commit
       that change.
-- [ ] `npx eas-cli env:push --path .env --environment production` — and repeat
+- [x] `npx eas-cli env:push --path .env --environment production` — and repeat
       for `preview` and `development`.
-      **Required.** `.env` is gitignored and EAS builds from git, so without
-      this the build ships with no Supabase URL or key and the app cannot sign
-      in. None of the four values are secret (the Supabase anon key is
-      protected by row-level security and already ships in the web bundle);
-      they simply have to exist at build time.
+      **Done for this project.** `.env` is gitignored and EAS builds from git,
+      so without this a build ships with no Supabase URL or key and cannot sign
+      in. The two Supabase values are required; the PostHog pair is optional.
 - [ ] `npx eas-cli build --profile development --platform android` — the
       quickest end-to-end proof, since Android needs no paid account and EAS
       generates the keystore for you.
@@ -76,11 +74,11 @@ revisiting only if you want native crash reports later.
 - [ ] **Account deletion.** Required, and already built: Settings → Danger zone
       → Delete account, which calls the `delete-account` edge function. Point
       the reviewer at it in the review notes.
-- [ ] **Sign in with Apple.** Apple's guideline 4.8 requires it *if* you offer
-      other third-party sign-in. You offer Google, so **expect this to be
-      raised**. Options: add Sign in with Apple (Supabase supports it), or
-      argue the exemption. Cheapest path is to add it — budget for this rather
-      than being surprised in review.
+- [x] **Sign in with Apple** is implemented (Landing screen, the entitlement,
+      and the config plugin). Two things remain and are yours: enable the
+      capability on the App ID in the Apple Developer portal, and enable the
+      Apple provider in Supabase with `com.taktek.bucksbuddy` as an authorized
+      client ID. It needs a dev build — the entitlement isn't in Expo Go.
 - [ ] **Demo account** in review notes. Reviewers cannot use Google SSO
       reliably. Give them the email/password path and tell them the carrot must
       be tapped seven times to reveal it, or they will not find it.

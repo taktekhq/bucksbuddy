@@ -13,7 +13,8 @@ import type { Transaction } from "@/types/db";
 // The full-history page has up to 500 rows, so it feeds these same pieces to a
 // SectionList instead of mapping over them (PORTING.md §5): `toSections` turns
 // the days into its sections and `DayHeader` is each section's `<header>`.
-// `HistoryTimeline` below is the plain composition, identical to the web's.
+// The web's `HistoryTimeline` composition has no mobile counterpart: the
+// SectionList is the composition here.
 
 export type TimelineSection = TimelineDay & {
   data: HistoryGroup[];
@@ -47,32 +48,3 @@ export const DayHeader = memo(function DayHeader({ day }: { day: TimelineDay }) 
   );
 });
 
-export function HistoryTimeline({
-  days,
-  onEdit,
-  onDelete,
-}: {
-  days: TimelineDay[];
-  onEdit: (tx: Transaction) => void;
-  onDelete: (tx: Transaction) => void;
-}) {
-  return (
-    <View className="flex flex-col gap-5">
-      {days.map((day) => (
-        <View key={day.key} className="flex flex-col gap-1.5">
-          <DayHeader day={day} />
-          <View className="flex flex-col gap-1.5">
-            {day.groups.map((g) => (
-              // Keyed by the run's category and its newest row, never by index,
-              // so a delete above a run doesn't re-key it (or hand its open
-              // state to a neighbour).
-              <View key={`${day.key}:${g.key}:${g.rows[0].id}`}>
-                <HistoryStack group={g} onEdit={onEdit} onDelete={onDelete} />
-              </View>
-            ))}
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-}
