@@ -16,7 +16,6 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.taktek.bucksbuddy",
-      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -27,8 +26,7 @@
         "backgroundColor": "#F2F2F7",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "predictiveBackGestureEnabled": false,
-      "versionCode": 1
+      "predictiveBackGestureEnabled": false
     },
     "plugins": [
       [
@@ -45,9 +43,6 @@
       "expo-secure-store"
     ],
     "owner": "taktekhq",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
     "extra": {
       "eas": {
         "projectId": "fd6e1661-5b7f-4109-a22e-e7f2725247a4"
