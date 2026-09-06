@@ -52,8 +52,8 @@ revisiting only if you want native crash reports later.
 ## 2. Apple — Developer + App Store Connect
 
 - [ ] **App Store Connect → My Apps → New App.** Bundle ID
-      `com.taktek.bucksbuddy`, primary language, and the SKU (anything; the
-      bundle ID is fine).
+      `io.taktek.bucksbuddy`, primary language, and `io.taktek.bucksbuddy`
+      as the SKU (private, permanent, only ever seen in sales reports).
 - [x] **Export compliance.** Already declared in `app.json`
       (`ios.infoPlist.ITSAppUsesNonExemptEncryption: false`), so App Store
       Connect stops asking on every build. `false` asserts you only use encryption that qualifies for an
@@ -77,7 +77,7 @@ revisiting only if you want native crash reports later.
 - [x] **Sign in with Apple** is implemented (Landing screen, the entitlement,
       and the config plugin). Two things remain and are yours: enable the
       capability on the App ID in the Apple Developer portal, and enable the
-      Apple provider in Supabase with `com.taktek.bucksbuddy` as an authorized
+      Apple provider in Supabase with `io.taktek.bucksbuddy` as an authorized
       client ID. It needs a dev build — the entitlement isn't in Expo Go.
 - [ ] **Demo account** in review notes. Reviewers cannot use Google SSO
       reliably. Give them the email/password path and tell them the carrot must
@@ -90,7 +90,7 @@ revisiting only if you want native crash reports later.
 
 ## 3. Google Play Console
 
-- [ ] **Create the app**, package `com.taktek.bucksbuddy`. One-time 25 USD
+- [ ] **Create the app**, package `io.taktek.bucksbuddy`. One-time 25 USD
       registration if you have not already.
 - [ ] **Data safety form.** Same disclosures as Apple's label: email address,
       user ID, financial info, product interaction; encrypted in transit; users
@@ -105,6 +105,10 @@ revisiting only if you want native crash reports later.
       app bundle rather than an APK).
 
 ---
+
+> **The identifier is `io.taktek.bucksbuddy`** — taktek.io reversed. It is
+> permanent once an App Store Connect record exists or an Android build is
+> published, so it was corrected before either happened.
 
 ## 4. Supabase
 

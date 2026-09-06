@@ -15,14 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.taktek.bucksbuddy",
+      "bundleIdentifier": "io.taktek.bucksbuddy",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
       "usesAppleSignIn": true
     },
     "android": {
-      "package": "com.taktek.bucksbuddy",
+      "package": "io.taktek.bucksbuddy",
       "adaptiveIcon": {
         "backgroundColor": "#F2F2F7",
         "foregroundImage": "./assets/adaptive-icon.png"
