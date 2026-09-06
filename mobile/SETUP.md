@@ -89,6 +89,29 @@ npx eas-cli build --profile development --platform android   # no paid account
 npx eas-cli build --profile production  --platform ios       # needs Apple
 ```
 
+These run in Expo's cloud and hand back an installable file; they do not touch
+a device plugged into your machine.
+
+## 5b. Running on a plugged-in iPhone (Mac only)
+
+Faster than a cloud build, and it does install straight onto the phone:
+
+```sh
+npx expo run:ios --device     # pick the connected iPhone when prompted
+```
+
+It needs Xcode, and it generates `ios/` locally — which is gitignored, because
+EAS regenerates it from `app.json` and a committed copy would quietly take over
+from the config plugins.
+
+To install a *cloud* build on a physical iPhone instead, the device has to be
+registered with Apple first:
+
+```sh
+npx eas-cli device:create      # opens a link to register the phone
+npx eas-cli build --profile development --platform ios
+```
+
 ## 6. Services this app talks to
 
 | Service | What it needs |
