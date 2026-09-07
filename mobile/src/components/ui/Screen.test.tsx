@@ -123,11 +123,34 @@ describe("Screen", () => {
       ),
     );
     // The web writes `pt-[calc(1rem+var(--safe-top))]`; there is no env() here,
-    // so the insets go on a wrapper and the screen's own padding stacks on top.
-    const padded = allNodes(screen.toJSON()).find(
-      (n) => typeof style(n).paddingTop === "number",
+    // so the insets go on the content container and the screen's own padding
+    // classes stack on top of them.
+    const scroller = find("RCTScrollView")[0];
+    expect(scroller.props.contentContainerStyle).toEqual(
+      expect.objectContaining({ paddingTop: 47, paddingBottom: 34 }),
     );
-    expect(style(padded)).toEqual({ paddingTop: 47, paddingBottom: 34 });
+  });
+
+  it("caps a safe area that came back absurd, instead of laying it out", async () => {
+    // This padding lives inside the scroller, so a bad measurement adds exactly
+    // that much blank space below the page — which is what scrolling forever
+    // into nothing looks like. No phone has a safe area of hundreds of points.
+    await render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 4000, left: 0, right: 0, bottom: 9000 },
+        }}
+      >
+        <Screen>
+          <Text>hello</Text>
+        </Screen>
+      </SafeAreaProvider>,
+    );
+    const scroller = find("RCTScrollView")[0];
+    expect(scroller.props.contentContainerStyle).toEqual(
+      expect.objectContaining({ paddingTop: 100, paddingBottom: 100 }),
+    );
   });
 
   it("scrolls the gradient with the content by default", async () => {

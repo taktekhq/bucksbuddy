@@ -66,7 +66,11 @@ describe("the page shell, in resolved styles", () => {
     );
 
     const scroller = allNodes(screen.toJSON()).find((n) => n.type === "RCTScrollView");
-    expect(scroller?.props.contentContainerStyle).toEqual({ flexGrow: 1 });
+    expect(scroller?.props.contentContainerStyle).toEqual({
+      flexGrow: 1,
+      paddingTop: 47,
+      paddingBottom: 34,
+    });
 
     const offenders = allNodes(screen.toJSON()).flatMap((n) =>
       percentageHeights(n.props.style).map((v) => `${n.type} ${v}`),
@@ -87,7 +91,8 @@ describe("the page shell, in resolved styles", () => {
     // 448 is `max-w-md` at 16px rem. At NativeWind's own default of 14 it would
     // be 392, which is what once made the whole app look zoomed out.
     expect(styles).toContainEqual(expect.objectContaining({ maxWidth: 448 }));
-    expect(styles).toContainEqual(
+    const scroller = allNodes(screen.toJSON()).find((n) => n.type === "RCTScrollView");
+    expect(scroller?.props.contentContainerStyle).toEqual(
       expect.objectContaining({ paddingTop: 47, paddingBottom: 34 }),
     );
   });

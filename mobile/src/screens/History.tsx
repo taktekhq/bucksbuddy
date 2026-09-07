@@ -29,7 +29,9 @@ import { ChevronLeft } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
 import {
   GradientLayer,
+  safeAreaPadding,
   ScreenFrame,
+  ScrollDiagnostic,
   useScrollBoundsReport,
 } from "@/components/ui/Screen";
 import { MonthSwitcher } from "@/components/ui/MonthSwitcher";
@@ -108,7 +110,7 @@ export function History() {
   const [grouping, setGrouping, hydrated] = useHistoryGrouping();
   const days = useMemo(() => groupByDay(transactions), [transactions]);
   const sections = useMemo(() => toSections(days), [days]);
-  const insets = useSafeAreaInsets();
+  const insets = safeAreaPadding(useSafeAreaInsets());
 
   // The "By category" view is scoped to one month at a time, paged with the
   // switcher (this month, last month, or further back). The timeline stays
@@ -151,7 +153,7 @@ export function History() {
   // History is the one page that does not use Screen's scroller, which makes it
   // the discriminator for the runaway-scroll fault: if it reports too, no
   // ScrollView prop can be responsible. See useScrollBoundsReport.
-  const reportBounds = useScrollBoundsReport();
+  const { onScroll: reportBounds, report } = useScrollBoundsReport(insets);
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
     const viewport = e.layoutMeasurement.height;
@@ -308,6 +310,7 @@ export function History() {
           )
         }
       />
+      <ScrollDiagnostic report={report} />
     </ScreenFrame>
   );
 }
