@@ -106,9 +106,37 @@ Getting this straight up front saves an afternoon:
 
 `nizar@taktek.io` is the Google account the browser is signed into by default,
 which is exactly how this goes wrong: both the Cloud console and Play Console
-silently act as whichever account is `authuser=0`. Do the whole of §3 in a
-separate Chrome profile (or an incognito window) signed in *only* as
-`nizar.mah99@gmail.com`, and check the avatar in the top right before every
+silently act as whichever account is `authuser=0`.
+
+**Invite the work account into Play Console and most of that problem goes
+away.** *Users and permissions → Invite new users* takes any Google account,
+including a Workspace one on another domain; give `nizar@taktek.io` **Admin**
+and it can create the app, manage releases, edit the listing and even run the
+service-account invitation in §3.3 — all without switching profiles. Adding a
+user never transfers ownership: the developer account, its payments profile
+and its verified identity stay with `nizar.mah99@gmail.com`, and only a
+deliberate ownership transfer (7-day hold, identity re-verification) would
+change that.
+
+Two things the invitation does **not** buy, both worth knowing before you rely
+on it:
+
+- **The service account in §3.2 still has to be created from the personal
+  account.** The blocker there is a Google *Cloud* org policy on taktek.io, and
+  it is evaluated on where the project sits in the resource hierarchy — not on
+  what the signed-in human may do in Play Console. Worse, a Workspace identity
+  cannot opt out: every project a `taktek.io` user creates is auto-parented to
+  the `taktek.io` organisation, so there is no "No organisation" option to
+  pick. That step, and only that step, needs a separate Chrome profile (or an
+  incognito window) signed in as `nizar.mah99@gmail.com`. It is five minutes,
+  once, ever.
+- **It does not change the account's type.** The closed-testing rule below
+  attaches to the developer account being a personal one, not to who is logged
+  into it. Inviting a Workspace account does not make it an organisation
+  account.
+
+So: sign in as the personal account for §3.2, and use whichever account is
+convenient for the rest — but check the avatar in the top right before every
 irreversible click.
 
 The package name `io.taktek.bucksbuddy` is fine on a personal account. Play
@@ -143,8 +171,9 @@ not use.
 
 ### 3.2 The service account — create it under the personal account
 
-This is the credential EAS uses to upload. Signed in as
-**nizar.mah99@gmail.com**, at `console.cloud.google.com`:
+This is the credential EAS uses to upload, and the one step that genuinely
+requires the personal account (see 3.0). Signed in as
+**nizar.mah99@gmail.com** — check the avatar — at `console.cloud.google.com`:
 
 - [ ] **New project** — name it something like `bucksbuddy-publishing`. When
       asked for a *Location / Organisation*, leave it **"No organisation"**.
@@ -175,7 +204,7 @@ one project first.
 
 ### 3.3 Invite the service account into Play Console
 
-Back in Play Console, still as **nizar.mah99@gmail.com**:
+Back in Play Console, as either account once 3.0's invitation is done:
 
 - [ ] **Users and permissions → Invite new users.** Paste the
       `…iam.gserviceaccount.com` email. It is treated as an ordinary user.
