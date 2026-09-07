@@ -247,8 +247,14 @@ Back in Play Console, as either account once 3.0's invitation is done:
       - Manage store presence
 
       (Play auto-selects a few read-only siblings; that is expected.)
-- [ ] Leave every **Account permissions** box unchecked. Nothing here needs to
-      touch billing, users or the developer account itself.
+- [ ] **Skip "Admin (all permissions)"** at the top of that same list, tempting
+      as it looks — it is app-scoped in name only. Play spells out that it also
+      lets the holder *invite new users to your developer account* and
+      re-permission everyone else with access to the app, so a leaked key would
+      have a foothold on the account rather than on one release track. The six
+      above are exactly what `eas submit` exercises; admin adds only risk.
+- [ ] Leave every **Account permissions** box unchecked too. Nothing here needs
+      to touch billing, users or the developer account itself.
 - [ ] Send the invite. There is no acceptance step — a service account is
       active immediately.
 
