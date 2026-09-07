@@ -3,7 +3,7 @@
 // this covers: the safe-area insets, and where the gradient sits relative to
 // the scroller.
 import type { ReactElement } from "react";
-import { Text } from "react-native";
+import { Keyboard, Text } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GradientLayer, Screen, ScreenFrame } from "@/components/ui/Screen";
@@ -235,7 +235,45 @@ describe("Screen", () => {
     );
     const scroller = find("RCTScrollView")[0];
     expect(scroller.props.keyboardShouldPersistTaps).toBe("handled");
-    expect(scroller.props.automaticallyAdjustKeyboardInsets).toBe(true);
+  });
+
+  it("never lets the scroll view write its own keyboard inset", async () => {
+    // `automaticallyAdjustKeyboardInsets` rewrote contentInset from iOS's
+    // keyboard-frame notifications, which an app switch scrambles; the inset
+    // outlived the keyboard and every page could scroll a keyboard's height
+    // into blank space. Four builds. It is not coming back.
+    await render(
+      withSafeArea(
+        <Screen>
+          <Text>form</Text>
+        </Screen>,
+      ),
+    );
+    const scroller = find("RCTScrollView")[0];
+    expect(scroller.props.automaticallyAdjustKeyboardInsets).toBeUndefined();
+    expect(scroller.props.contentInset).toBeUndefined();
+  });
+
+  it("makes room for the keyboard as padding around the scroller instead", async () => {
+    await render(
+      withSafeArea(
+        <Screen>
+          <Text>form</Text>
+        </Screen>,
+      ),
+    );
+    // `behavior` never reaches a host node, but under "padding" the wrapper
+    // composes `paddingBottom: <keyboard height>` onto its host View — zero
+    // with no keyboard up — and measures itself with onLayout. Neither
+    // "height", "position" nor an absent behaviour leaves that signature.
+    // One tree for both lookups: `find` re-serializes, and a parent search by
+    // identity across two serializations matches nothing.
+    const tree = screen.toJSON();
+    const scroller = find("RCTScrollView", tree)[0];
+    const wrapper = allNodes(tree).find((n) => (n.children ?? []).includes(scroller));
+    const flat = ([] as unknown[]).concat(wrapper?.props.style ?? []).flat(3);
+    expect(flat).toContainEqual(expect.objectContaining({ paddingBottom: 0 }));
+    expect(typeof wrapper?.props.onLayout).toBe("function");
   });
 });
 
@@ -258,10 +296,11 @@ describe("a scroller that goes out of bounds", () => {
     return child;
   }
 
-  const at = (offset: number, content: number, viewport = 800) => ({
+  const at = (offset: number, content: number, viewport = 800, inset = 0) => ({
     contentOffset: { x: 0, y: offset },
     contentSize: { width: 390, height: content },
     layoutMeasurement: { width: 390, height: viewport },
+    contentInset: { top: 0, left: 0, bottom: inset, right: 0 },
   });
 
   it("says nothing about an ordinary scroll", async () => {
@@ -276,14 +315,43 @@ describe("a scroller that goes out of bounds", () => {
     expect(posthog.capture).not.toHaveBeenCalled();
   });
 
-  it("reports scrolling well beyond the end of the content", async () => {
-    // The shape a stray contentInset takes: the content is a normal size and
-    // the scroll range is not.
-    await scrollTo(at(1500, 1000));
+  it("reports scrolling well beyond the end of the content, with the inset that let it", async () => {
+    // The shape the fault took: content a normal size, scroll range not, and
+    // the scroll view's own bottom inset — a keyboard's height — the reason.
+    await scrollTo(at(1500, 1000, 800, 331));
     expect(posthog.capture).toHaveBeenCalledWith(
       "scroll_out_of_bounds",
-      expect.objectContaining({ content: 1000, viewport: 800, beyond_end: 1300, oversized: false }),
+      expect.objectContaining({
+        content: 1000,
+        viewport: 800,
+        beyond_end: 1300,
+        oversized: false,
+        scroll_inset: 331,
+      }),
     );
+    expect(screen.getByText(/inset 331/)).toBeOnTheScreen();
+  });
+
+  it("reads the inset React Native attaches to every scroll event", async () => {
+    // No fallback on purpose: a native scroll event always carries
+    // contentInset, and History's hand-built one passes it through too. An
+    // event built without it here still gets the library's default (zero).
+    const { contentInset: _dropped, ...bare } = at(1500, 1000);
+    await scrollTo(bare);
+    expect(posthog.capture).toHaveBeenLastCalledWith(
+      "scroll_out_of_bounds",
+      expect.objectContaining({ scroll_inset: 0 }),
+    );
+  });
+
+  it("says nothing while a keyboard is up, because reaching past the end is the point", async () => {
+    const visible = jest.spyOn(Keyboard, "isVisible").mockReturnValue(true);
+    try {
+      await scrollTo(at(1500, 1000, 800, 331));
+      expect(posthog.capture).not.toHaveBeenCalled();
+    } finally {
+      visible.mockRestore();
+    }
   });
 
   it("reports a page taller than any real page in this app", async () => {

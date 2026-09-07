@@ -72,6 +72,19 @@ the only places this comes up.
 `Screen`/`ScreenFrame` — pass `gradient` and, for Home's savings tint,
 `gradientFixed`. Don't hand-roll it.
 
+### The keyboard
+
+The browser shrinks its viewport when the keyboard comes up and scrolls the
+field into view. Port that as **padding**, never as a scroll inset: `Screen`
+wraps its scroller in `KeyboardAvoidingView behavior="padding"`, which listens
+to the keyboard's own show/hide events and zeroes unconditionally on hide.
+
+Do not reach for `automaticallyAdjustKeyboardInsets`. It rewrites the scroll
+view's `contentInset` from iOS's keyboard-*frame* notifications, and an app
+switch scrambles those, so the inset outlived the keyboard and every page could
+scroll a keyboard's height into blank space. It took four builds to see,
+because jest runs no layout. `Screen.test.tsx` asserts the prop is absent.
+
 ## 3. Foundation — use it, don't rebuild it
 
 - `components/ui/Screen` — `Screen` (scroll + centered column + safe areas +

@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState, type ReactNode, type Ref } from "react";
 import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -43,16 +46,18 @@ export function GradientLayer({ gradient }: { gradient: Gradient }) {
 
 // A scroller reports itself when it goes somewhere it should not be able to.
 //
-// Two builds have now gone out with pages that scroll far past their content
-// into blank space, and neither the code nor the test suite could say why:
-// jest runs no layout, so nothing on this side can see it. This closes that
-// gap. It distinguishes the only two shapes the fault can take —
+// A scroller that goes somewhere it should not be able to reports itself.
 //
-//   * content taller than any real page  -> something renders an absurd box
-//   * offset beyond the end of content   -> contentInset, i.e. the keyboard path
+// This is what finally identified the runaway scroll: a page 930pt tall in a
+// 912pt window resting 349pt down, which a scroll view can only do if its
+// bottom contentInset is at least 331 — a keyboard's height. The scroller's
+// own keyboard avoidance (`automaticallyAdjustKeyboardInsets`, since removed)
+// wrote that inset from iOS's keyboard-frame notifications, and an app switch
+// scrambles those, so the inset outlived the keyboard. jest runs no layout, so
+// nothing on this side could have seen it; this could.
 //
-// — and sends the numbers with the route, once per mount, so the next report
-// arrives with an answer attached instead of a description.
+// It stays, printing the real inset now, until the fix is confirmed on a
+// device. It never fires while a keyboard is legitimately up.
 const OVERSIZE = 3; // a page worth more than three viewports is already odd here
 const SLACK = 200; // a rubber-band bounce legitimately overshoots by about this
 
@@ -63,6 +68,8 @@ export type ScrollReport = {
   offset: number;
   beyond_end: number;
   oversized: boolean;
+  /** The scroll view's own bottom contentInset — the number that was wrong. */
+  scroll_inset: number;
   inset_top: number;
   inset_bottom: number;
 };
@@ -73,7 +80,11 @@ export function useScrollBoundsReport(insets: { top: number; bottom: number }) {
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (reported.current) return;
-      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      // With a keyboard up the page is *meant* to reach past its content — that
+      // is what avoidance is — so there is nothing to report until it is gone.
+      if (Keyboard.isVisible()) return;
+      const { contentOffset, contentSize, layoutMeasurement, contentInset } =
+        event.nativeEvent;
       const viewport = layoutMeasurement.height;
       const content = contentSize.height;
       if (viewport <= 0) return;
@@ -88,6 +99,7 @@ export function useScrollBoundsReport(insets: { top: number; bottom: number }) {
         offset: Math.round(contentOffset.y),
         beyond_end: Math.round(beyondEnd),
         oversized,
+        scroll_inset: Math.round(contentInset.bottom),
         inset_top: Math.round(insets.top),
         inset_bottom: Math.round(insets.bottom),
       };
@@ -126,8 +138,8 @@ export function ScrollDiagnostic({ report }: { report: ScrollReport | null }) {
     >
       <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
         {report.route} · view {report.viewport} · content {report.content} · at{" "}
-        {report.offset} · past {report.beyond_end} · safe {report.inset_top}/
-        {report.inset_bottom}
+        {report.offset} · past {report.beyond_end} · inset {report.scroll_inset} · safe{" "}
+        {report.inset_top}/{report.inset_bottom}
       </Text>
     </View>
   );
@@ -180,6 +192,18 @@ export function Screen({
   const { onScroll, report } = useScrollBoundsReport(insets);
   return (
     <ScreenFrame gradient={gradient} gradientFixed={gradientFixed} statusBar={statusBar}>
+      {/* The keyboard as padding, and nothing more. When it comes up this view
+          pads its own bottom by the keyboard's height, so the scroller shrinks
+          and the page gains exactly that much room; when it goes, the padding is
+          zero. It listens to the keyboard's own show/hide events and zeroes
+          unconditionally — its source says it avoids the frame-change
+          notification on purpose. That notification is what the scroll view's
+          built-in avoidance (`automaticallyAdjustKeyboardInsets`) rewrote its
+          contentInset from, and iOS scrambles it across an app switch, which
+          left every page with a keyboard's worth of phantom scroll range. That
+          prop is gone; there is no inset to go wrong any more. Android resizes
+          the window itself, so it gets no behaviour here. */}
+      <KeyboardAvoidingView behavior={Platform.select({ ios: "padding" })} style={styles.fill}>
       <ScrollView
         ref={scrollRef}
         onScroll={onScroll}
@@ -194,8 +218,6 @@ export function Screen({
         contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        // iOS scrolls the focused input into view natively, like the browser.
-        automaticallyAdjustKeyboardInsets
         contentInsetAdjustmentBehavior="never"
         showsVerticalScrollIndicator={false}
       >
@@ -204,6 +226,7 @@ export function Screen({
           {children}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
       <ScrollDiagnostic report={report} />
     </ScreenFrame>
   );
@@ -222,6 +245,8 @@ export function safeAreaPadding(insets: { top: number; bottom: number }) {
     bottom: Math.min(Math.max(insets.bottom, 0), MAX_INSET),
   };
 }
+
+const styles = StyleSheet.create({ fill: { flex: 1 } });
 
 // Internal: drop `min-h-full` from a screen's class list.
 //

@@ -164,6 +164,7 @@ export function History() {
           contentOffset: e.contentOffset,
           contentSize: e.contentSize,
           layoutMeasurement: e.layoutMeasurement,
+          contentInset: e.contentInset,
         },
       } as never);
     }
