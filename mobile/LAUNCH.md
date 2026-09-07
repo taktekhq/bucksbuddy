@@ -278,8 +278,13 @@ Run from `mobile/`, signed into Expo as a member of **taktekhq**:
 
 ### 3.5 The first upload is manual — after that it is automatic
 
-The Play Developer API cannot create the first release of an app; it can only
-add to one that already exists. So exactly once:
+**Why.** The Play Developer API addresses everything by package name, and
+`io.taktek.bucksbuddy` does not exist as far as Play is concerned until a
+bundle declaring it has been uploaded (§3.1 — the create-app dialog never asked
+for it). So the API has no way to say "this new package belongs to that app
+record": it can only edit a package Play already knows. The console upload is
+what performs that binding. Nothing about EAS causes this, and no permission
+fixes it. So exactly once:
 
 - [ ] `npx eas-cli build --profile production --platform android` (an `.aab` —
       the profile already builds an app bundle rather than an APK).
@@ -297,6 +302,39 @@ npx eas-cli build --profile production --platform android --auto-submit
 
 …or the **Mobile release** workflow in §6, which does the same thing from the
 Actions tab.
+
+### 3.6 Tracks and testers — internal is not closed
+
+Four tracks, and `eas.json` currently targets the first:
+
+| Track | `eas.json` name | Review | Testers | Counts toward production access? |
+| --- | --- | --- | --- | --- |
+| Internal testing | `internal` | none — live in minutes | up to 100 | **no** |
+| Closed testing | `alpha` (or a custom track's own name) | yes | your email lists | **yes** |
+| Open testing | `beta` | yes | anyone with the link | no |
+| Production | `production` | yes | everyone | — |
+
+To add someone to either testing track: **Test and release → Testing →
+<track> → Testers tab → Create email list**, add the Google address they
+actually use on their phone, save, tick the list, **Save changes**. Then copy
+the **join link** at the bottom of the page and send it to them; they open it,
+accept, and the Play Store link on that page installs the app. Three things
+that waste an evening if missed — the address must be the device's Google
+account, the invitation has to be accepted before the app is visible to them,
+and the track needs at least one uploaded release for the link to resolve.
+
+**The distinction matters if §3.0's closed-testing rule applies to you.** Only
+*closed* testing counts toward the 12 testers × 14 continuous days. Piling
+friends into internal testing earns nothing toward production access, however
+long they stay. When you reach that stage, run the closed track and point
+releases at it by changing `track` in `eas.json`:
+
+```json
+"android": { "track": "alpha", "releaseStatus": "completed" }
+```
+
+Internal testing is still the right default for day-to-day builds — no review,
+live in minutes — which is why it is what is committed today.
 
 ---
 
