@@ -33,6 +33,15 @@ point. Four mechanical differences between vitest and jest:
   default transform ignores. Nothing to do — just don't be surprised.
 - **Supabase** is not mocked globally. Mock `@/lib/supabase` per test file with
   whatever shape that file needs, as the web's tests do.
+- **Classes are inert under jest** — NativeWind skips its component registry when
+  `NODE_ENV === "test"`, so `className` stays a string prop and most assertions
+  are on that string. When the question is what a class *means*, use
+  `src/test/tailwind`: it compiles the real config and hands back the style
+  objects the device will lay out. `Screen.styles.test.tsx` is the example, and
+  it is the only kind of test that can see a layout rule being broken.
+- **jest runs no layout at all**, so nothing here can catch a page that scrolls
+  past its own content. `useScrollBoundsReport` covers that gap from the other
+  side: the app reports itself, with numbers, when a scroller goes out of bounds.
 - **jest is not the device.** Tests run on node, which provides globals Hermes
   does not (`crypto` above all). A green suite is not evidence that something
   exists at runtime — see PORTING.md §5. When code depends on a global, test it

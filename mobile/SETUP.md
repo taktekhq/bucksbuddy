@@ -34,8 +34,12 @@ npx eas-cli env:pull --environment production   # writes .env
 ```
 
 `bucksbuddy.supabase.co` is the project's vanity domain; the generated
-`oezaeieadtmrfrevlkbh.supabase.co` reaches the same project. The two Supabase
-values are required — without them the app cannot sign in. The PostHog pair is
+`oezaeieadtmrfrevlkbh.supabase.co` reaches the same project. Use the vanity one
+everywhere, including in the EAS environments — supabase-js derives the session
+storage key from the hostname (`sb-<first label>-auth-token`), so the two hosts
+keep two separate sessions and switching between them signs everyone out once.
+
+The two Supabase values are required — without them the app cannot sign in. The PostHog pair is
 optional: analytics degrade to a silent no-op when the key is unset.
 
 ## 3. Run it

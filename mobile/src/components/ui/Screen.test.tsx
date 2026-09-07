@@ -4,9 +4,10 @@
 // the scroller.
 import type { ReactElement } from "react";
 import { Text } from "react-native";
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GradientLayer, Screen, ScreenFrame } from "@/components/ui/Screen";
+import posthog from "@/lib/posthog";
 import { colors, OBSERVATORY, RABBIT_HOLE, SAVINGS, VAULT } from "@/lib/theme";
 
 const METRICS = {
@@ -212,5 +213,76 @@ describe("Screen", () => {
     const scroller = find("RCTScrollView")[0];
     expect(scroller.props.keyboardShouldPersistTaps).toBe("handled");
     expect(scroller.props.automaticallyAdjustKeyboardInsets).toBe(true);
+  });
+});
+
+// Two builds shipped with pages that scroll far past their content into blank
+// space, and nothing on this side could see it — jest runs no layout. The
+// scroller now reports itself instead, so the next report arrives with numbers.
+describe("a scroller that goes out of bounds", () => {
+  async function scrollTo(nativeEvent: Record<string, unknown>) {
+    await render(
+      withSafeArea(
+        <Screen>
+          <Text>page</Text>
+        </Screen>,
+      ),
+    );
+    // fireEvent walks up for a handler, so the child stands in for the scroller
+    // and the test needs no testID in production code.
+    const child = screen.getByText("page");
+    await fireEvent.scroll(child, { nativeEvent });
+    return child;
+  }
+
+  const at = (offset: number, content: number, viewport = 800) => ({
+    contentOffset: { x: 0, y: offset },
+    contentSize: { width: 390, height: content },
+    layoutMeasurement: { width: 390, height: viewport },
+  });
+
+  it("says nothing about an ordinary scroll", async () => {
+    await scrollTo(at(400, 1600));
+    expect(posthog.capture).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about a rubber-band bounce past the end", async () => {
+    // Content 1000 in a viewport of 800 ends at offset 200; going to 300 is the
+    // hundred points of overshoot the platform does on purpose.
+    await scrollTo(at(300, 1000));
+    expect(posthog.capture).not.toHaveBeenCalled();
+  });
+
+  it("reports scrolling well beyond the end of the content", async () => {
+    // The shape a stray contentInset takes: the content is a normal size and
+    // the scroll range is not.
+    await scrollTo(at(1500, 1000));
+    expect(posthog.capture).toHaveBeenCalledWith(
+      "scroll_out_of_bounds",
+      expect.objectContaining({ content: 1000, viewport: 800, beyond_end: 1300, oversized: false }),
+    );
+  });
+
+  it("reports a page taller than any real page in this app", async () => {
+    // The other shape: something rendered an absurd box.
+    await scrollTo(at(0, 9000));
+    expect(posthog.capture).toHaveBeenCalledWith(
+      "scroll_out_of_bounds",
+      expect.objectContaining({ content: 9000, oversized: true }),
+    );
+  });
+
+  it("reports once per screen, not once per frame", async () => {
+    const scroller = await scrollTo(at(0, 9000));
+    await fireEvent.scroll(scroller, { nativeEvent: at(10, 9000) });
+    await fireEvent.scroll(scroller, { nativeEvent: at(20, 9000) });
+    expect(posthog.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for a real layout before judging anything", async () => {
+    // The first events can arrive with a zero viewport, and every page looks
+    // infinitely tall next to nothing.
+    await scrollTo(at(0, 9000, 0));
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
 });

@@ -1,9 +1,17 @@
-import type { ReactNode, Ref } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useRef, type ReactNode, type Ref } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { colors, type Gradient } from "@/lib/theme";
+import { currentRoute } from "@/lib/router";
+import posthog from "@/lib/posthog";
 
 // The page shell — what `<main class="mx-auto flex min-h-full max-w-md …">` is
 // on the web, plus the three things a browser handles for us:
@@ -30,6 +38,44 @@ export function GradientLayer({ gradient }: { gradient: Gradient }) {
       style={[StyleSheet.absoluteFill, { height: gradient.stops[gradient.stops.length - 1] }]}
     />
   );
+}
+
+// A scroller reports itself when it goes somewhere it should not be able to.
+//
+// Two builds have now gone out with pages that scroll far past their content
+// into blank space, and neither the code nor the test suite could say why:
+// jest runs no layout, so nothing on this side can see it. This closes that
+// gap. It distinguishes the only two shapes the fault can take —
+//
+//   * content taller than any real page  -> something renders an absurd box
+//   * offset beyond the end of content   -> contentInset, i.e. the keyboard path
+//
+// — and sends the numbers with the route, once per mount, so the next report
+// arrives with an answer attached instead of a description.
+const OVERSIZE = 3; // a page worth more than three viewports is already odd here
+const SLACK = 200; // a rubber-band bounce legitimately overshoots by about this
+
+export function useScrollBoundsReport() {
+  const reported = useRef(false);
+  return useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (reported.current) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const viewport = layoutMeasurement.height;
+    const content = contentSize.height;
+    if (viewport <= 0) return;
+    const beyondEnd = contentOffset.y - Math.max(content - viewport, 0);
+    const oversized = content > viewport * OVERSIZE;
+    if (beyondEnd < SLACK && !oversized) return;
+    reported.current = true;
+    posthog.capture("scroll_out_of_bounds", {
+      route: currentRoute(),
+      viewport: Math.round(viewport),
+      content: Math.round(content),
+      offset: Math.round(contentOffset.y),
+      beyond_end: Math.round(beyondEnd),
+      oversized,
+    });
+  }, []);
 }
 
 export function ScreenFrame({
@@ -76,10 +122,13 @@ export function Screen({
   scrollRef,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const onScroll = useScrollBoundsReport();
   return (
     <ScreenFrame gradient={gradient} gradientFixed={gradientFixed} statusBar={statusBar}>
       <ScrollView
         ref={scrollRef}
+        onScroll={onScroll}
+        scrollEventThrottle={250}
         className="flex-1"
         contentContainerClassName="grow"
         keyboardShouldPersistTaps="handled"

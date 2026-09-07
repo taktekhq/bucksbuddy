@@ -101,7 +101,10 @@ let mockStoreValue = makeStoreValue();
 jest.mock("@/lib/store", () => ({ useStore: () => mockStoreValue }));
 
 const mockNavigate = jest.fn();
-jest.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => (mockNavigate as (...x: unknown[]) => unknown)(...a) }));
+jest.mock("@/lib/router", () => ({
+  navigate: (...a: unknown[]) => (mockNavigate as (...x: unknown[]) => unknown)(...a),
+  currentRoute: () => "/history",
+}));
 
 import { History } from "@/screens/History";
 import { takePendingEdit } from "@/lib/editIntent";
@@ -297,5 +300,47 @@ describe("History", () => {
     });
     // Nothing user-visible changes — the page just keeps rendering.
     expect(screen.getByText("All History")).toBeOnTheScreen();
+    // …and an ordinary scroll is not worth reporting.
+    expect(posthog.capture).not.toHaveBeenCalledWith(
+      "scroll_out_of_bounds",
+      expect.anything(),
+    );
+  });
+
+  it("reports itself when it scrolls past the end of its own content", async () => {
+    // History is the only page that does not use Screen's scroller. If it goes
+    // out of bounds too, no ScrollView prop can be the cause of the runaway
+    // scrolling, which is the one thing the numbers cannot tell us on their own.
+    mockStoreValue = makeStoreValue({ transactions: [tx({ id: "t1" })] });
+    await render(<History />);
+    await fireEvent.scroll(await screen.findByLabelText("Delete"), {
+      nativeEvent: {
+        contentOffset: { y: 5000, x: 0 },
+        contentSize: { height: 1000, width: 320 },
+        layoutMeasurement: { height: 640, width: 320 },
+      },
+    });
+    expect(posthog.capture).toHaveBeenCalledWith(
+      "scroll_out_of_bounds",
+      expect.objectContaining({ route: "/history", content: 1000, viewport: 640 }),
+    );
+  });
+
+  it("reports itself when its content is taller than any real page", async () => {
+    // The other shape of the fault: the scroll range is honest and the content
+    // is absurd. History virtualizes, so this should be unreachable.
+    mockStoreValue = makeStoreValue({ transactions: [tx({ id: "t1" })] });
+    await render(<History />);
+    await fireEvent.scroll(await screen.findByLabelText("Delete"), {
+      nativeEvent: {
+        contentOffset: { y: 0, x: 0 },
+        contentSize: { height: 9000, width: 320 },
+        layoutMeasurement: { height: 640, width: 320 },
+      },
+    });
+    expect(posthog.capture).toHaveBeenCalledWith(
+      "scroll_out_of_bounds",
+      expect.objectContaining({ content: 9000, oversized: true }),
+    );
   });
 });
