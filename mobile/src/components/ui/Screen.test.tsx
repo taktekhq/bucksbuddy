@@ -180,6 +180,27 @@ describe("Screen", () => {
     expect(style(find("View")[0]).backgroundColor).toBe("#141428");
   });
 
+  it("drops min-h-full, which scrolls a page forever on iOS", async () => {
+    // `minHeight: 100%` inside a scroller resolves against a parent whose own
+    // height is the scrolling content. iOS answers that circle by growing the
+    // content every pass: Home, Settings and Safe scrolled into blank space
+    // while Stats, the one dark room that never had the class, was fine.
+    await render(
+      withSafeArea(
+        <Screen className="flex min-h-full flex-col gap-6 px-4">
+          <Text>page</Text>
+        </Screen>,
+      ),
+    );
+    const main = allNodes(screen.toJSON()).find((n) =>
+      String(n.props.className ?? "").includes("max-w-md"),
+    );
+    expect(main?.props.className).not.toContain("min-h-full");
+    // Everything else the screen asked for survives, `grow` included — that is
+    // what actually fills a short page on this side.
+    expect(main?.props.className).toBe("mx-auto w-full max-w-md grow flex flex-col gap-6 px-4");
+  });
+
   it("keeps taps working while the keyboard is up", async () => {
     await render(
       withSafeArea(

@@ -33,7 +33,8 @@ point. Four mechanical differences between vitest and jest:
   default transform ignores. Nothing to do — just don't be surprised.
 - **Supabase** is not mocked globally. Mock `@/lib/supabase` per test file with
   whatever shape that file needs, as the web's tests do.
-- **`crypto.ts` is slow on purpose** (600k PBKDF2 rounds). Test the wrap/unwrap
+- **`crypto.ts` is slow under jest** (600k PBKDF2 rounds, and the native
+  derivation in `lib/pbkdf2` only exists in a real build). Test the wrap/unwrap
   round trip once, and use `jest.setTimeout` if a suite needs it; test the
   cheap paths (base64, value encryption, the verifier) directly.
 

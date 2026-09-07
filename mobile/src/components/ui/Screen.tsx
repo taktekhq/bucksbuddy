@@ -6,11 +6,13 @@ import { StatusBar } from "expo-status-bar";
 import { colors, type Gradient } from "@/lib/theme";
 
 // The page shell — what `<main class="mx-auto flex min-h-full max-w-md …">` is
-// on the web, plus the two things a browser handles for us:
+// on the web, plus the three things a browser handles for us:
 //
 //   • Safe areas. The web writes `pt-[calc(1rem+var(--safe-top))]`; there is no
 //     `env()` here, so the insets come from react-native-safe-area-context and
 //     are added to the padding.
+//   • Filling a short page. The web's `min-h-full` is `grow` here, and the
+//     class itself has to go — see `withoutMinHFull` at the bottom.
 //   • The gradient floor. The web paints the gradient on the scrolling <main>
 //     and a `fixed inset-0` floor behind it in the gradient's terminal color,
 //     so a rubber-band bounce never flashes the light canvas. Same here.
@@ -93,11 +95,33 @@ export function Screen({
             to it, so the insets go on a wrapper and the screen's own `pt-*` /
             `pb-*` classes stack on top of them. */}
         <View className="grow" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <View className={`mx-auto w-full max-w-md grow ${className}`}>{children}</View>
+          <View className={`mx-auto w-full max-w-md grow ${withoutMinHFull(className)}`}>
+            {children}
+          </View>
         </View>
       </ScrollView>
     </ScreenFrame>
   );
+}
+
+// Internal: drop `min-h-full` from a screen's class list.
+//
+// The web's `<main>` carries it so a short page still fills the viewport. Here
+// that job belongs to `grow` above: the ScrollView's content container already
+// stretches to the viewport and `flexGrow` carries it down. Leaving
+// `min-h-full` in resolves `minHeight: 100%` against a parent whose own height
+// is the scrolling content — a circular constraint. iOS answers it by growing
+// the content every layout pass, so the page scrolls forever into blank space
+// and the real content ends up far above the viewport.
+//
+// Screens still paste the web's class list verbatim (PORTING.md); this removes
+// the one token that cannot survive the trip.
+function withoutMinHFull(className: string): string {
+  return className
+    .trim()
+    .split(/\s+/)
+    .filter((name) => name !== "min-h-full")
+    .join(" ");
 }
 
 // Internal: pixel stops → the 0..1 fractions LinearGradient wants.

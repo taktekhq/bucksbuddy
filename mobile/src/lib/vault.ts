@@ -6,8 +6,10 @@
 //
 // The web derives a wrapping key from a passphrase on every page load: 600k
 // PBKDF2 rounds, which WebCrypto does in native code in a few hundred
-// milliseconds. In React Native the same work is pure JavaScript and takes
-// seconds, so doing it on every launch would make the app unusable.
+// milliseconds. lib/pbkdf2 reaches for the same native speed here, but it
+// cannot always have it — in Expo Go, or if the native module ever fails to
+// load, the fallback is JavaScript and the same work takes tens of seconds.
+// Deriving on every launch would stake the app on that never happening.
 //
 // It also isn't necessary. A user's master key never changes: it is generated
 // once, and turning a passphrase on or off only re-wraps it (see the web's

@@ -47,26 +47,31 @@ Two things the script does that matter for how the app *feels*:
 | Google OAuth redirect       | `expo-web-browser` auth session (`lib/oauth.ts`)                     |
 | CSV download                | expo-file-system + share sheet                                       |
 | `window.confirm`            | `Alert.alert`                                                        |
-| WebCrypto (`lib/e2e.ts`)    | pure-JS AES-GCM via `@noble` (`lib/crypto.ts`), byte-compatible      |
+| WebCrypto (`lib/e2e.ts`)    | `@noble` AES-GCM + native PBKDF2 (`lib/crypto.ts`), byte-compatible  |
 
 `PORTING.md` is the contract every screen was ported against; keep it in
 sync when a rule changes.
 
 ### Encryption
 
-Expo Go has no WebCrypto, so `lib/crypto.ts` implements the same AES-GCM and
-PBKDF2 in pure JavaScript with `@noble`. The envelopes are byte-compatible
-with what the browser wrote, which matters because the rows already in
-Supabase were encrypted there —
+React Native has no WebCrypto, so `lib/crypto.ts` implements the same AES-GCM
+with `@noble`. The envelopes are byte-compatible with what the browser wrote,
+which matters because the rows already in Supabase were encrypted there —
 `scripts/crypto-interop.test.mts` proves it in both directions.
 
-Cold start never derives a key. The web repeats 600k PBKDF2 rounds on every
-page load, which WebCrypto absorbs in native code and pure JS cannot. It also
-isn't needed: a master key is generated once and only ever re-wrapped, so this
-device derives it once and keeps it in the OS keystore (`lib/vault.ts`),
-checked against the account verifier on load. Later launches are a keystore
-read. Both that key and the cached passphrase are wiped on sign-out and
-account deletion.
+Key derivation is the one part that cannot be pure JavaScript. 600k PBKDF2
+rounds is ~1.2M SHA-256 compressions; WebCrypto absorbs that in a few hundred
+milliseconds and Hermes, which has no JIT, takes tens of seconds — long enough
+that the unlock button looked broken. `lib/pbkdf2.ts` hands the loop to OpenSSL
+via `react-native-quick-crypto` and keeps the `@noble` implementation as the
+fallback for Expo Go and the test suite. Both produce identical bytes, and
+`src/lib/pbkdf2.test.ts` asserts that they do.
+
+Cold start still never derives a key. A master key is generated once and only
+ever re-wrapped, so this device derives it once and keeps it in the OS keystore
+(`lib/vault.ts`), checked against the account verifier on load. Later launches
+are a keystore read. Both that key and the cached passphrase are wiped on
+sign-out and account deletion.
 
 ### Sign-in
 

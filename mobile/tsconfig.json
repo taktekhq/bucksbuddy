@@ -2,6 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // lib/crypto imports lib/pbkdf2 by its full filename so that node can load
+    // it directly in scripts/crypto-interop.test.mts, which runs the mobile
+    // crypto against the browser's without a bundler in the way.
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": [
         "./src/*"

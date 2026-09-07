@@ -44,7 +44,8 @@
       "expo-secure-store",
       "expo-apple-authentication",
       "expo-sqlite",
-      "posthog-react-native/expo"
+      "posthog-react-native/expo",
+      "react-native-quick-crypto"
     ],
     "owner": "taktekhq",
     "extra": {

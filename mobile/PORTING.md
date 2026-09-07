@@ -92,6 +92,11 @@ the only places this comes up.
 - `ring-1 ring-inset ring-white/5` — NativeWind maps ring to a box shadow. If a
   ring doesn't render over an opaque child, use `border` + a matching inset,
   and say so in a comment.
+- `min-h-full` on a `<main>` — `Screen` strips it. Percentage heights inside a
+  scroller resolve against a parent whose height *is* the scrolling content, and
+  iOS resolves that circle by growing the content every layout pass: the page
+  scrolls forever into blank space. `grow` does the real job. Paste the web
+  class list verbatim anyway; `Screen` removes this one token for you.
 - `backdrop-blur` — not supported. Skip it (the Safe's cards look fine without).
 - `divide-y` — not supported. Put `border-t border-separator` on each row after
   the first.
