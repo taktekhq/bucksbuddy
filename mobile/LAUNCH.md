@@ -164,12 +164,13 @@ app* picker in 3.3 has nothing to offer.
       changeable later), default language, app-or-game, **free or paid**, and
       the policy declarations. A paid app can be made free later; a published
       free app can *never* become paid, so choose deliberately.
-- [ ] Note what it does **not** ask for: the package name. `io.taktek.bucksbuddy`
-      binds to the listing when the first bundle is uploaded (§3.5), not here —
-      so there is nothing to mistype at this stage, and nothing to verify
-      either. Check the build's package before that first upload instead.
+- [ ] The record carries the package name — `io.taktek.bucksbuddy` shows under
+      the app title in *All apps* from the moment it is created, before any
+      build is uploaded. It is permanent, so read it back and check it against
+      `app.json` → `android.package` now rather than later.
 - [ ] The record may sit unfinished for as long as you like. Creating it
-      publishes nothing.
+      publishes nothing, and it stays in **Draft** until the first release is
+      rolled out — a state that matters in §3.5.
 - [ ] Content rating questionnaire, target audience, privacy policy URL
       (`https://bucksbuddy.com/privacy`), category (Finance), screenshots.
 - [ ] **Data safety form.** Same disclosures as Apple's label: email address,
@@ -276,30 +277,38 @@ Run from `mobile/`, signed into Expo as a member of **taktekhq**:
       release status `completed`. Builds land with the internal testers and
       promotion to production stays a deliberate click in Play Console.
 
-### 3.5 The first upload is manual — after that it is automatic
+### 3.5 The first release — the one time `production` is the wrong profile
 
-**Why.** The Play Developer API addresses everything by package name
-(`/applications/{packageName}/edits`), and `io.taktek.bucksbuddy` does not
-exist as far as Play is concerned until a bundle declaring it has been
-uploaded. Creating the app record in §3.1 is not the same thing — that dialog
-never asked for a package, so the record has none attached yet. The API can
-only edit a package Play already knows, and the console upload is what performs
-the binding. Nothing about EAS causes this and no permission fixes it.
+**The constraint is the app's Draft state, not the package.** The package is
+registered from §3.1 onwards, so the API can address the app perfectly well.
+But while the record has never had a release rolled out, Play sits it in
+**Draft**, and a draft app accepts *only* releases whose status is also
+`draft`. The `production` submit profile asks for `completed`, so used first it
+fails with:
 
-Try the automated path anyway. It costs one command, the failure is immediate
-and harmless, and the build gets made either way:
+```
+Google Api Error: Invalid request - Only releases with status draft may be created on draft app.
+```
 
-- [ ] `npx eas-cli build --profile production --platform android --auto-submit`
-      (an `.aab` — the profile already builds an app bundle rather than an APK).
-- [ ] **If the submit succeeded**, the binding was already there. Skip to §3.6;
-      there is no manual step to do.
-- [ ] **If it failed with `Package not found: io.taktek.bucksbuddy`**, that is
-      this constraint and nothing else. Download the `.aab` from the build page
-      and upload it **by hand** into the internal testing track. Accept Play App
-      Signing when offered; EAS keeps the upload key, Google keeps the signing
-      key.
-- [ ] Then confirm the automated path is open:
+That is not a credentials problem and no permission fixes it. `eas.json`
+therefore carries a second submit profile, `first-release`, identical but for
+`releaseStatus: "draft"`. Use it exactly once:
+
+- [ ] `npx eas-cli build --profile production --platform android
+      --auto-submit-with-profile first-release` — builds the `.aab` (the
+      profile already builds an app bundle rather than an APK) and uploads it
+      as a draft release.
+- [ ] In Play Console, open that draft release on the internal testing track
+      and **roll it out**. Accept Play App Signing when offered; EAS keeps the
+      upload key, Google keeps the signing key. Play takes the app out of Draft
+      at this point — that is the whole purpose of the exercise.
+- [ ] Confirm the normal path is now open:
       `npx eas-cli submit --platform android --profile production --latest`.
+      Once this works, `first-release` has no further use; leave it in place
+      for the next app rather than deleting it.
+
+Uploading that first `.aab` by hand through the console instead works just as
+well and needs no second profile — it is the same one-time chore either way.
 
 From then on, one command builds and ships:
 

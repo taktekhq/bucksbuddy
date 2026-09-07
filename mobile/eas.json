@@ -42,6 +42,12 @@
         "track": "internal",
         "releaseStatus": "completed"
       }
+    },
+    "first-release": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
     }
   }
 }
