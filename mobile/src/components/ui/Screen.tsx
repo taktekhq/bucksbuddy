@@ -1,11 +1,10 @@
-import { useCallback, useRef, useState, type ReactNode, type Ref } from "react";
+import { useCallback, useRef, type ReactNode, type Ref } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -56,8 +55,8 @@ export function GradientLayer({ gradient }: { gradient: Gradient }) {
 // scrambles those, so the inset outlived the keyboard. jest runs no layout, so
 // nothing on this side could have seen it; this could.
 //
-// It stays, printing the real inset now, until the fix is confirmed on a
-// device. It never fires while a keyboard is legitimately up.
+// It reports to PostHog only — the on-screen strip it once drove is gone. It
+// never fires while a keyboard is legitimately up.
 const OVERSIZE = 3; // a page worth more than three viewports is already odd here
 const SLACK = 200; // a rubber-band bounce legitimately overshoots by about this
 
@@ -75,7 +74,6 @@ export type ScrollReport = {
 };
 
 export function useScrollBoundsReport(insets: { top: number; bottom: number }) {
-  const [report, setReport] = useState<ScrollReport | null>(null);
   const reported = useRef(false);
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -104,45 +102,10 @@ export function useScrollBoundsReport(insets: { top: number; bottom: number }) {
         inset_bottom: Math.round(insets.bottom),
       };
       posthog.capture("scroll_out_of_bounds", { ...next });
-      setReport(next);
     },
     [insets.top, insets.bottom],
   );
-  return { onScroll, report };
-}
-
-/**
- * The numbers, on the screen.
- *
- * Temporary and deliberate. Three builds have gone out with pages that scroll
- * past their content, the fault has never been reproducible here, and the
- * analytics key this project has cannot read its own events back. So the page
- * says what it measured, and only when it has already gone wrong — on a healthy
- * build this renders nothing, ever. Delete it once the cause is known.
- */
-export function ScrollDiagnostic({ report }: { report: ScrollReport | null }) {
-  if (!report) return null;
-  return (
-    <View
-      pointerEvents="none"
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: "#FF3B30",
-        paddingHorizontal: 8,
-        paddingTop: 44,
-        paddingBottom: 6,
-      }}
-    >
-      <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
-        {report.route} · view {report.viewport} · content {report.content} · at{" "}
-        {report.offset} · past {report.beyond_end} · inset {report.scroll_inset} · safe{" "}
-        {report.inset_top}/{report.inset_bottom}
-      </Text>
-    </View>
-  );
+  return onScroll;
 }
 
 export function ScreenFrame({
@@ -189,7 +152,7 @@ export function Screen({
   scrollRef,
 }: Props) {
   const insets = safeAreaPadding(useSafeAreaInsets());
-  const { onScroll, report } = useScrollBoundsReport(insets);
+  const onScroll = useScrollBoundsReport(insets);
   return (
     <ScreenFrame gradient={gradient} gradientFixed={gradientFixed} statusBar={statusBar}>
       {/* The keyboard as padding, and nothing more. When it comes up this view
@@ -227,7 +190,6 @@ export function Screen({
         </View>
       </ScrollView>
       </KeyboardAvoidingView>
-      <ScrollDiagnostic report={report} />
     </ScreenFrame>
   );
 }
