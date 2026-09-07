@@ -278,20 +278,27 @@ Run from `mobile/`, signed into Expo as a member of **taktekhq**:
 
 ### 3.5 The first upload is manual — after that it is automatic
 
-**Why.** The Play Developer API addresses everything by package name, and
-`io.taktek.bucksbuddy` does not exist as far as Play is concerned until a
-bundle declaring it has been uploaded (§3.1 — the create-app dialog never asked
-for it). So the API has no way to say "this new package belongs to that app
-record": it can only edit a package Play already knows. The console upload is
-what performs that binding. Nothing about EAS causes this, and no permission
-fixes it. So exactly once:
+**Why.** The Play Developer API addresses everything by package name
+(`/applications/{packageName}/edits`), and `io.taktek.bucksbuddy` does not
+exist as far as Play is concerned until a bundle declaring it has been
+uploaded. Creating the app record in §3.1 is not the same thing — that dialog
+never asked for a package, so the record has none attached yet. The API can
+only edit a package Play already knows, and the console upload is what performs
+the binding. Nothing about EAS causes this and no permission fixes it.
 
-- [ ] `npx eas-cli build --profile production --platform android` (an `.aab` —
-      the profile already builds an app bundle rather than an APK).
-- [ ] Download it from the build page and upload it **by hand** into the
-      internal testing track in Play Console. Accept Play App Signing when
-      offered; EAS keeps the upload key, Google keeps the signing key.
-- [ ] Then prove the automated path works end to end:
+Try the automated path anyway. It costs one command, the failure is immediate
+and harmless, and the build gets made either way:
+
+- [ ] `npx eas-cli build --profile production --platform android --auto-submit`
+      (an `.aab` — the profile already builds an app bundle rather than an APK).
+- [ ] **If the submit succeeded**, the binding was already there. Skip to §3.6;
+      there is no manual step to do.
+- [ ] **If it failed with `Package not found: io.taktek.bucksbuddy`**, that is
+      this constraint and nothing else. Download the `.aab` from the build page
+      and upload it **by hand** into the internal testing track. Accept Play App
+      Signing when offered; EAS keeps the upload key, Google keeps the signing
+      key.
+- [ ] Then confirm the automated path is open:
       `npx eas-cli submit --platform android --profile production --latest`.
 
 From then on, one command builds and ships:
