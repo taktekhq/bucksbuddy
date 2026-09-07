@@ -5,10 +5,13 @@ module.exports = {
   preset: "jest-expo",
   setupFilesAfterEnv: ["<rootDir>/src/test/setup.ts"],
   testMatch: ["<rootDir>/src/**/*.test.{ts,tsx}"],
-  // lucide-react-native (and the noble crypto packages) ship ESM, which jest
+  // lucide-react-native, the noble crypto packages, and query-string (pulled in
+  // by @react-navigation/core; pinned to 9.x by the override in package.json
+  // to clear a Dependabot alert on decode-uri-component) ship ESM, which jest
   // must transform rather than skip along with the rest of node_modules.
+  // Metro handles all of them on its own.
   transformIgnorePatterns: [
-    "node_modules/(?!(?:jest-)?react-native|@react-native|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|lucide-react-native|nativewind|react-native-css-interop|@noble/.*)",
+    "node_modules/(?!(?:jest-)?react-native|@react-native|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|lucide-react-native|nativewind|react-native-css-interop|@noble/.*|query-string|decode-uri-component|filter-obj|split-on-first)",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
