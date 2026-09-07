@@ -152,10 +152,24 @@ not use.
 > account and a second 25 USD registration for a taktek.io organisation
 > account. The rest of this section works either way.
 
-### 3.1 The app record
+### 3.1 The app record — yours to create, not EAS's
 
-- [ ] **Create the app** in Play Console, package `io.taktek.bucksbuddy`.
-      One-time 25 USD registration if you have not already.
+**EAS never creates the app.** The Play Developer API has no endpoint for it —
+the same limitation that makes §3.5's first upload manual. So this step comes
+first in practice as well as in numbering: until the record exists, the *Add
+app* picker in 3.3 has nothing to offer.
+
+- [ ] **All apps → Create app.** One-time 25 USD registration if you have not
+      already. The dialog asks for five things and no more: app name (30 chars,
+      changeable later), default language, app-or-game, **free or paid**, and
+      the policy declarations. A paid app can be made free later; a published
+      free app can *never* become paid, so choose deliberately.
+- [ ] Note what it does **not** ask for: the package name. `io.taktek.bucksbuddy`
+      binds to the listing when the first bundle is uploaded (§3.5), not here —
+      so there is nothing to mistype at this stage, and nothing to verify
+      either. Check the build's package before that first upload instead.
+- [ ] The record may sit unfinished for as long as you like. Creating it
+      publishes nothing.
 - [ ] Content rating questionnaire, target audience, privacy policy URL
       (`https://bucksbuddy.com/privacy`), category (Finance), screenshots.
 - [ ] **Data safety form.** Same disclosures as Apple's label: email address,
@@ -222,8 +236,9 @@ Back in Play Console, as either account once 3.0's invitation is done:
 
 - [ ] **Users and permissions → Invite new users.** Paste the
       `…iam.gserviceaccount.com` email. It is treated as an ordinary user.
-- [ ] Under **App permissions**, click *Add app*, pick **BucksBuddy**, and grant
-      only that app — not account-level access:
+- [ ] Under **App permissions**, click *Add app*, pick **BucksBuddy** (it is
+      only listed if 3.1 is done), and grant only that app — not account-level
+      access:
       - View app information (read-only)
       - Edit and delete draft apps
       - Release to production, exclude devices, and use Play App Signing
