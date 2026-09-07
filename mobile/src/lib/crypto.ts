@@ -26,14 +26,21 @@
 //   value blob : "<iv>.<ct>"
 //   wrapped key: "v1.<salt>.<iv>.<ct>"
 //
-// Cost note: deriving a wrapping key is 600k PBKDF2 rounds, which is seconds
-// in pure JS on a phone. That is why lib/vault caches the *unwrapped* master
-// key in the device keystore — see the comment there. Derivation happens when
-// a device first unlocks, not on every launch.
+// Cost note: deriving a wrapping key is 600k PBKDF2 rounds. lib/pbkdf2 runs
+// those natively where it can, which keeps an unlock under a second; the
+// pure-JS fallback is tens of seconds. Either way lib/vault caches the
+// *unwrapped* master key in the device keystore, so derivation happens when a
+// device first unlocks rather than on every launch.
 import { gcm } from "@noble/ciphers/aes.js";
-import { pbkdf2Async } from "@noble/hashes/pbkdf2.js";
-import { sha256 } from "@noble/hashes/sha2.js";
 import { randomBytes, utf8ToBytes } from "@noble/hashes/utils.js";
+// Relative, not "@/lib/…": scripts/crypto-interop.test.mts loads this file
+// straight from node, which has no path aliases.
+import { deriveBits } from "./pbkdf2.ts";
+// Side-effect import. randomBytes below reads `globalThis.crypto` at call time,
+// and React Native provides none — see lib/random. Importing it here means the
+// encryption layer carries its own random source rather than trusting the entry
+// point to have installed one first.
+import "./random.ts";
 
 const VERSION = "v1";
 // PBKDF2 work factor. Matches the web exactly — change one and old wrapped
@@ -111,12 +118,10 @@ export function decryptString(key: MasterKeyBytes, blob: string): string {
 }
 
 /** Derive an AES wrapping key from a passphrase + salt via PBKDF2. The slow
- *  part — see the cost note at the top of the file. */
+ *  part — see the cost note at the top of the file, and lib/pbkdf2 for where
+ *  the work actually happens. */
 function deriveWrapKey(passphrase: string, salt: Uint8Array): Promise<Uint8Array> {
-  return pbkdf2Async(sha256, utf8ToBytes(passphrase), salt, {
-    c: PBKDF2_ITERATIONS,
-    dkLen: 32,
-  });
+  return deriveBits(passphrase, salt, PBKDF2_ITERATIONS, 32);
 }
 
 /** Encrypt the master key under a passphrase. Returns "v1.<salt>.<iv>.<ct>". */

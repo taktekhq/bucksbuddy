@@ -20,6 +20,15 @@ import {
   unwrapMasterKey,
   wrapMasterKey,
 } from "@/lib/crypto";
+import { installCsprng } from "@/lib/random";
+
+// jest-expo's expo-crypto mock returns all zeros, and installCsprng refuses a
+// source like that on purpose. Node's CSPRNG stands in for the device's native
+// one so the polyfill has something real to install.
+jest.mock("expo-crypto", () => {
+  const { webcrypto } = require("node:crypto");
+  return { getRandomValues: (array: Uint8Array) => webcrypto.getRandomValues(array) };
+});
 
 // The repo's tsconfig doesn't pull in Node's types (tests aren't part of the
 // typecheck), so name the one Node global this file borrows as a reference
@@ -119,4 +128,43 @@ describe("crypto", () => {
     },
     240_000,
   );
+});
+
+// The bug that shipped in build 8. Every one of these paths needs randomness,
+// and Hermes has no `crypto` global to get it from — but node does, so this
+// suite was green while saving anything on the phone threw.
+describe("without a crypto global, which is what a phone actually is", () => {
+  const key = generateMasterKey();
+  let real: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    real = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+    Reflect.deleteProperty(globalThis, "crypto");
+  });
+
+  afterEach(() => {
+    if (real) Object.defineProperty(globalThis, "crypto", real);
+  });
+
+  it("cannot encrypt at all before the polyfill is installed", () => {
+    // Not a hypothetical: this threw on every save in build 8, and because
+    // nothing catches it the button just sat there reading "Saving…".
+    expect(() => encryptString(key, "42")).toThrow(/getRandomValues/);
+  });
+
+  it("cannot mint a master key either, so a new account cannot bootstrap", () => {
+    expect(() => generateMasterKey()).toThrow(/getRandomValues/);
+  });
+
+  it("encrypts, wraps and unwraps once the polyfill is installed", async () => {
+    expect(installCsprng()).toBe(true);
+    const fresh = generateMasterKey();
+    // Reversibility alone would also pass with a source that returns zeros, and
+    // that source would make every key in the fleet identical.
+    expect(keyToB64(fresh)).not.toBe(keyToB64(generateMasterKey()));
+    expect(fresh.some((byte) => byte !== 0)).toBe(true);
+    expect(decryptString(fresh, encryptString(fresh, "42"))).toBe("42");
+    const wrapped = await wrapMasterKey(fresh, "hunter2");
+    expect(keyToB64(await unwrapMasterKey(wrapped, "hunter2"))).toBe(keyToB64(fresh));
+  }, 120_000);
 });

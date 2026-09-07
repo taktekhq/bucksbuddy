@@ -153,7 +153,9 @@ async function measureGrids(width: number) {
     (node) => typeof node.props.onLayout === "function",
   );
   for (const grid of grids) {
-    await fireEvent(grid, "layout", { nativeEvent: { layout: { width } } });
+    // The shell's KeyboardAvoidingView has an onLayout of its own now, and it
+    // calls `event.persist()` like a real React event would; give it one.
+    await fireEvent(grid, "layout", { nativeEvent: { layout: { width } }, persist() {} });
   }
   return grids.length;
 }

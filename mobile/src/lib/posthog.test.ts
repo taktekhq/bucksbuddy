@@ -63,6 +63,12 @@ describe("posthog", () => {
     const posthog = loadModule();
     expect(mockConstruct).toHaveBeenCalledWith("phc_test", {
       host: "https://eu.i.posthog.com",
+      // Load-bearing, not decoration: React Native only tracks promise
+      // rejections under __DEV__, so without this a crash in an async onPress
+      // is discarded on a release build and the screen just sits there.
+      errorTracking: {
+        autocapture: { uncaughtExceptions: true, unhandledRejections: true },
+      },
     });
 
     // Every event is stamped with the platform so the two apps stay apart in
@@ -98,6 +104,9 @@ describe("posthog", () => {
     loadModule();
     expect(mockConstruct).toHaveBeenCalledWith("phc_test", {
       host: "https://us.i.posthog.com",
+      errorTracking: {
+        autocapture: { uncaughtExceptions: true, unhandledRejections: true },
+      },
     });
   });
 

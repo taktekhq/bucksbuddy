@@ -45,7 +45,21 @@ function real(client: PostHog): Analytics {
 }
 
 const posthog: Analytics = key
-  ? real(new PostHog(key, { host: host || "https://us.i.posthog.com" }))
+  ? real(
+      new PostHog(key, {
+        host: host || "https://us.i.posthog.com",
+        // React Native installs a promise-rejection tracker only under __DEV__
+        // (react-native/Libraries/Core/polyfillPromise.js), so on a release
+        // build an unhandled rejection from an async onPress reaches neither
+        // App's ErrorUtils handler nor the ErrorBoundary — it just vanishes.
+        // That is how a crash on every save looked like a button that did
+        // nothing. Note the SDK also gates this on the project's own
+        // "autocapture exceptions" setting, so both have to be on.
+        errorTracking: {
+          autocapture: { uncaughtExceptions: true, unhandledRejections: true },
+        },
+      }),
+    )
   : noop;
 
 export default posthog;

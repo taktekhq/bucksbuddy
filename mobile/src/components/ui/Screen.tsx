@@ -1,16 +1,30 @@
-import type { ReactNode, Ref } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useRef, useState, type ReactNode, type Ref } from "react";
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { colors, type Gradient } from "@/lib/theme";
+import { currentRoute } from "@/lib/router";
+import posthog from "@/lib/posthog";
 
 // The page shell — what `<main class="mx-auto flex min-h-full max-w-md …">` is
-// on the web, plus the two things a browser handles for us:
+// on the web, plus the three things a browser handles for us:
 //
 //   • Safe areas. The web writes `pt-[calc(1rem+var(--safe-top))]`; there is no
 //     `env()` here, so the insets come from react-native-safe-area-context and
 //     are added to the padding.
+//   • Filling a short page. The web's `min-h-full` is `grow` here, and the
+//     class itself has to go — see `withoutMinHFull` at the bottom.
 //   • The gradient floor. The web paints the gradient on the scrolling <main>
 //     and a `fixed inset-0` floor behind it in the gradient's terminal color,
 //     so a rubber-band bounce never flashes the light canvas. Same here.
@@ -27,6 +41,107 @@ export function GradientLayer({ gradient }: { gradient: Gradient }) {
       locations={toLocations(gradient.stops)}
       style={[StyleSheet.absoluteFill, { height: gradient.stops[gradient.stops.length - 1] }]}
     />
+  );
+}
+
+// A scroller reports itself when it goes somewhere it should not be able to.
+//
+// A scroller that goes somewhere it should not be able to reports itself.
+//
+// This is what finally identified the runaway scroll: a page 930pt tall in a
+// 912pt window resting 349pt down, which a scroll view can only do if its
+// bottom contentInset is at least 331 — a keyboard's height. The scroller's
+// own keyboard avoidance (`automaticallyAdjustKeyboardInsets`, since removed)
+// wrote that inset from iOS's keyboard-frame notifications, and an app switch
+// scrambles those, so the inset outlived the keyboard. jest runs no layout, so
+// nothing on this side could have seen it; this could.
+//
+// It stays, printing the real inset now, until the fix is confirmed on a
+// device. It never fires while a keyboard is legitimately up.
+const OVERSIZE = 3; // a page worth more than three viewports is already odd here
+const SLACK = 200; // a rubber-band bounce legitimately overshoots by about this
+
+export type ScrollReport = {
+  route: string;
+  viewport: number;
+  content: number;
+  offset: number;
+  beyond_end: number;
+  oversized: boolean;
+  /** The scroll view's own bottom contentInset — the number that was wrong. */
+  scroll_inset: number;
+  inset_top: number;
+  inset_bottom: number;
+};
+
+export function useScrollBoundsReport(insets: { top: number; bottom: number }) {
+  const [report, setReport] = useState<ScrollReport | null>(null);
+  const reported = useRef(false);
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (reported.current) return;
+      // With a keyboard up the page is *meant* to reach past its content — that
+      // is what avoidance is — so there is nothing to report until it is gone.
+      if (Keyboard.isVisible()) return;
+      const { contentOffset, contentSize, layoutMeasurement, contentInset } =
+        event.nativeEvent;
+      const viewport = layoutMeasurement.height;
+      const content = contentSize.height;
+      if (viewport <= 0) return;
+      const beyondEnd = contentOffset.y - Math.max(content - viewport, 0);
+      const oversized = content > viewport * OVERSIZE;
+      if (beyondEnd < SLACK && !oversized) return;
+      reported.current = true;
+      const next: ScrollReport = {
+        route: currentRoute(),
+        viewport: Math.round(viewport),
+        content: Math.round(content),
+        offset: Math.round(contentOffset.y),
+        beyond_end: Math.round(beyondEnd),
+        oversized,
+        scroll_inset: Math.round(contentInset.bottom),
+        inset_top: Math.round(insets.top),
+        inset_bottom: Math.round(insets.bottom),
+      };
+      posthog.capture("scroll_out_of_bounds", { ...next });
+      setReport(next);
+    },
+    [insets.top, insets.bottom],
+  );
+  return { onScroll, report };
+}
+
+/**
+ * The numbers, on the screen.
+ *
+ * Temporary and deliberate. Three builds have gone out with pages that scroll
+ * past their content, the fault has never been reproducible here, and the
+ * analytics key this project has cannot read its own events back. So the page
+ * says what it measured, and only when it has already gone wrong — on a healthy
+ * build this renders nothing, ever. Delete it once the cause is known.
+ */
+export function ScrollDiagnostic({ report }: { report: ScrollReport | null }) {
+  if (!report) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: "#FF3B30",
+        paddingHorizontal: 8,
+        paddingTop: 44,
+        paddingBottom: 6,
+      }}
+    >
+      <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+        {report.route} · view {report.viewport} · content {report.content} · at{" "}
+        {report.offset} · past {report.beyond_end} · inset {report.scroll_inset} · safe{" "}
+        {report.inset_top}/{report.inset_bottom}
+      </Text>
+    </View>
   );
 }
 
@@ -73,31 +188,84 @@ export function Screen({
   className = "",
   scrollRef,
 }: Props) {
-  const insets = useSafeAreaInsets();
+  const insets = safeAreaPadding(useSafeAreaInsets());
+  const { onScroll, report } = useScrollBoundsReport(insets);
   return (
     <ScreenFrame gradient={gradient} gradientFixed={gradientFixed} statusBar={statusBar}>
+      {/* The keyboard as padding, and nothing more. When it comes up this view
+          pads its own bottom by the keyboard's height, so the scroller shrinks
+          and the page gains exactly that much room; when it goes, the padding is
+          zero. It listens to the keyboard's own show/hide events and zeroes
+          unconditionally — its source says it avoids the frame-change
+          notification on purpose. That notification is what the scroll view's
+          built-in avoidance (`automaticallyAdjustKeyboardInsets`) rewrote its
+          contentInset from, and iOS scrambles it across an app switch, which
+          left every page with a keyboard's worth of phantom scroll range. That
+          prop is gone; there is no inset to go wrong any more. Android resizes
+          the window itself, so it gets no behaviour here. */}
+      <KeyboardAvoidingView behavior={Platform.select({ ios: "padding" })} style={styles.fill}>
       <ScrollView
         ref={scrollRef}
+        onScroll={onScroll}
+        scrollEventThrottle={250}
         className="flex-1"
+        // The web writes `pt-[calc(1rem+var(--safe-top))]`, i.e. base padding
+        // PLUS the inset. The insets go here, on the content container, so the
+        // screen's own `pt-*` / `pb-*` classes stack on top of them rather than
+        // fighting them — and so there is one less nested `grow` between the
+        // scroller and the page than there used to be.
         contentContainerClassName="grow"
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        // iOS scrolls the focused input into view natively, like the browser.
-        automaticallyAdjustKeyboardInsets
         contentInsetAdjustmentBehavior="never"
         showsVerticalScrollIndicator={false}
       >
         {gradient && !gradientFixed && <GradientLayer gradient={gradient} />}
-        {/* The web writes `pt-[calc(1rem+var(--safe-top))]`, i.e. base padding
-            PLUS the inset. An inline style would beat the class rather than add
-            to it, so the insets go on a wrapper and the screen's own `pt-*` /
-            `pb-*` classes stack on top of them. */}
-        <View className="grow" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <View className={`mx-auto w-full max-w-md grow ${className}`}>{children}</View>
+        <View className={`mx-auto w-full max-w-md grow ${withoutMinHFull(className)}`}>
+          {children}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
+      <ScrollDiagnostic report={report} />
     </ScreenFrame>
   );
+}
+
+// A phone's safe area is tens of points, never hundreds. Anything larger is a
+// measurement that has gone wrong, and because this padding sits inside the
+// scroller a bad one adds exactly that much blank space below the page — which
+// is what "I can scroll forever and then the UI disappears" looks like. Cap it
+// rather than lay it out, and let the diagnostic show what came in.
+const MAX_INSET = 100;
+
+export function safeAreaPadding(insets: { top: number; bottom: number }) {
+  return {
+    top: Math.min(Math.max(insets.top, 0), MAX_INSET),
+    bottom: Math.min(Math.max(insets.bottom, 0), MAX_INSET),
+  };
+}
+
+const styles = StyleSheet.create({ fill: { flex: 1 } });
+
+// Internal: drop `min-h-full` from a screen's class list.
+//
+// The web's `<main>` carries it so a short page still fills the viewport. Here
+// that job belongs to `grow` above: the ScrollView's content container already
+// stretches to the viewport and `flexGrow` carries it down. Leaving
+// `min-h-full` in resolves `minHeight: 100%` against a parent whose own height
+// is the scrolling content — a circular constraint. iOS answers it by growing
+// the content every layout pass, so the page scrolls forever into blank space
+// and the real content ends up far above the viewport.
+//
+// Screens still paste the web's class list verbatim (PORTING.md); this removes
+// the one token that cannot survive the trip.
+function withoutMinHFull(className: string): string {
+  return className
+    .trim()
+    .split(/\s+/)
+    .filter((name) => name !== "min-h-full")
+    .join(" ");
 }
 
 // Internal: pixel stops → the 0..1 fractions LinearGradient wants.

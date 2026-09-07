@@ -18,6 +18,7 @@ import {
   type SectionListRenderItem,
 } from "react-native";
 import Animated, {
+  runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
@@ -26,7 +27,13 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft } from "lucide-react-native";
 import { Press } from "@/components/ui/Press";
-import { GradientLayer, ScreenFrame } from "@/components/ui/Screen";
+import {
+  GradientLayer,
+  safeAreaPadding,
+  ScreenFrame,
+  ScrollDiagnostic,
+  useScrollBoundsReport,
+} from "@/components/ui/Screen";
 import { MonthSwitcher } from "@/components/ui/MonthSwitcher";
 import { HistoryStack } from "@/components/HistoryStack";
 import { DayHeader, toSections, type TimelineSection } from "@/components/HistoryTimeline";
@@ -103,7 +110,7 @@ export function History() {
   const [grouping, setGrouping, hydrated] = useHistoryGrouping();
   const days = useMemo(() => groupByDay(transactions), [transactions]);
   const sections = useMemo(() => toSections(days), [days]);
-  const insets = useSafeAreaInsets();
+  const insets = safeAreaPadding(useSafeAreaInsets());
 
   // The "By category" view is scoped to one month at a time, paged with the
   // switcher (this month, last month, or further back). The timeline stays
@@ -143,8 +150,24 @@ export function History() {
   // The gradient scrolls with the content, like the web's `<main>` background,
   // and the frame's floor shows through on an overscroll bounce.
   const scrollY = useSharedValue(0);
+  // History is the one page that does not use Screen's scroller, which makes it
+  // the discriminator for the runaway-scroll fault: if it reports too, no
+  // ScrollView prop can be responsible. See useScrollBoundsReport.
+  const { onScroll: reportBounds, report } = useScrollBoundsReport(insets);
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
+    const viewport = e.layoutMeasurement.height;
+    const beyondEnd = e.contentOffset.y - Math.max(e.contentSize.height - viewport, 0);
+    if (viewport > 0 && (beyondEnd > 200 || e.contentSize.height > viewport * 3)) {
+      runOnJS(reportBounds)({
+        nativeEvent: {
+          contentOffset: e.contentOffset,
+          contentSize: e.contentSize,
+          layoutMeasurement: e.layoutMeasurement,
+          contentInset: e.contentInset,
+        },
+      } as never);
+    }
   });
   const gradientStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -scrollY.value }],
@@ -288,6 +311,7 @@ export function History() {
           )
         }
       />
+      <ScrollDiagnostic report={report} />
     </ScreenFrame>
   );
 }

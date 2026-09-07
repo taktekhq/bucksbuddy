@@ -3,10 +3,11 @@
 // this covers: the safe-area insets, and where the gradient sits relative to
 // the scroller.
 import type { ReactElement } from "react";
-import { Text } from "react-native";
-import { render, screen } from "@testing-library/react-native";
+import { Keyboard, Text } from "react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GradientLayer, Screen, ScreenFrame } from "@/components/ui/Screen";
+import posthog from "@/lib/posthog";
 import { colors, OBSERVATORY, RABBIT_HOLE, SAVINGS, VAULT } from "@/lib/theme";
 
 const METRICS = {
@@ -122,11 +123,34 @@ describe("Screen", () => {
       ),
     );
     // The web writes `pt-[calc(1rem+var(--safe-top))]`; there is no env() here,
-    // so the insets go on a wrapper and the screen's own padding stacks on top.
-    const padded = allNodes(screen.toJSON()).find(
-      (n) => typeof style(n).paddingTop === "number",
+    // so the insets go on the content container and the screen's own padding
+    // classes stack on top of them.
+    const scroller = find("RCTScrollView")[0];
+    expect(scroller.props.contentContainerStyle).toEqual(
+      expect.objectContaining({ paddingTop: 47, paddingBottom: 34 }),
     );
-    expect(style(padded)).toEqual({ paddingTop: 47, paddingBottom: 34 });
+  });
+
+  it("caps a safe area that came back absurd, instead of laying it out", async () => {
+    // This padding lives inside the scroller, so a bad measurement adds exactly
+    // that much blank space below the page — which is what scrolling forever
+    // into nothing looks like. No phone has a safe area of hundreds of points.
+    await render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 4000, left: 0, right: 0, bottom: 9000 },
+        }}
+      >
+        <Screen>
+          <Text>hello</Text>
+        </Screen>
+      </SafeAreaProvider>,
+    );
+    const scroller = find("RCTScrollView")[0];
+    expect(scroller.props.contentContainerStyle).toEqual(
+      expect.objectContaining({ paddingTop: 100, paddingBottom: 100 }),
+    );
   });
 
   it("scrolls the gradient with the content by default", async () => {
@@ -180,6 +204,27 @@ describe("Screen", () => {
     expect(style(find("View")[0]).backgroundColor).toBe("#141428");
   });
 
+  it("drops min-h-full, which scrolls a page forever on iOS", async () => {
+    // `minHeight: 100%` inside a scroller resolves against a parent whose own
+    // height is the scrolling content. iOS answers that circle by growing the
+    // content every pass: Home, Settings and Safe scrolled into blank space
+    // while Stats, the one dark room that never had the class, was fine.
+    await render(
+      withSafeArea(
+        <Screen className="flex min-h-full flex-col gap-6 px-4">
+          <Text>page</Text>
+        </Screen>,
+      ),
+    );
+    const main = allNodes(screen.toJSON()).find((n) =>
+      String(n.props.className ?? "").includes("max-w-md"),
+    );
+    expect(main?.props.className).not.toContain("min-h-full");
+    // Everything else the screen asked for survives, `grow` included — that is
+    // what actually fills a short page on this side.
+    expect(main?.props.className).toBe("mx-auto w-full max-w-md grow flex flex-col gap-6 px-4");
+  });
+
   it("keeps taps working while the keyboard is up", async () => {
     await render(
       withSafeArea(
@@ -190,6 +235,145 @@ describe("Screen", () => {
     );
     const scroller = find("RCTScrollView")[0];
     expect(scroller.props.keyboardShouldPersistTaps).toBe("handled");
-    expect(scroller.props.automaticallyAdjustKeyboardInsets).toBe(true);
+  });
+
+  it("never lets the scroll view write its own keyboard inset", async () => {
+    // `automaticallyAdjustKeyboardInsets` rewrote contentInset from iOS's
+    // keyboard-frame notifications, which an app switch scrambles; the inset
+    // outlived the keyboard and every page could scroll a keyboard's height
+    // into blank space. Four builds. It is not coming back.
+    await render(
+      withSafeArea(
+        <Screen>
+          <Text>form</Text>
+        </Screen>,
+      ),
+    );
+    const scroller = find("RCTScrollView")[0];
+    expect(scroller.props.automaticallyAdjustKeyboardInsets).toBeUndefined();
+    expect(scroller.props.contentInset).toBeUndefined();
+  });
+
+  it("makes room for the keyboard as padding around the scroller instead", async () => {
+    await render(
+      withSafeArea(
+        <Screen>
+          <Text>form</Text>
+        </Screen>,
+      ),
+    );
+    // `behavior` never reaches a host node, but under "padding" the wrapper
+    // composes `paddingBottom: <keyboard height>` onto its host View — zero
+    // with no keyboard up — and measures itself with onLayout. Neither
+    // "height", "position" nor an absent behaviour leaves that signature.
+    // One tree for both lookups: `find` re-serializes, and a parent search by
+    // identity across two serializations matches nothing.
+    const tree = screen.toJSON();
+    const scroller = find("RCTScrollView", tree)[0];
+    const wrapper = allNodes(tree).find((n) => (n.children ?? []).includes(scroller));
+    const flat = ([] as unknown[]).concat(wrapper?.props.style ?? []).flat(3);
+    expect(flat).toContainEqual(expect.objectContaining({ paddingBottom: 0 }));
+    expect(typeof wrapper?.props.onLayout).toBe("function");
+  });
+});
+
+// Two builds shipped with pages that scroll far past their content into blank
+// space, and nothing on this side could see it — jest runs no layout. The
+// scroller now reports itself instead, so the next report arrives with numbers.
+describe("a scroller that goes out of bounds", () => {
+  async function scrollTo(nativeEvent: Record<string, unknown>) {
+    await render(
+      withSafeArea(
+        <Screen>
+          <Text>page</Text>
+        </Screen>,
+      ),
+    );
+    // fireEvent walks up for a handler, so the child stands in for the scroller
+    // and the test needs no testID in production code.
+    const child = screen.getByText("page");
+    await fireEvent.scroll(child, { nativeEvent });
+    return child;
+  }
+
+  const at = (offset: number, content: number, viewport = 800, inset = 0) => ({
+    contentOffset: { x: 0, y: offset },
+    contentSize: { width: 390, height: content },
+    layoutMeasurement: { width: 390, height: viewport },
+    contentInset: { top: 0, left: 0, bottom: inset, right: 0 },
+  });
+
+  it("says nothing about an ordinary scroll", async () => {
+    await scrollTo(at(400, 1600));
+    expect(posthog.capture).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about a rubber-band bounce past the end", async () => {
+    // Content 1000 in a viewport of 800 ends at offset 200; going to 300 is the
+    // hundred points of overshoot the platform does on purpose.
+    await scrollTo(at(300, 1000));
+    expect(posthog.capture).not.toHaveBeenCalled();
+  });
+
+  it("reports scrolling well beyond the end of the content, with the inset that let it", async () => {
+    // The shape the fault took: content a normal size, scroll range not, and
+    // the scroll view's own bottom inset — a keyboard's height — the reason.
+    await scrollTo(at(1500, 1000, 800, 331));
+    expect(posthog.capture).toHaveBeenCalledWith(
+      "scroll_out_of_bounds",
+      expect.objectContaining({
+        content: 1000,
+        viewport: 800,
+        beyond_end: 1300,
+        oversized: false,
+        scroll_inset: 331,
+      }),
+    );
+    expect(screen.getByText(/inset 331/)).toBeOnTheScreen();
+  });
+
+  it("reads the inset React Native attaches to every scroll event", async () => {
+    // No fallback on purpose: a native scroll event always carries
+    // contentInset, and History's hand-built one passes it through too. An
+    // event built without it here still gets the library's default (zero).
+    const { contentInset: _dropped, ...bare } = at(1500, 1000);
+    await scrollTo(bare);
+    expect(posthog.capture).toHaveBeenLastCalledWith(
+      "scroll_out_of_bounds",
+      expect.objectContaining({ scroll_inset: 0 }),
+    );
+  });
+
+  it("says nothing while a keyboard is up, because reaching past the end is the point", async () => {
+    const visible = jest.spyOn(Keyboard, "isVisible").mockReturnValue(true);
+    try {
+      await scrollTo(at(1500, 1000, 800, 331));
+      expect(posthog.capture).not.toHaveBeenCalled();
+    } finally {
+      visible.mockRestore();
+    }
+  });
+
+  it("reports a page taller than any real page in this app", async () => {
+    // The other shape: something rendered an absurd box.
+    await scrollTo(at(0, 9000));
+    expect(posthog.capture).toHaveBeenCalledWith(
+      "scroll_out_of_bounds",
+      expect.objectContaining({ content: 9000, oversized: true }),
+    );
+  });
+
+  it("reports once per screen, not once per frame", async () => {
+    const scroller = await scrollTo(at(0, 9000));
+    await fireEvent.scroll(scroller, { nativeEvent: at(10, 9000) });
+    await fireEvent.scroll(scroller, { nativeEvent: at(20, 9000) });
+    expect(posthog.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for a real layout before judging anything", async () => {
+    // The first events can arrive with a zero viewport, and every page looks
+    // infinitely tall next to nothing.
+    await scrollTo(at(0, 9000, 0));
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
 });

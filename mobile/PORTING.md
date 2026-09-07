@@ -72,6 +72,19 @@ the only places this comes up.
 `Screen`/`ScreenFrame` — pass `gradient` and, for Home's savings tint,
 `gradientFixed`. Don't hand-roll it.
 
+### The keyboard
+
+The browser shrinks its viewport when the keyboard comes up and scrolls the
+field into view. Port that as **padding**, never as a scroll inset: `Screen`
+wraps its scroller in `KeyboardAvoidingView behavior="padding"`, which listens
+to the keyboard's own show/hide events and zeroes unconditionally on hide.
+
+Do not reach for `automaticallyAdjustKeyboardInsets`. It rewrites the scroll
+view's `contentInset` from iOS's keyboard-*frame* notifications, and an app
+switch scrambles those, so the inset outlived the keyboard and every page could
+scroll a keyboard's height into blank space. It took four builds to see,
+because jest runs no layout. `Screen.test.tsx` asserts the prop is absent.
+
 ## 3. Foundation — use it, don't rebuild it
 
 - `components/ui/Screen` — `Screen` (scroll + centered column + safe areas +
@@ -92,6 +105,11 @@ the only places this comes up.
 - `ring-1 ring-inset ring-white/5` — NativeWind maps ring to a box shadow. If a
   ring doesn't render over an opaque child, use `border` + a matching inset,
   and say so in a comment.
+- `min-h-full` on a `<main>` — `Screen` strips it. Percentage heights inside a
+  scroller resolve against a parent whose height *is* the scrolling content, and
+  iOS resolves that circle by growing the content every layout pass: the page
+  scrolls forever into blank space. `grow` does the real job. Paste the web
+  class list verbatim anyway; `Screen` removes this one token for you.
 - `backdrop-blur` — not supported. Skip it (the Safe's cards look fine without).
 - `divide-y` — not supported. Put `border-t border-separator` on each row after
   the first.
@@ -102,20 +120,41 @@ the only places this comes up.
   has no CSS grid. Use `flex-row flex-wrap` and give children an explicit width
   measured with `onLayout` — `(width - gap) / 2` — or `flex-1` in explicit rows.
 
-## 5. Performance
+## 5. Globals the browser has and Hermes does not
+
+React Native is not a browser and not node. Hermes ships a small global surface,
+and jest runs on node, which has a large one — so a missing global type-checks
+clean, passes every test at 100% coverage, and throws on the phone.
+
+- `crypto` — **not provided by anything**: not Hermes, not React Native 0.86,
+  not the Expo runtime. `lib/random` installs `getRandomValues` from
+  expo-crypto, and `lib/crypto` imports it so the encryption layer carries its
+  own source. This one shipped: every write threw for a whole TestFlight build
+  while reads worked, because only writes need randomness.
+- `TextEncoder` / `TextDecoder` / `URL` / `structuredClone` — provided by Expo's
+  winter runtime (`expo/src/winter/runtime.native.ts`). Safe to use.
+- Anything else browser- or node-only (`btoa`, `Buffer`, `setImmediate`,
+  `queueMicrotask`) — grep `node_modules/react-native` and
+  `expo/src/winter/runtime.native.ts` before relying on it. If it is not in
+  either list, it does not exist on the device no matter what jest says.
+
+A library counts too: check what it reaches for at runtime, not just its API.
+`@noble/hashes` reads `globalThis.crypto` at call time, which is how this got in.
+
+## 6. Performance
 
 - The History page renders every transaction (up to 500) — it must virtualize
   (`SectionList`/`FlatList`), not map over an array. Rows `React.memo`'d,
   `keyExtractor` stable, callbacks `useCallback`'d.
 - Everything else maps like the web does; the lists are short.
 
-## 6. Copy and behaviour
+## 7. Copy and behaviour
 
 Every string, placeholder, empty state and error message comes over verbatim
 ("Nothin' here yet, Doc."). Every conditional (locked, masked, loading, LBP
 hint) is preserved. Same `posthog.capture` events with the same properties.
 
-## 7. Done means
+## 8. Done means
 
 - `npx tsc --noEmit` passes.
 - No `StyleSheet.create` for anything a class can express. (`StyleSheet` is fine
