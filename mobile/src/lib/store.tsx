@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import posthog from "@/lib/posthog";
 import { navigate } from "@/lib/router";
 import { clearCache, loadCache, saveCache } from "@/lib/cache";
 import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
@@ -36,6 +37,27 @@ import type {
 } from "@/types/db";
 
 type Result = { error: string | null };
+
+// Every mutation below promises a Result, and every screen renders `{ error }`
+// without catching. So a mutation that *throws* strands whatever "Saving…"
+// state the screen set and tells the user nothing at all — which is exactly how
+// a missing `crypto.getRandomValues` presented on the device in build 8: a dead
+// button, no message, no report. This keeps the promise true for every caller
+// and puts the real error somewhere it can be read back.
+function reporting<A extends unknown[]>(
+  action: string,
+  fn: (...args: A) => Promise<Result>,
+): (...args: A) => Promise<Result> {
+  return async (...args: A) => {
+    try {
+      return await fn(...args);
+    } catch (thrown) {
+      const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+      posthog.captureException(error, { source: "store", action });
+      return { error: error.message };
+    }
+  };
+}
 
 type Store = {
   loading: boolean;
@@ -216,11 +238,18 @@ export function StoreProvider({
       const state = await vault.loadVault(userId);
       if (cancelled) return;
       if (state.status === "unlocked") {
-        // Default tier: no user passphrase, always unlocked.
         masterKey.current = state.masterKey;
         setE2eMode(state.mode);
         setLocked(false);
-        setPassphrase(null);
+        // On the passphrase tier this is the cached-key fast path, and the
+        // passphrase is still on the device — Settings shows it back, exactly
+        // as the web does. Dropping it here left the field blank after every
+        // relaunch, so "Save passphrase" hit the empty-field guard and did
+        // nothing at all.
+        const stored =
+          state.mode === "passphrase" ? await loadStoredPassphrase(userId) : null;
+        if (cancelled) return;
+        setPassphrase(stored);
       } else {
         // Passphrase tier: try the one cached on this device so we stay unlocked
         // across restarts.
@@ -241,7 +270,18 @@ export function StoreProvider({
       }
       setSettled(true);
       await loadData();
-    })();
+    })().catch((thrown: unknown) => {
+      // Nothing above is allowed to leave the app on "Loading…" forever with no
+      // error and no report. A key read that fails now surfaces here instead of
+      // being mistaken for a brand-new user (see vault.fetchKeyRow).
+      if (cancelled) return;
+      const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+      posthog.captureException(error, { source: "store_bootstrap" });
+      masterKey.current = null;
+      setLocked(true);
+      setSettled(true);
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
@@ -302,7 +342,19 @@ export function StoreProvider({
     await clearCache(userId);
     masterKey.current = null;
     setPassphrase(null);
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (thrown) {
+      // `signOut` returns no Result, so it is the one store action `reporting`
+      // cannot wrap, and it is called straight from an onPress. A rejection
+      // here would leave the row doing nothing at all when tapped. This
+      // device's secrets are already gone, so leaving is still the right
+      // outcome; the failure just has to be visible somewhere.
+      posthog.captureException(
+        thrown instanceof Error ? thrown : new Error(String(thrown)),
+        { source: "store", action: "sign_out" },
+      );
+    }
     navigate("/");
   }, [userId]);
 
@@ -483,30 +535,50 @@ export function StoreProvider({
     [safeGoldEntries],
   );
 
+  // Wrapped once, and memoized so each one keeps the stable identity its
+  // `useCallback` gave it.
+  const guarded = useMemo(
+    () => ({
+      addTransaction: reporting("add_transaction", addTransaction),
+      updateTransaction: reporting("update_transaction", updateTransaction),
+      deleteTransaction: reporting("delete_transaction", deleteTransaction),
+      setRate: reporting("set_rate", setRate),
+      unlock: reporting("unlock", unlock),
+      enableEncryption: reporting("enable_encryption", enableEncryption),
+      disableEncryption: reporting("disable_encryption", disableEncryption),
+      deleteAccount: reporting("delete_account", deleteAccount),
+      addSafeGoldEntry: reporting("add_safe_gold_entry", addSafeGoldEntry),
+      deleteSafeGoldEntry: reporting("delete_safe_gold_entry", deleteSafeGoldEntry),
+    }),
+    [
+      addTransaction,
+      updateTransaction,
+      deleteTransaction,
+      setRate,
+      unlock,
+      enableEncryption,
+      disableEncryption,
+      deleteAccount,
+      addSafeGoldEntry,
+      deleteSafeGoldEntry,
+    ],
+  );
+
   const value: Store = {
     loading,
     transactions,
     lbpPerUsd,
     balanceCents,
     monthlyNetCents,
-    addTransaction,
-    updateTransaction,
-    deleteTransaction,
-    setRate,
     e2eMode,
     locked,
     passphrase,
-    unlock,
-    enableEncryption,
-    disableEncryption,
     signOut,
-    deleteAccount,
     safeTotalCents,
     safeGoldEntries,
     safeGoldGrams,
-    addSafeGoldEntry,
-    deleteSafeGoldEntry,
     refresh: loadData,
+    ...guarded,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

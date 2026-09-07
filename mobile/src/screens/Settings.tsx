@@ -234,8 +234,12 @@ function EncryptionCard() {
   const on = e2eMode === "passphrase";
 
   async function submit() {
-    // The web's `required` attribute: an empty field never submits.
-    if (!pass) return;
+    // The web's `required` attribute stops the submit *and* tells the user why.
+    // Returning in silence made the button look broken instead of unavailable.
+    if (!pass) {
+      setErr("Enter a passphrase.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     const { error } = locked ? await unlock(pass) : await enableEncryption(pass);

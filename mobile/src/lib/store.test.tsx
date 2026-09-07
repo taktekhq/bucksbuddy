@@ -123,6 +123,7 @@ jest.mock("@/lib/vault", () => {
 
 import { LOCKED_MSG } from "@/lib/vault";
 import { StoreProvider, useStore } from "@/lib/store";
+import posthog from "@/lib/posthog";
 
 const KEY = new Uint8Array(32).fill(7);
 const CACHE_KEY = "bb-cache:u1";
@@ -935,5 +936,175 @@ describe("StoreProvider / useStore", () => {
     await act(async () => late.release(KEY));
 
     expect(mockClearStoredPassphrase).not.toHaveBeenCalled();
+  });
+});
+
+// Build 8 shipped without a `crypto.getRandomValues`, so every encrypting write
+// threw. Nothing caught it, so the screens sat on "Saving…" forever with no
+// message and no report — the failure was invisible, which cost more than the
+// failure itself. A mutation must always come back as a Result.
+describe("a mutation that throws", () => {
+  it("comes back as an error instead of stranding the caller", async () => {
+    mockVault.encryptTxValues.mockRejectedValue(
+      new Error("crypto.getRandomValues must be defined"),
+    );
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let res: Res = { error: null };
+    await act(async () => {
+      res = await result.current.addTransaction(newTx);
+    });
+    expect(res.error).toBe("crypto.getRandomValues must be defined");
+    // …and the row is not optimistically added, because nothing was saved.
+    expect(result.current.transactions).toEqual([]);
+  });
+
+  it("reports what threw, so the next one of these is not invisible", async () => {
+    mockVault.encryptTxValues.mockRejectedValue(new Error("boom"));
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      await result.current.addTransaction(newTx);
+    });
+    expect(posthog.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "boom" }),
+      expect.objectContaining({ source: "store", action: "add_transaction" }),
+    );
+  });
+
+  it("survives something that threw a non-Error", async () => {
+    // Native modules reject with plain strings often enough to matter.
+    mockVault.encryptGoldValues.mockImplementation(() => {
+      throw "the bridge said no";
+    });
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let res: Res = { error: null };
+    await act(async () => {
+      res = await result.current.addSafeGoldEntry({ is_deposit: true, grams: 1 });
+    });
+    expect(res.error).toBe("the bridge said no");
+  });
+});
+
+describe("a bootstrap that fails", () => {
+  it("stops at a locked screen instead of loading forever", async () => {
+    // vault.loadVault now throws when the key read fails rather than treating
+    // it as a brand-new user. Nothing may leave the app on "Loading…" with no
+    // error and no report.
+    mockVault.loadVault.mockRejectedValue(new Error("offline"));
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.locked).toBe(true);
+    expect(posthog.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "offline" }),
+      expect.objectContaining({ source: "store_bootstrap" }),
+    );
+  });
+
+  it("says nothing when what threw was not an Error", async () => {
+    // Native modules reject with plain strings often enough to matter, and a
+    // report of "undefined" would be worse than none.
+    mockVault.loadVault.mockRejectedValue("the bridge said no");
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(posthog.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "the bridge said no" }),
+      expect.objectContaining({ source: "store_bootstrap" }),
+    );
+  });
+
+  it("says nothing once the screen is gone", async () => {
+    // The failure has to land *after* the unmount to exercise the guard, so
+    // hold the rejection until then rather than racing it.
+    let fail!: (error: Error) => void;
+    mockVault.loadVault.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+    const { unmount } = await setup();
+    await unmount();
+    await act(async () => fail(new Error("offline")));
+    expect(posthog.captureException).not.toHaveBeenCalled();
+  });
+});
+
+describe("signing out", () => {
+  it("still leaves, and reports, when the server call rejects", async () => {
+    // `signOut` returns no Result, so it is the one action the store's wrapper
+    // cannot cover, and Settings calls it straight from an onPress. A silent
+    // rejection would make the row do nothing at all when tapped.
+    mockSignOut.mockRejectedValue(new Error("offline"));
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      await result.current.signOut();
+    });
+    expect(posthog.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "offline" }),
+      expect.objectContaining({ source: "store", action: "sign_out" }),
+    );
+    // The device secrets are already gone, so leaving is still the right end.
+    expect(mockNavigate).toHaveBeenCalledWith("/");
+  });
+
+  it("reports a non-Error rejection too", async () => {
+    mockSignOut.mockRejectedValue("the bridge said no");
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      await result.current.signOut();
+    });
+    expect(posthog.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "the bridge said no" }),
+      expect.objectContaining({ action: "sign_out" }),
+    );
+  });
+});
+
+describe("a passphrase already stored on this device", () => {
+  it("shows it back after a relaunch that unlocks from the cached key", async () => {
+    // The fast path returns `unlocked` without ever consulting the stored
+    // passphrase. Dropping it here left Settings' field blank on every launch
+    // after the first, so "Save passphrase" hit the empty-field guard.
+    mockVault.loadVault.mockResolvedValue({
+      status: "unlocked",
+      mode: "passphrase",
+      masterKey: KEY,
+    });
+    mockLoadStoredPassphrase.mockResolvedValue("hunter2");
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.locked).toBe(false);
+    expect(result.current.e2eMode).toBe("passphrase");
+    expect(result.current.passphrase).toBe("hunter2");
+  });
+
+  it("does not set it once the screen is gone", async () => {
+    mockVault.loadVault.mockResolvedValue({
+      status: "unlocked",
+      mode: "passphrase",
+      masterKey: KEY,
+    });
+    const late = deferred<string | null>();
+    mockLoadStoredPassphrase.mockReturnValueOnce(late.promise);
+    const { unmount } = await setup();
+    await unmount();
+    await act(async () => late.release("hunter2"));
+    expect(mockVault.rowToTransaction).not.toHaveBeenCalled();
+  });
+
+  it("has none to show on the default tier, and does not go looking", async () => {
+    mockVault.loadVault.mockResolvedValue({
+      status: "unlocked",
+      mode: "default",
+      masterKey: KEY,
+    });
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.passphrase).toBeNull();
+    expect(mockLoadStoredPassphrase).not.toHaveBeenCalled();
   });
 });

@@ -221,10 +221,13 @@ describe("Settings — encryption", () => {
     expect(screen.getByText("Turn on encryption")).toBeOnTheScreen();
   });
 
-  it("never submits an empty passphrase", async () => {
+  it("never submits an empty passphrase, and says why", async () => {
     await render(<Settings />);
     await fireEvent.press(screen.getByText("Turn on encryption"));
     expect(mockStoreValue.enableEncryption).not.toHaveBeenCalled();
+    // Returning in silence made the button read as broken rather than
+    // unavailable — the web's `required` attribute says something.
+    expect(screen.getByText("Enter a passphrase.")).toBeOnTheScreen();
   });
 
   it("surfaces an enable error", async () => {

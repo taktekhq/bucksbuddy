@@ -67,6 +67,12 @@ via `react-native-quick-crypto` and keeps the `@noble` implementation as the
 fallback for Expo Go and the test suite. Both produce identical bytes, and
 `src/lib/pbkdf2.test.ts` asserts that they do.
 
+Randomness comes from `lib/random`, which installs `crypto.getRandomValues`
+from expo-crypto onto the global. React Native provides no `crypto` at all, and
+`@noble` reads it at call time, so without this every encrypting write throws
+while every read succeeds. It refuses a source that returns zeros or repeats
+itself rather than encrypting with predictable bytes.
+
 Cold start still never derives a key. A master key is generated once and only
 ever re-wrapped, so this device derives it once and keeps it in the OS keystore
 (`lib/vault.ts`), checked against the account verifier on load. Later launches

@@ -186,12 +186,18 @@ const decNumber = (key: MasterKey, c: string) => Number(decryptString(key, c));
 const encNote = (key: MasterKey, note: string | null | undefined) =>
   note === null || note === undefined ? null : encryptString(key, note);
 
+// Throws rather than returning null when the read itself fails, because the two
+// mean opposite things. `null` tells loadVault the user is brand new and to mint
+// a master key; a dropped network error would send a returning user down that
+// path, cache a key their data was never encrypted with, and quietly make
+// everything they wrote in that session unreadable.
 async function fetchKeyRow(userId: string): Promise<KeyRow | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("e2e_keys")
     .select("wrapped_key, wrap_type, verifier")
     .eq("user_id", userId)
     .maybeSingle();
+  if (error) throw new Error(error.message);
   return (data as KeyRow | null) ?? null;
 }
 
@@ -276,25 +282,33 @@ export const vault: Vault = {
   // passphrase. Cheap — the data is untouched, and the cached key stays valid
   // because the master key itself doesn't change.
   async enablePassphrase(userId, masterKey, passphrase) {
-    await supabase
+    const { error } = await supabase
       .from("e2e_keys")
       .update({
         wrapped_key: await wrapMasterKey(masterKey, passphrase),
         wrap_type: "passphrase",
       })
       .eq("user_id", userId);
+    // Without this the card flips to "On" and the passphrase is written to the
+    // keystore while the server still holds the old wrapper — the passphrase
+    // then works on this phone and nowhere else.
+    if (error) throw new Error(error.message);
   },
 
   // Turn off E2E: re-wrap the master key back under the public passphrase. The
   // data becomes operator-readable again, same as the default tier.
   async disablePassphrase(userId, masterKey) {
-    await supabase
+    const { error } = await supabase
       .from("e2e_keys")
       .update({
         wrapped_key: await wrapMasterKey(masterKey, DEFAULT_PASSPHRASE),
         wrap_type: "default",
       })
       .eq("user_id", userId);
+    // Throwing here also fixes an ordering hazard: the caller wipes this
+    // device's secrets straight afterwards, and doing that while the row is
+    // still passphrase-wrapped would lock the user out of their own data.
+    if (error) throw new Error(error.message);
   },
 
   // Turn a stored row into a decrypted Transaction. The labels are plaintext;

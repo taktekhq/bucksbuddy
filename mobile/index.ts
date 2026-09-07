@@ -1,3 +1,7 @@
+// First, before anything else: React Native has no `crypto.getRandomValues`,
+// and lib/crypto cannot encrypt a single value without it. See src/lib/random.
+import './src/lib/random';
+
 import { registerRootComponent } from 'expo';
 
 import App from './src/App';

@@ -33,6 +33,13 @@ point. Four mechanical differences between vitest and jest:
   default transform ignores. Nothing to do — just don't be surprised.
 - **Supabase** is not mocked globally. Mock `@/lib/supabase` per test file with
   whatever shape that file needs, as the web's tests do.
+- **jest is not the device.** Tests run on node, which provides globals Hermes
+  does not (`crypto` above all). A green suite is not evidence that something
+  exists at runtime — see PORTING.md §5. When code depends on a global, test it
+  with that global deleted; `crypto.test.ts` does exactly that.
+- **jest-expo's `expo-crypto` mock returns all zeros.** Anything that needs real
+  randomness has to stand something else in, or it will pass while proving
+  nothing. `installCsprng` refuses a source like that on purpose.
 - **`crypto.ts` is slow under jest** (600k PBKDF2 rounds, and the native
   derivation in `lib/pbkdf2` only exists in a real build). Test the wrap/unwrap
   round trip once, and use `jest.setTimeout` if a suite needs it; test the

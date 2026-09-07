@@ -33,9 +33,14 @@
 // device first unlocks rather than on every launch.
 import { gcm } from "@noble/ciphers/aes.js";
 import { randomBytes, utf8ToBytes } from "@noble/hashes/utils.js";
-// Relative, not "@/lib/pbkdf2": scripts/crypto-interop.test.mts loads this file
+// Relative, not "@/lib/…": scripts/crypto-interop.test.mts loads this file
 // straight from node, which has no path aliases.
 import { deriveBits } from "./pbkdf2.ts";
+// Side-effect import. randomBytes below reads `globalThis.crypto` at call time,
+// and React Native provides none — see lib/random. Importing it here means the
+// encryption layer carries its own random source rather than trusting the entry
+// point to have installed one first.
+import "./random.ts";
 
 const VERSION = "v1";
 // PBKDF2 work factor. Matches the web exactly — change one and old wrapped

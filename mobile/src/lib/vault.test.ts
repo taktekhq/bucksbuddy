@@ -457,6 +457,40 @@ describe("vault: enable / disable a passphrase", () => {
   });
 });
 
+describe("vault: a Supabase call that fails", () => {
+  // Build 8's lesson: a write that reports success it never had is worse than
+  // one that fails loudly. Everything here used to be swallowed.
+  it("refuses to mistake a failed key read for a brand-new user", async () => {
+    // The dangerous one. A dropped read used to look like "no row yet", so
+    // loadVault minted a fresh master key, cached it, and encrypted that
+    // session's entries with a key nothing else in the account knows.
+    set({ "e2e_keys:select": () => ({ data: null, error: { message: "offline" } }) });
+    await expect(vault.loadVault("u1")).rejects.toThrow("offline");
+    expect(opsOn("e2e_keys", "upsert")).toHaveLength(0);
+    expect(mockSecureStore.has(CACHED_KEY)).toBe(false);
+  });
+
+  it("reports a failed unlock read rather than blaming the passphrase", async () => {
+    set({ "e2e_keys:select": () => ({ data: null, error: { message: "offline" } }) });
+    await expect(vault.unlockVault("u1", "pw")).rejects.toThrow("offline");
+  });
+
+  it("fails turning a passphrase on when the row was not re-wrapped", async () => {
+    // Otherwise the card flips to "On" and the passphrase goes into this
+    // device's keystore while the server still holds the old wrapper — so it
+    // opens the vault on this phone and nowhere else.
+    const mk = generateMasterKey();
+    set({ "e2e_keys:update": () => ({ data: null, error: { message: "denied" } }) });
+    await expect(vault.enablePassphrase("u1", mk, "pw")).rejects.toThrow("denied");
+  });
+
+  it("fails turning it off, before the caller wipes this device's secrets", async () => {
+    const mk = generateMasterKey();
+    set({ "e2e_keys:update": () => ({ data: null, error: { message: "denied" } }) });
+    await expect(vault.disablePassphrase("u1", mk)).rejects.toThrow("denied");
+  });
+});
+
 describe("vault: per-field encryption", () => {
   it("round-trips a transaction's money values, with and without a note", async () => {
     const mk = generateMasterKey();
