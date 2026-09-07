@@ -9,6 +9,12 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+
+# The Google Play service account key. It should be uploaded to EAS and then
+# deleted locally (LAUNCH.md §3) — this is the seatbelt, not the plan.
+google-service-account*.json
+play-service-account*.json
+*-service-account*.json
 .env
 .env.local
 .DS_Store

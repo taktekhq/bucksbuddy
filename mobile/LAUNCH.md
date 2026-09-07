@@ -41,6 +41,9 @@ Run from `mobile/`.
 - [ ] `npx eas-cli build --profile production --platform ios` — walks you
       through Apple credentials. Let EAS manage them unless you have a reason
       not to.
+- [ ] Store credentials so `--auto-submit` works unattended: iOS is already
+      pointed at its App Store Connect record (`eas.json` → `submit.production
+      .ios.ascAppId`), Android needs the Google Service Account key from §3.4.
 
 **"Link your project with third-party services"** in the Expo dashboard is
 optional. It wires up crash/error reporting (Sentry and similar). This app has
@@ -90,8 +93,45 @@ revisiting only if you want native crash reports later.
 
 ## 3. Google Play Console
 
-- [ ] **Create the app**, package `io.taktek.bucksbuddy`. One-time 25 USD
-      registration if you have not already.
+### 3.0 Which account is which
+
+Three identities are involved and **none of them has to match the others**.
+Getting this straight up front saves an afternoon:
+
+| What | Who owns it | Why it can differ |
+| --- | --- | --- |
+| Expo / EAS project | the **taktekhq** org (`app.json` → `owner`) | EAS only needs to *hold* the store credentials; it never authenticates to Google as you. |
+| Google Play developer account | **nizar.mah99@gmail.com** (personal) | This is the account that hosts, owns and gets paid for the listing. |
+| Google Cloud project holding the publishing service account | **nizar.mah99@gmail.com** (personal — see 3.2) | Play grants the service account access by *invitation*, not by shared ownership, so the key may come from any Cloud project. |
+
+`nizar@taktek.io` is the Google account the browser is signed into by default,
+which is exactly how this goes wrong: both the Cloud console and Play Console
+silently act as whichever account is `authuser=0`. Do the whole of §3 in a
+separate Chrome profile (or an incognito window) signed in *only* as
+`nizar.mah99@gmail.com`, and check the avatar in the top right before every
+irreversible click.
+
+The package name `io.taktek.bucksbuddy` is fine on a personal account. Play
+does not verify that you own the domain in a package name — the only thing
+that ever needs `taktek.io` proven is Android App Links, which this app does
+not use.
+
+> **Before committing to the personal account, know the two costs.** A personal
+> developer account created on or after 13 November 2023 must run a *closed
+> test with at least 12 testers opted in continuously for 14 days* before it
+> may apply for production access; organisation accounts are exempt. Personal
+> accounts also have to display a contact address publicly on the listing.
+> If the account predates that date, neither applies and there is nothing to
+> weigh. Otherwise the choice is between a fortnight of testing on the personal
+> account and a second 25 USD registration for a taktek.io organisation
+> account. The rest of this section works either way.
+
+### 3.1 The app record
+
+- [ ] **Create the app** in Play Console, package `io.taktek.bucksbuddy`.
+      One-time 25 USD registration if you have not already.
+- [ ] Content rating questionnaire, target audience, privacy policy URL
+      (`https://bucksbuddy.com/privacy`), category (Finance), screenshots.
 - [ ] **Data safety form.** Same disclosures as Apple's label: email address,
       user ID, financial info, product interaction; encrypted in transit; users
       can request deletion.
@@ -100,9 +140,99 @@ revisiting only if you want native crash reports later.
       enough. Add a short section to the existing web app (e.g.
       `bucksbuddy.com/delete-account`) explaining the in-app route and giving
       the support email as a fallback.
-- [ ] Content rating questionnaire, target audience, privacy policy URL.
-- [ ] Upload the `production` profile's `.aab` (the profile already builds an
-      app bundle rather than an APK).
+
+### 3.2 The service account — create it under the personal account
+
+This is the credential EAS uses to upload. Signed in as
+**nizar.mah99@gmail.com**, at `console.cloud.google.com`:
+
+- [ ] **New project** — name it something like `bucksbuddy-publishing`. When
+      asked for a *Location / Organisation*, leave it **"No organisation"**.
+- [ ] **Enable the Google Play Android Developer API**
+      (`androidpublisher.googleapis.com`) on that project.
+- [ ] **IAM & Admin → Service Accounts → Create service account.** Name it
+      `eas-play-publisher`. **Skip the "grant this service account access to
+      the project" step** — it needs no Cloud IAM role at all. Every permission
+      it will ever use is granted on the Play Console side, in 3.3.
+- [ ] Open the new account → **Keys → Add key → Create new key → JSON**. The
+      file downloads once and cannot be re-downloaded. Keep it out of the repo;
+      `mobile/.gitignore` already refuses `*-service-account*.json` as a
+      backstop.
+- [ ] Copy the service account's **email** — it looks like
+      `eas-play-publisher@bucksbuddy-publishing.iam.gserviceaccount.com`. That
+      string is what Play Console needs.
+
+**Why not the taktek.io org?** Two reasons, and the first is a hard blocker.
+Google enforces a secure-by-default org policy bundle on every organisation
+created on or after 3 May 2024, and it includes
+`iam.disableServiceAccountKeyCreation` — the "Create new key → JSON" step above
+simply fails inside such an org until an org policy admin adds a project-level
+exception. Second, a credential that lives in the work org is a credential that
+dies when the Workspace seat does, taking automated publishing of a personally
+owned listing with it. If you do want it under taktek.io anyway, it works —
+someone with `orgpolicy.policyAdmin` has to override that constraint for the
+one project first.
+
+### 3.3 Invite the service account into Play Console
+
+Back in Play Console, still as **nizar.mah99@gmail.com**:
+
+- [ ] **Users and permissions → Invite new users.** Paste the
+      `…iam.gserviceaccount.com` email. It is treated as an ordinary user.
+- [ ] Under **App permissions**, click *Add app*, pick **BucksBuddy**, and grant
+      only that app — not account-level access:
+      - View app information (read-only)
+      - Edit and delete draft apps
+      - Release to production, exclude devices, and use Play App Signing
+      - Release apps to testing tracks
+      - Manage testing tracks and edit tester lists
+      - Manage store presence
+
+      (Play auto-selects a few read-only siblings; that is expected.)
+- [ ] Leave every **Account permissions** box unchecked. Nothing here needs to
+      touch billing, users or the developer account itself.
+- [ ] Send the invite. There is no acceptance step — a service account is
+      active immediately.
+
+Permissions can take a few minutes to propagate. A submit that fails with a
+403 right after inviting is usually just impatience.
+
+### 3.4 Hand the key to EAS
+
+Run from `mobile/`, signed into Expo as a member of **taktekhq**:
+
+- [ ] `npx eas-cli credentials --platform android` → *production* →
+      **Google Service Account** → *Manage your Google Service Account Key for
+      Play Store submissions* → **Set up a Google Service Account Key** →
+      upload the JSON.
+- [ ] **Delete the local JSON afterwards.** EAS holds it now, and `eas.json`
+      deliberately has no `serviceAccountKeyPath` so nothing expects the file
+      to exist on anyone's disk.
+- [ ] `eas.json` already carries the Android submit config: track `internal`,
+      release status `completed`. Builds land with the internal testers and
+      promotion to production stays a deliberate click in Play Console.
+
+### 3.5 The first upload is manual — after that it is automatic
+
+The Play Developer API cannot create the first release of an app; it can only
+add to one that already exists. So exactly once:
+
+- [ ] `npx eas-cli build --profile production --platform android` (an `.aab` —
+      the profile already builds an app bundle rather than an APK).
+- [ ] Download it from the build page and upload it **by hand** into the
+      internal testing track in Play Console. Accept Play App Signing when
+      offered; EAS keeps the upload key, Google keeps the signing key.
+- [ ] Then prove the automated path works end to end:
+      `npx eas-cli submit --platform android --profile production --latest`.
+
+From then on, one command builds and ships:
+
+```
+npx eas-cli build --profile production --platform android --auto-submit
+```
+
+…or the **Mobile release** workflow in §6, which does the same thing from the
+Actions tab.
 
 ---
 
@@ -146,12 +276,17 @@ revisiting only if you want native crash reports later.
 
 ## 6. GitHub
 
-- [ ] **Nothing is required today.** Tests need no credentials.
-- [ ] Optional, if you want CI to build: add `EXPO_TOKEN` (Expo dashboard →
-      Access Tokens) as a repository secret, then a workflow calling
-      `eas build --non-interactive`.
 - [x] `.github/workflows/ci.yml` already runs the mobile suite (type-check plus
-      the 100% coverage gate) alongside the web one.
+      the 100% coverage gate) alongside the web one. Tests need no credentials.
+- [x] `.github/workflows/release-mobile.yml` builds the production artefact and
+      auto-submits it. It is **dispatch-only** — a release is a decision, not a
+      consequence of merging — with a platform picker and a *submit* toggle.
+- [ ] **Add `EXPO_TOKEN`** as a repository secret (Expo dashboard → Access
+      Tokens, an org token for taktekhq) — the release workflow is the only
+      thing that needs it. No Google or Apple secret belongs in GitHub: both
+      live on EAS, which is what §3.4 sets up.
+- [ ] Run it once with *submit* off to confirm the token works, before trusting
+      it with a real release.
 
 ---
 

@@ -1,0 +1,69 @@
+name: Mobile release
+
+# Builds the production artefact on EAS and, optionally, hands it straight to
+# the store. Deliberately dispatch-only: a release is a decision, not a
+# consequence of merging. Run it from the Actions tab, or with
+# `gh workflow run release-mobile.yml -f platform=android`.
+#
+# Requires one repository secret:
+#   EXPO_TOKEN — Expo dashboard → Access Tokens (an org token for taktekhq).
+#
+# The store credentials themselves are NOT here. They live on EAS:
+#   * Android — the Google Service Account key uploaded to EAS credentials.
+#   * iOS     — the App Store Connect API key EAS manages for you.
+# See mobile/LAUNCH.md §3 for how the Android one is created and, in
+# particular, which Google account has to create it.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Which store to build for
+        type: choice
+        options: [android, ios, all]
+        default: android
+      submit:
+        description: Upload to the store when the build finishes
+        type: boolean
+        default: true
+
+# One release at a time, and never cancel one in flight — a half-finished
+# submit leaves a draft release sitting in Play Console.
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: EAS build (${{ inputs.platform }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+      # --no-wait hands the job off to EAS and returns: the build (and the
+      # submit that follows it) run on Expo's servers, so a 30-minute Android
+      # build does not bill 30 minutes of GitHub runner time. Watch it at
+      # https://expo.dev/accounts/taktekhq/projects/bucksbuddy/builds.
+      #
+      # `production` sets autoIncrement, so EAS picks the next versionCode
+      # from its own remote store (appVersionSource: remote) — nothing in git
+      # has to be bumped to release.
+      - name: Build${{ inputs.submit && ' and submit' || '' }}
+        run: |
+          eas build \
+            --platform ${{ inputs.platform }} \
+            --profile production \
+            --non-interactive \
+            --no-wait \
+            ${{ inputs.submit && '--auto-submit' || '' }}
