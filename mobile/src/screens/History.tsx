@@ -31,7 +31,6 @@ import {
   GradientLayer,
   safeAreaPadding,
   ScreenFrame,
-  ScrollDiagnostic,
   useScrollBoundsReport,
 } from "@/components/ui/Screen";
 import { MonthSwitcher } from "@/components/ui/MonthSwitcher";
@@ -153,7 +152,7 @@ export function History() {
   // History is the one page that does not use Screen's scroller, which makes it
   // the discriminator for the runaway-scroll fault: if it reports too, no
   // ScrollView prop can be responsible. See useScrollBoundsReport.
-  const { onScroll: reportBounds, report } = useScrollBoundsReport(insets);
+  const reportBounds = useScrollBoundsReport(insets);
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
     const viewport = e.layoutMeasurement.height;
@@ -311,7 +310,6 @@ export function History() {
           )
         }
       />
-      <ScrollDiagnostic report={report} />
     </ScreenFrame>
   );
 }

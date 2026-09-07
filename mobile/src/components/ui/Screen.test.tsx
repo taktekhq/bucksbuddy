@@ -329,7 +329,6 @@ describe("a scroller that goes out of bounds", () => {
         scroll_inset: 331,
       }),
     );
-    expect(screen.getByText(/inset 331/)).toBeOnTheScreen();
   });
 
   it("reads the inset React Native attaches to every scroll event", async () => {
