@@ -102,7 +102,7 @@ Getting this straight up front saves an afternoon:
 | --- | --- | --- |
 | Expo / EAS project | the **taktekhq** org (`app.json` → `owner`) | EAS only needs to *hold* the store credentials; it never authenticates to Google as you. |
 | Google Play developer account | **nizar.mah99@gmail.com** (personal) | This is the account that hosts, owns and gets paid for the listing. |
-| Google Cloud project holding the publishing service account | **nizar.mah99@gmail.com** (personal — see 3.2) | Play grants the service account access by *invitation*, not by shared ownership, so the key may come from any Cloud project. |
+| Google Cloud project holding the publishing service account | **nizar.mah99@gmail.com** by default — taktek.io is possible, see 3.2 | Play grants the service account access by *invitation*, not by shared ownership, so the key may come from any Cloud project. |
 
 `nizar@taktek.io` is the Google account the browser is signed into by default,
 which is exactly how this goes wrong: both the Cloud console and Play Console
@@ -121,22 +121,20 @@ change that.
 Two things the invitation does **not** buy, both worth knowing before you rely
 on it:
 
-- **The service account in §3.2 still has to be created from the personal
-  account.** The blocker there is a Google *Cloud* org policy on taktek.io, and
-  it is evaluated on where the project sits in the resource hierarchy — not on
-  what the signed-in human may do in Play Console. Worse, a Workspace identity
-  cannot opt out: every project a `taktek.io` user creates is auto-parented to
-  the `taktek.io` organisation, so there is no "No organisation" option to
-  pick. That step, and only that step, needs a separate Chrome profile (or an
-  incognito window) signed in as `nizar.mah99@gmail.com`. It is five minutes,
-  once, ever.
+- **It has no bearing on the service account in §3.2.** Which Cloud project
+  holds the publishing key is decided by Cloud IAM and org policy, evaluated on
+  where the project sits in the resource hierarchy — Play Console admin rights
+  do not reach it. §3.2 weighs that separately. Note that a Workspace identity
+  has no say either: every project a `taktek.io` user creates is auto-parented
+  to the `taktek.io` organisation, so "No organisation" is only on offer to the
+  gmail account.
 - **It does not change the account's type.** The closed-testing rule below
   attaches to the developer account being a personal one, not to who is logged
   into it. Inviting a Workspace account does not make it an organisation
   account.
 
-So: sign in as the personal account for §3.2, and use whichever account is
-convenient for the rest — but check the avatar in the top right before every
+So: use whichever account is convenient for everything except §3.2, which has
+its own answer — but check the avatar in the top right before every
 irreversible click.
 
 The package name `io.taktek.bucksbuddy` is fine on a personal account. Play
@@ -169,11 +167,12 @@ not use.
       `bucksbuddy.com/delete-account`) explaining the in-app route and giving
       the support email as a fallback.
 
-### 3.2 The service account — create it under the personal account
+### 3.2 The service account — the publishing credential
 
-This is the credential EAS uses to upload, and the one step that genuinely
-requires the personal account (see 3.0). Signed in as
-**nizar.mah99@gmail.com** — check the avatar — at `console.cloud.google.com`:
+This is the key EAS uses to upload. The steps below take the simplest route,
+the personal account; the note at the end of the section says when taktek.io
+would do instead and what it costs. Signed in as **nizar.mah99@gmail.com** —
+check the avatar — at `console.cloud.google.com`:
 
 - [ ] **New project** — name it something like `bucksbuddy-publishing`. When
       asked for a *Location / Organisation*, leave it **"No organisation"**.
@@ -191,16 +190,31 @@ requires the personal account (see 3.0). Signed in as
       `eas-play-publisher@bucksbuddy-publishing.iam.gserviceaccount.com`. That
       string is what Play Console needs.
 
-**Why not the taktek.io org?** Two reasons, and the first is a hard blocker.
-Google enforces a secure-by-default org policy bundle on every organisation
-created on or after 3 May 2024, and it includes
-`iam.disableServiceAccountKeyCreation` — the "Create new key → JSON" step above
-simply fails inside such an org until an org policy admin adds a project-level
-exception. Second, a credential that lives in the work org is a credential that
-dies when the Workspace seat does, taking automated publishing of a personally
-owned listing with it. If you do want it under taktek.io anyway, it works —
-someone with `orgpolicy.policyAdmin` has to override that constraint for the
-one project first.
+**Does this really have to be the personal account?** No — it is the path of
+least resistance, not a rule. Play grants the service account access by
+invitation, so the key may come from *any* Cloud project, in any organisation,
+owned by anyone. Two things push it towards the personal account:
+
+1. **The org policy, which may or may not bite.** Google enforces a
+   secure-by-default policy bundle on every organisation created on or after
+   3 May 2024, and it includes `iam.disableServiceAccountKeyCreation` — inside
+   such an org the "Create new key → JSON" step simply fails. Whether taktek.io
+   is affected depends on when its *Cloud* organisation was created, so check
+   rather than assume: **IAM & Admin → Organization policies**, search
+   `disableServiceAccountKeyCreation`, read the status. If it is not enforced,
+   this reason evaporates.
+2. **Durability.** A credential in the work org dies with the Workspace seat
+   that anchors it, taking automated publishing of a personally owned listing
+   with it. How much that matters depends on how permanent taktek.io is.
+
+If you want it under taktek.io and the policy *is* enforced, that is
+surmountable and you are probably the person who can do it: a Workspace super
+admin can grant themselves `roles/orgpolicy.policyAdmin`, then add a rule on
+that one project — scoped to the project, not the whole org — with enforcement
+off. Everything else in §3 is unchanged.
+
+Weigh it knowing the personal project is genuinely free: the Play Developer API
+needs no billing account, so nothing about it expires or bills.
 
 ### 3.3 Invite the service account into Play Console
 
