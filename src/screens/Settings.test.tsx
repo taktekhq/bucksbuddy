@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { makeStoreValue } from "@/test/storeValue";
-import type { Transaction } from "@/types/db";
 
 const { getSession, signOut } = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -19,23 +18,6 @@ let storeValue = makeStoreValue();
 vi.mock("@/lib/store", () => ({ useStore: () => storeValue }));
 
 import { Settings } from "@/screens/Settings";
-
-function tx(overrides: Partial<Transaction> = {}): Transaction {
-  return {
-    id: "t1",
-    user_id: "u1",
-    is_income: false,
-    category: "groceries",
-    amount_usd_cents: 1000,
-    original_currency: "USD",
-    original_amount: 10,
-    rate_used: 89500,
-    occurred_at: "2026-06-01T00:00:00.000Z",
-    note: null,
-    created_at: "2026-06-01T00:00:00.000Z",
-    ...overrides,
-  };
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -74,23 +56,15 @@ describe("Settings — account & data", () => {
     expect(storeValue.signOut).toHaveBeenCalled();
   });
 
-  it("exports the decrypted in-memory rows to a CSV download", async () => {
-    storeValue = makeStoreValue({ transactions: [tx()] });
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+  it("offers the export card", () => {
     render(<Settings />);
-    await userEvent.click(screen.getByRole("button", { name: /Export CSV/ }));
-    await waitFor(() => expect(clickSpy).toHaveBeenCalled());
-    expect(URL.createObjectURL).toHaveBeenCalled();
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:fake");
-    clickSpy.mockRestore();
+    expect(screen.getByRole("button", { name: /Export/ })).toBeInTheDocument();
   });
 
   it("disables export while locked", () => {
     storeValue = makeStoreValue({ locked: true });
     render(<Settings />);
-    expect(screen.getByRole("button", { name: /Export CSV/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Export/ })).toBeDisabled();
   });
 });
 

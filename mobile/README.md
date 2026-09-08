@@ -45,7 +45,7 @@ Two things the script does that matter for how the app *feels*:
 | `<svg>` sparkline           | react-native-svg (`SparkArea`)                                       |
 | CSS gradients + fixed floor | expo-linear-gradient (`Screen` / `ScreenFrame`)                      |
 | Google OAuth redirect       | `expo-web-browser` auth session (`lib/oauth.ts`)                     |
-| CSV download                | expo-file-system + share sheet                                       |
+| CSV / PDF download          | expo-file-system + share sheet                                       |
 | `window.confirm`            | `Alert.alert`                                                        |
 | WebCrypto (`lib/e2e.ts`)    | `@noble` AES-GCM + native PBKDF2 (`lib/crypto.ts`), byte-compatible  |
 

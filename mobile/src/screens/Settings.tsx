@@ -3,55 +3,32 @@ import { Text, View } from "react-native";
 import { Input } from "@/components/ui/Input";
 import {
   ChevronLeft,
-  Download,
   Eye,
   EyeOff,
   Lock,
   ShieldCheck,
   Trash2,
 } from "lucide-react-native";
-import { File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import { Press } from "@/components/ui/Press";
 import { Screen } from "@/components/ui/Screen";
+import { ExportCard } from "@/components/ExportCard";
 import { RateEditor } from "@/components/RateEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
 import { navigate } from "@/lib/router";
-import { transactionsToCsv } from "@/lib/csv";
 import { useStore } from "@/lib/store";
 import posthog from "@/lib/posthog";
 import { colors } from "@/lib/theme";
 
 export function Settings() {
   const [email, setEmail] = useState("");
-  const { transactions, locked, signOut } = useStore();
+  const { signOut } = useStore();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setEmail(data.session?.user.email ?? "");
     });
   }, []);
-
-  async function exportCsv() {
-    // Export the decrypted, in-memory rows (the database only holds ciphertext),
-    // so it's instant — no query, nothing to await. On native the file goes to
-    // the cache dir and out through the share sheet (the browser's download).
-    const csv = transactionsToCsv(transactions);
-    const file = new File(Paths.cache, `bucksbuddy-${new Date().toISOString().slice(0, 10)}.csv`);
-    try {
-      file.write(csv);
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(file.uri, {
-          mimeType: "text/csv",
-          UTI: "public.comma-separated-values-text",
-        });
-      }
-      posthog.capture("csv_exported", { row_count: transactions.length });
-    } catch {
-      // Share sheet dismissed or storage unavailable — nothing to report.
-    }
-  }
 
   return (
     // <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4
@@ -110,18 +87,7 @@ export function Settings() {
       {/* DATA */}
       <View className="flex flex-col gap-2">
         <SectionHeader>Data</SectionHeader>
-        <View className="rounded-card bg-surface shadow-card">
-          <View className="overflow-hidden rounded-card">
-            <Press
-              onPress={exportCsv}
-              disabled={locked}
-              className="flex w-full flex-row items-center justify-between px-4 py-3.5 text-base font-medium text-label disabled:opacity-50"
-            >
-              <Text className="text-base font-medium text-label">Export CSV</Text>
-              <Download size={20} strokeWidth={2} color={colors.labelSecondary} />
-            </Press>
-          </View>
-        </View>
+        <ExportCard />
       </View>
 
       {/* DANGER ZONE */}
