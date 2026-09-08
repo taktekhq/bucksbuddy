@@ -1,35 +1,45 @@
-import { Text } from "react-native";
+import { Image } from "react-native";
+
+// The mascot, as a picture rather than a glyph.
+const CARROT = require("../../../assets/carrot.png");
 
 type Props = {
   /**
-   * Emoji size in points — what the web's font-size class resolves to
-   * (`text-6xl` = 60, `text-5xl` = 48, `text-2xl` = 24). A Text's fontSize is
-   * the only thing that drives an emoji's size, so it comes in as a number.
+   * The mascot's size in points — what the web's font-size class resolves to
+   * (`text-6xl` = 60, `text-5xl` = 48, `text-2xl` = 24). It stays a number
+   * rather than a class because the web sized the emoji through its font size,
+   * and every call site already passes the number that class means.
    */
   size?: number;
   className?: string;
 };
 
-// The mascot. We render the real 🥕 emoji on purpose — on Apple devices that's
-// the exact orange carrot the user asked for, straight from the system emoji
-// font. No custom SVG can match "the carrot from the Apple emojis." Static by
-// design: the carrot sits still.
+// The mascot. This used to be the literal 🥕 character, on the theory that the
+// system emoji font *is* the carrot the design asks for. That holds on Apple
+// devices and nowhere else: Android renders the same code point from Noto Color
+// Emoji, a flatter, blunter carrot with different leaves and a different
+// orange, so the brand mark — the one thing on every screen — was a different
+// drawing on half the installs.
 //
-// The web's `leading-none` would be lineHeight = size, but the color emoji
-// glyph overhangs its em box on both platforms and gets its top clipped at
-// that height, so the line is ~1.15× and the emoji is centred inside it.
+// So it is Apple's artwork, shipped as an asset (`assets/carrot.png`, cut from
+// the app icon and matted off its white background), and both platforms draw
+// the identical mark.
+//
+// Sized as a square box with `contain`: the carrot is slightly taller than it
+// is wide, so it fills the box's height and centres across its width — the same
+// footprint the emoji had, without the line-height headroom a text glyph needed
+// to avoid being clipped.
 export function Carrot({ size = 48, className = "" }: Props) {
   return (
-    <Text
+    <Image
+      source={CARROT}
       accessibilityRole="image"
       accessibilityLabel="carrot"
-      allowFontScaling={false}
-      className={`text-center ${className}`}
-      // Not a class: the size is a prop, and `includeFontPadding` (Android's
-      // extra glyph padding, which shifts the emoji off-centre) has none.
-      style={{ fontSize: size, lineHeight: Math.round(size * 1.15), includeFontPadding: false }}
-    >
-      🥕
-    </Text>
+      resizeMode="contain"
+      className={className}
+      // Not a class: the size is a prop, the same number the web's font-size
+      // class resolves to.
+      style={{ width: size, height: size }}
+    />
   );
 }

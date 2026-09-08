@@ -26,9 +26,11 @@ look can be reused on new screens.
   states ("That's all, folks. 🥕", "Spendin' like a wabbit.", "Nothin' here yet,
   Doc."). Keep it short and human. **Primary action labels stay Apple-plain**
   ("Add", "Save", "Done") — the personality lives around them, not on the button.
-- **Mascot:** the **🥕 emoji** — rendered as the real system emoji on purpose, so
-  on Apple devices it's the exact carrot the brief asked for. Use the
-  [`Carrot`](../src/components/ui/Carrot.tsx) component. **It sits still** — the
+- **Mascot:** the **Apple 🥕** — the exact carrot the brief asked for. Use the
+  [`Carrot`](../src/components/ui/Carrot.tsx) component. The web renders the
+  emoji character, which is that carrot on Apple devices and Google's blunter
+  one everywhere else; the native app ships the artwork as an asset
+  (`mobile/assets/carrot.png`) so Android draws the same mark. **It sits still** — the
   carrot never animates (no hop, no wiggle). It appears as a quiet corner mark on
   Home, centered above the login card, and on the splash.
 - **Personality:** plain Apple **everywhere**, with the hijack showing up only at
@@ -155,7 +157,8 @@ never numbers and never long body copy.
 Each lives in `components/ui/` (or `components/`). States:
 **default → active/selected → pressed → disabled**.
 
-- **Carrot** — the static 🥕 mascot. Decorative; pass a font-size class.
+- **Carrot** — the static 🥕 mascot. Decorative; pass a font-size class (on
+  native, the point size that class resolves to).
 - **InOutToggle** — pill segmented control on a `grouped` track. Active fills with
   **money color**: Out = `bg-expense text-white`, In = `bg-income text-white`;
   inactive = `text-label-secondary`. Direction reads at a glance.

@@ -25,7 +25,8 @@
       "package": "io.taktek.bucksbuddy",
       "adaptiveIcon": {
         "backgroundColor": "#F2F2F7",
-        "foregroundImage": "./assets/adaptive-icon.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -33,9 +34,28 @@
       [
         "expo-font",
         {
-          "fonts": [
-            "./assets/fonts/Grobold.ttf"
-          ]
+          "ios": {
+            "fonts": [
+              "./assets/fonts/Grobold.ttf"
+            ]
+          },
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "Grobold",
+                "fontDefinitions": [
+                  { "path": "./assets/fonts/Grobold.ttf", "weight": 400 },
+                  { "path": "./assets/fonts/Grobold.ttf", "weight": 700 }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "expo-status-bar",
+        {
+          "style": "dark"
         }
       ],
       "expo-web-browser",
