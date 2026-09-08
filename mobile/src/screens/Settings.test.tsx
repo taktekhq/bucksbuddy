@@ -1,10 +1,9 @@
 // Adapted from the web's src/screens/Settings.test.tsx. The account, delete and
-// encryption cases carry over one-for-one; the CSV export differs by port —
-// the browser's <a download> is a file written to the cache and handed to the
-// share sheet — so that one case is rewritten around those calls.
+// encryption cases carry over one-for-one. The export itself is covered by
+// components/ExportCard.test.tsx, where the port actually differs — the
+// browser's <a download> is a file written to the cache and handed to the
+// share sheet.
 import { render, screen, fireEvent } from "@testing-library/react-native";
-import { File } from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
 import posthog from "@/lib/posthog";
 import type { Transaction } from "@/types/db";
@@ -61,23 +60,6 @@ jest.mock("@/lib/store", () => ({ useStore: () => mockStoreValue }));
 
 import { Settings } from "@/screens/Settings";
 
-function tx(overrides: Partial<Transaction> = {}): Transaction {
-  return {
-    id: "t1",
-    user_id: "u1",
-    is_income: false,
-    category: "groceries",
-    amount_usd_cents: 1000,
-    original_currency: "USD",
-    original_amount: 10,
-    rate_used: 89500,
-    occurred_at: "2026-06-01T00:00:00.000Z",
-    note: null,
-    created_at: "2026-06-01T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
 beforeEach(() => {
   mockStoreValue = makeStoreValue();
   mockGetSession.mockResolvedValue({ data: { session: { user: { email: "" } } } });
@@ -110,46 +92,16 @@ describe("Settings — account & data", () => {
     expect(mockStoreValue.signOut).toHaveBeenCalled();
   });
 
-  it("exports the decrypted in-memory rows through the share sheet", async () => {
-    mockStoreValue = makeStoreValue({ transactions: [tx()] });
+  it("offers the export card", async () => {
     await render(<Settings />);
-    await fireEvent.press(screen.getByText("Export CSV"));
-
-    const written = (File as unknown as jest.Mock).mock.results[0].value;
-    expect(written.write).toHaveBeenCalledWith(expect.stringContaining("Groceries"));
-    expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      written.uri,
-      expect.objectContaining({ mimeType: "text/csv" }),
-    );
-    expect(posthog.capture).toHaveBeenCalledWith("csv_exported", { row_count: 1 });
+    expect(screen.getByText("Export")).toBeOnTheScreen();
   });
 
-  it("still records the export when there's no share sheet to hand it to", async () => {
-    (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(false);
-    await render(<Settings />);
-    await fireEvent.press(screen.getByText("Export CSV"));
-    expect(Sharing.shareAsync).not.toHaveBeenCalled();
-    expect(posthog.capture).toHaveBeenCalledWith("csv_exported", { row_count: 0 });
-  });
-
-  it("stays quiet when the export can't be written", async () => {
-    (File as unknown as jest.Mock).mockImplementationOnce(() => ({
-      uri: "/cache/nope.csv",
-      write: () => {
-        throw new Error("storage full");
-      },
-    }));
-    await render(<Settings />);
-    await fireEvent.press(screen.getByText("Export CSV"));
-    expect(Sharing.shareAsync).not.toHaveBeenCalled();
-    expect(posthog.capture).not.toHaveBeenCalledWith("csv_exported", expect.anything());
-  });
-
-  it("disables export while locked", async () => {
+  it("does not open the export card while locked", async () => {
     mockStoreValue = makeStoreValue({ locked: true });
     await render(<Settings />);
-    await fireEvent.press(screen.getByText("Export CSV"));
-    expect(File as unknown as jest.Mock).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText("Export"));
+    expect(screen.queryByText("This month")).not.toBeOnTheScreen();
   });
 });
 

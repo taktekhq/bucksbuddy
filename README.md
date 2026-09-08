@@ -20,7 +20,8 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   as plain storage — but any user can turn on **end-to-end encryption** in Settings with a
   passphrase, after which *no one but them* (not even whoever runs the server) can read their
   amounts or notes. See **Encryption** below.
-- **Export:** CSV download (client-side) for accounting.
+- **Export:** CSV or PDF, for this month, last month, the past 3 months, or all time.
+  Generated client-side from the decrypted rows, so it works on encrypted data.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)

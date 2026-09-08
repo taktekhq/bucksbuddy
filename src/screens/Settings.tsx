@@ -1,46 +1,29 @@
 import { useEffect, useState } from "react";
 import {
   ChevronLeft,
-  Download,
   Eye,
   EyeOff,
   Lock,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
+import { ExportCard } from "@/components/ExportCard";
 import { RateEditor } from "@/components/RateEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
 import { navigate } from "@/lib/router";
-import { transactionsToCsv } from "@/lib/csv";
 import { useStore } from "@/lib/store";
 import posthog from "@/lib/posthog";
 
 export function Settings() {
   const [email, setEmail] = useState("");
-  const { transactions, locked, signOut } = useStore();
+  const { signOut } = useStore();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setEmail(data.session?.user.email ?? "");
     });
   }, []);
-
-  function exportCsv() {
-    // Export the decrypted, in-memory rows (the database only holds ciphertext),
-    // so it's instant — no query, nothing to await.
-    const csv = transactionsToCsv(transactions);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `bucksbuddy-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    posthog.capture("csv_exported", { row_count: transactions.length });
-  }
 
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
@@ -89,17 +72,7 @@ export function Settings() {
       {/* DATA */}
       <section className="flex flex-col gap-2">
         <SectionHeader>Data</SectionHeader>
-        <div className="overflow-hidden rounded-card bg-surface shadow-card">
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={locked}
-            className="press flex w-full items-center justify-between px-4 py-3.5 text-base font-medium text-label disabled:opacity-50"
-          >
-            <span>Export CSV</span>
-            <Download className="h-5 w-5 text-label-secondary" strokeWidth={2} />
-          </button>
-        </div>
+        <ExportCard />
       </section>
 
       {/* DANGER ZONE */}
