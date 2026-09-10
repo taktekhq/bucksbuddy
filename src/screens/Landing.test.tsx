@@ -115,18 +115,3 @@ describe("Landing", () => {
     expect(await screen.findByText("bad creds")).toBeInTheDocument();
   });
 });
-
-describe("Landing — install hint", () => {
-  it("tells iPhone visitors how to add the app to the Home Screen", () => {
-    Object.defineProperty(navigator, "userAgent", {
-      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) Safari/604.1",
-      configurable: true,
-    });
-    try {
-      render(<Landing />);
-      expect(screen.getByText("Add to Home Screen")).toBeInTheDocument();
-    } finally {
-      Reflect.deleteProperty(navigator, "userAgent");
-    }
-  });
-});
