@@ -6,7 +6,7 @@ import type { Transaction } from "@/types/db";
 
 vi.mock("framer-motion", async () => (await import("@/test/framerMock")).default);
 
-let storeValue = makeStoreValue({ lbpPerUsd: 89500 });
+let storeValue = makeStoreValue();
 vi.mock("@/lib/store", () => ({ useStore: () => storeValue }));
 
 import { AddComposer } from "@/components/AddComposer";
@@ -35,7 +35,7 @@ async function chooseCategory(name: RegExp) {
 
 describe("AddComposer (add mode)", () => {
   beforeEach(() => {
-    storeValue = makeStoreValue({ lbpPerUsd: 89500 });
+    storeValue = makeStoreValue();
   });
 
   it("guides the user from amount to category to a ready CTA", async () => {
@@ -153,7 +153,6 @@ describe("AddComposer (add mode)", () => {
 
   it("shows the error returned by the store and keeps the input", async () => {
     storeValue = makeStoreValue({
-      lbpPerUsd: 89500,
       addTransaction: vi.fn(async () => ({ error: "Server said no" })),
     });
     render(<AddComposer editing={null} onClearEdit={() => {}} />);
@@ -166,7 +165,6 @@ describe("AddComposer (add mode)", () => {
   it("shows a Saving… state while the save is in flight", async () => {
     let resolve!: (v: { error: null }) => void;
     storeValue = makeStoreValue({
-      lbpPerUsd: 89500,
       addTransaction: vi.fn(
         () => new Promise<{ error: null }>((r) => (resolve = r)),
       ),
@@ -185,7 +183,7 @@ describe("AddComposer (add mode)", () => {
 
 describe("AddComposer (edit mode)", () => {
   beforeEach(() => {
-    storeValue = makeStoreValue({ lbpPerUsd: 89500 });
+    storeValue = makeStoreValue();
   });
 
   it("prefills from the editing transaction and saves an update", async () => {
@@ -213,5 +211,95 @@ describe("AddComposer (edit mode)", () => {
   it("clears the editing note when it was null", () => {
     render(<AddComposer editing={tx({ note: null })} onClearEdit={() => {}} />);
     expect((screen.getByLabelText("Note") as HTMLInputElement).value).toBe("");
+  });
+});
+
+describe("AddComposer (other currencies)", () => {
+  beforeEach(() => {
+    storeValue = makeStoreValue({
+      homeCurrency: "EUR",
+      currencies: [{ code: "USD", rate: 1.25 }], // 1.25 USD per €1
+    });
+  });
+
+  it("types in the home currency by default and converts a secondary at its rate", async () => {
+    render(<AddComposer editing={null} onClearEdit={() => {}} />);
+    expect(screen.getByText("€")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Amount"), "12.50");
+    await chooseCategory(/Gas/);
+    expect(screen.getByRole("button", { name: "Add €12.50" })).toBeInTheDocument();
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Switch currency" }));
+    expect(screen.getByText("$")).toBeInTheDocument();
+    expect(screen.getByText("≈ €10.00")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Add 12.50 USD" }));
+    expect(storeValue.addTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount_usd_cents: 1000,
+        original_currency: "USD",
+        original_amount: 12.5,
+        rate_used: 1.25,
+      }),
+    );
+  });
+
+  it("cycles through every currency in Settings and back to home", async () => {
+    storeValue = makeStoreValue({
+      currencies: [
+        { code: "LBP", rate: 89500 },
+        { code: "EUR", rate: 0.9 },
+      ],
+    });
+    render(<AddComposer editing={null} onClearEdit={() => {}} />);
+    const toggle = screen.getByRole("button", { name: "Switch currency" });
+    expect(toggle).toHaveTextContent("USD");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveTextContent("LBP");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveTextContent("EUR");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveTextContent("USD");
+  });
+
+  it("has nothing to switch to with only the home currency set up", () => {
+    storeValue = makeStoreValue({ currencies: [] });
+    render(<AddComposer editing={null} onClearEdit={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Switch currency" })).not.toBeInTheDocument();
+    expect(screen.getByText("USD")).toBeInTheDocument();
+  });
+
+  it("keeps a removed currency on offer while editing an entry typed in it", async () => {
+    storeValue = makeStoreValue({ currencies: [] }); // LBP no longer set up
+    render(
+      <AddComposer
+        editing={tx({
+          original_currency: "LBP",
+          original_amount: 90000,
+          rate_used: 90000,
+          amount_usd_cents: 100,
+        })}
+        onClearEdit={() => {}}
+      />,
+    );
+    // The entry's own currency, at the rate it was saved with.
+    expect(screen.getByText("LL")).toBeInTheDocument();
+    expect(screen.getByText("≈ $1.00")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save 90,000 LBP" })).toBeInTheDocument();
+    // And the toggle still offers home.
+    await userEvent.click(screen.getByRole("button", { name: "Switch currency" }));
+    expect(screen.getByRole("button", { name: "Save $90,000.00" })).toBeInTheDocument();
+  });
+
+  it("folds a pick that Settings no longer offers back to home", async () => {
+    storeValue = makeStoreValue({ currencies: [{ code: "LBP", rate: 89500 }] });
+    const { rerender } = render(<AddComposer editing={null} onClearEdit={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: "Switch currency" }));
+    expect(screen.getByText("LL")).toBeInTheDocument();
+    // LBP disappears from Settings underneath the open composer.
+    storeValue = makeStoreValue({ currencies: [] });
+    rerender(<AddComposer editing={null} onClearEdit={() => {}} />);
+    expect(screen.getByText("$")).toBeInTheDocument();
+    expect(screen.getByText("USD")).toBeInTheDocument();
   });
 });

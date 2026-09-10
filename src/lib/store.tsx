@@ -11,7 +11,14 @@ import {
 import { supabase } from "@/lib/supabase";
 import { navigate } from "@/lib/router";
 import { clearCache, loadCache, saveCache } from "@/lib/cache";
-import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
+import {
+  currencySettingsFromProfile,
+  DEFAULT_CURRENCIES,
+  DEFAULT_HOME_CURRENCY,
+  switchHomeCurrency,
+  type Currency,
+  type CurrencyRate,
+} from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
@@ -34,6 +41,7 @@ import {
 import type {
   NewSafeGoldEntry,
   NewTransaction,
+  Profile,
   SafeGoldEntry,
   SafeGoldEntryRow,
   Transaction,
@@ -45,7 +53,11 @@ type Result = { error: string | null };
 type Store = {
   loading: boolean;
   transactions: Transaction[];
-  lbpPerUsd: number;
+  // Currency settings (see lib/currency): totals are kept and shown in
+  // `homeCurrency`; `currencies` are the secondary ones, each with its rate
+  // per 1 home unit.
+  homeCurrency: Currency;
+  currencies: CurrencyRate[];
   // Running balance = all-time net of every transaction (income adds, expenses
   // and transfers into the Safe subtract). This carries forward across months,
   // so a new month opens at last month's standing instead of snapping to $0.
@@ -55,7 +67,11 @@ type Store = {
   addTransaction: (tx: NewTransaction) => Promise<Result>;
   updateTransaction: (id: string, tx: NewTransaction) => Promise<Result>;
   deleteTransaction: (id: string) => Promise<Result>;
-  setRate: (rate: number) => Promise<Result>;
+  // Change the home currency. Stored amounts keep their numbers (nothing is
+  // converted); the rate list is re-based when it can be, else cleared.
+  setHomeCurrency: (code: Currency) => Promise<Result>;
+  // Replace the secondary-currency list (add, remove, or change a rate).
+  setCurrencies: (list: CurrencyRate[]) => Promise<Result>;
   // Encryption. `e2eMode` is "default" (operator-readable, no passphrase) or
   // "passphrase" (real E2E). `locked` is true when this device doesn't have the
   // passphrase yet, so amounts show obscured until it's entered. `passphrase` is
@@ -215,7 +231,12 @@ export function StoreProvider({
   const [transactions, setTransactions] = useState<Transaction[]>(
     cached?.transactions ?? [],
   );
-  const [lbpPerUsd, setLbpPerUsd] = useState(cached?.lbpPerUsd ?? DEFAULT_LBP_PER_USD);
+  const [homeCurrency, setHome] = useState<Currency>(
+    cached?.homeCurrency ?? DEFAULT_HOME_CURRENCY,
+  );
+  const [currencies, setCurrencyList] = useState<CurrencyRate[]>(
+    cached?.currencies ?? [...DEFAULT_CURRENCIES],
+  );
   const [safeGoldEntries, setSafeGoldEntries] = useState<SafeGoldEntry[]>(
     cached?.safeGoldEntries ?? [],
   );
@@ -226,18 +247,25 @@ export function StoreProvider({
   // lands in React state / devtools and changing it doesn't trigger renders.
   const masterKey = useRef<CryptoKey | null>(null);
 
-  // Load the exchange rate plus, when unlocked, the decrypted transactions and
-  // gold. Backfilling any legacy plaintext rows into the `_enc` columns was a
-  // separate one-off operator step, not done here.
+  // Load the currency settings plus, when unlocked, the decrypted transactions
+  // and gold. Backfilling any legacy plaintext rows into the `_enc` columns was
+  // a separate one-off operator step, not done here.
   const loadData = useCallback(async () => {
     setLoading(true);
-    // The exchange rate isn't encrypted, so it loads regardless of lock state.
+    // The currency settings aren't encrypted, so they load regardless of lock
+    // state. `*` rather than named columns so a database that predates
+    // 0007_currencies.sql (only `lbp_per_usd`) still answers, and the helper
+    // fills in from whatever the row has.
     const { data: profile } = await supabase
       .from("profiles")
-      .select("lbp_per_usd")
+      .select("*")
       .eq("id", userId)
       .single();
-    if (profile?.lbp_per_usd) setLbpPerUsd(profile.lbp_per_usd);
+    if (profile) {
+      const settings = currencySettingsFromProfile(profile as Partial<Profile>);
+      setHome(settings.homeCurrency);
+      setCurrencyList(settings.currencies);
+    }
 
     const [{ data: txData }, { data: goldData }] = await Promise.all([
       supabase
@@ -311,8 +339,8 @@ export function StoreProvider({
   // (and the cleared cache) from being written back as if they were real.
   useEffect(() => {
     if (loading || locked) return;
-    saveCache(userId, { transactions, lbpPerUsd, safeGoldEntries });
-  }, [userId, loading, locked, transactions, lbpPerUsd, safeGoldEntries]);
+    saveCache(userId, { transactions, homeCurrency, currencies, safeGoldEntries });
+  }, [userId, loading, locked, transactions, homeCurrency, currencies, safeGoldEntries]);
 
   const unlock = useCallback(
     async (pass: string) => {
@@ -431,14 +459,29 @@ export function StoreProvider({
     [transactions],
   );
 
-  const setRate = useCallback(
-    async (rate: number) => {
+  const setHomeCurrency = useCallback(
+    async (code: Currency) => {
+      const next = switchHomeCurrency({ homeCurrency, currencies }, code);
       const { error } = await supabase
         .from("profiles")
-        .update({ lbp_per_usd: rate })
+        .update({ home_currency: next.homeCurrency, currencies: next.currencies })
         .eq("id", userId);
       if (error) return { error: error.message };
-      setLbpPerUsd(rate);
+      setHome(next.homeCurrency);
+      setCurrencyList(next.currencies);
+      return { error: null };
+    },
+    [userId, homeCurrency, currencies],
+  );
+
+  const setCurrencies = useCallback(
+    async (list: CurrencyRate[]) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ currencies: list })
+        .eq("id", userId);
+      if (error) return { error: error.message };
+      setCurrencyList(list);
       return { error: null };
     },
     [userId],
@@ -530,13 +573,15 @@ export function StoreProvider({
   const value: Store = {
     loading,
     transactions,
-    lbpPerUsd,
+    homeCurrency,
+    currencies,
     balanceCents,
     monthlyNetCents,
     addTransaction,
     updateTransaction,
     deleteTransaction,
-    setRate,
+    setHomeCurrency,
+    setCurrencies,
     e2eMode,
     locked,
     passphrase,

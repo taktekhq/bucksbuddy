@@ -98,7 +98,10 @@ describe("StoreProvider / useStore", () => {
       occurred_at: new Date("2020-01-01").toISOString(), // outside this month
     });
     const { result } = setup({
-      "profiles:select": () => ({ data: { lbp_per_usd: 90000 }, error: null }),
+      "profiles:select": () => ({
+        data: { home_currency: "EUR", currencies: [{ code: "USD", rate: 1.08 }] },
+        error: null,
+      }),
       "transactions:select": () => ({
         data: [inMonth, safeMove, safeWithdraw],
         error: null,
@@ -129,7 +132,8 @@ describe("StoreProvider / useStore", () => {
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.lbpPerUsd).toBe(90000);
+    expect(result.current.homeCurrency).toBe("EUR");
+    expect(result.current.currencies).toEqual([{ code: "USD", rate: 1.08 }]);
     expect(result.current.transactions).toHaveLength(3);
     expect(result.current.monthlyNetCents).toBe(3000); // 5000 in − 2000 safe out
     // Running balance carries all-time: +5000 −2000 +500 (the 2020 withdrawal).
@@ -147,7 +151,18 @@ describe("StoreProvider / useStore", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.transactions).toEqual([]);
     expect(result.current.safeGoldEntries).toEqual([]);
-    expect(result.current.lbpPerUsd).toBe(89500); // default kept
+    // The currency defaults are kept.
+    expect(result.current.homeCurrency).toBe("USD");
+    expect(result.current.currencies).toEqual([{ code: "LBP", rate: 89500 }]);
+  });
+
+  it("carries a pre-migration profile's single LBP rate across", async () => {
+    const { result } = setup({
+      "profiles:select": () => ({ data: { lbp_per_usd: 90000 }, error: null }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.homeCurrency).toBe("USD");
+    expect(result.current.currencies).toEqual([{ code: "LBP", rate: 90000 }]);
   });
 
   it("adds a transaction optimistically", async () => {
@@ -258,25 +273,62 @@ describe("StoreProvider / useStore", () => {
     expect(result.current.transactions.map((t) => t.id)).toEqual(["b"]);
   });
 
-  it("sets the exchange rate, and surfaces rate errors", async () => {
+  it("replaces the secondary currencies, and surfaces errors", async () => {
+    const { result } = setup({
+      "profiles:update": () => ({ data: null, error: null }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const list = [
+      { code: "LBP" as const, rate: 95000 },
+      { code: "EUR" as const, rate: 0.8 },
+    ];
+    await act(async () => {
+      await result.current.setCurrencies(list);
+    });
+    expect(result.current.currencies).toEqual(list);
+
+    mock = makeSupabaseMock({
+      "profiles:update": () => ({ data: null, error: { message: "denied" } }),
+    });
+    let res: Res = { error: null };
+    await act(async () => {
+      res = await result.current.setCurrencies([]);
+    });
+    expect(res.error).toBe("denied");
+    expect(result.current.currencies).toEqual(list); // unchanged on failure
+  });
+
+  it("switches the home currency, re-basing the rates, and surfaces errors", async () => {
     const { result } = setup({
       "profiles:update": () => ({ data: null, error: null }),
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
-      await result.current.setRate(95000);
+      await result.current.setCurrencies([
+        { code: "LBP", rate: 95000 },
+        { code: "EUR", rate: 0.8 },
+      ]);
     });
-    expect(result.current.lbpPerUsd).toBe(95000);
+    await act(async () => {
+      await result.current.setHomeCurrency("EUR");
+    });
+    expect(result.current.homeCurrency).toBe("EUR");
+    expect(result.current.currencies).toEqual([
+      { code: "USD", rate: 1.25 },
+      { code: "LBP", rate: 118750 },
+    ]);
 
     mock = makeSupabaseMock({
       "profiles:update": () => ({ data: null, error: { message: "denied" } }),
     });
-    let res: { error: string | null } = { error: null };
+    let res: Res = { error: null };
     await act(async () => {
-      res = await result.current.setRate(96000);
+      res = await result.current.setHomeCurrency("GBP");
     });
     expect(res.error).toBe("denied");
+    expect(result.current.homeCurrency).toBe("EUR"); // unchanged on failure
   });
 
   it("adds and deletes gold entries, restoring on delete failure", async () => {
@@ -553,9 +605,10 @@ describe("StoreProvider / useStore", () => {
     localStorage.setItem(
       "bb-cache:u1",
       JSON.stringify({
-        v: 1,
+        v: 2,
         transactions: [tx({ id: "cached", amount_usd_cents: 1234 })],
-        lbpPerUsd: 91000,
+        homeCurrency: "EUR",
+        currencies: [{ code: "USD", rate: 1.1 }],
         safeGoldEntries: [],
       }),
     );
@@ -568,7 +621,8 @@ describe("StoreProvider / useStore", () => {
     // Synchronously available before any network round-trip resolves.
     expect(result.current.loading).toBe(false);
     expect(result.current.transactions[0].id).toBe("cached");
-    expect(result.current.lbpPerUsd).toBe(91000);
+    expect(result.current.homeCurrency).toBe("EUR");
+    expect(result.current.currencies).toEqual([{ code: "USD", rate: 1.1 }]);
 
     // The background refresh replaces it with what the server returned.
     await waitFor(() => expect(result.current.transactions[0].id).toBe("fresh"));
@@ -600,7 +654,13 @@ describe("StoreProvider / useStore", () => {
     // A stale plaintext snapshot left on a now-locked device must be dropped.
     localStorage.setItem(
       "bb-cache:u1",
-      JSON.stringify({ v: 1, transactions: [tx()], lbpPerUsd: 90000, safeGoldEntries: [] }),
+      JSON.stringify({
+        v: 2,
+        transactions: [tx()],
+        homeCurrency: "USD",
+        currencies: [],
+        safeGoldEntries: [],
+      }),
     );
     const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
     await waitFor(() => expect(result.current.loading).toBe(false));

@@ -1,5 +1,11 @@
-import type { Currency } from "@/lib/currency";
+import type { Currency, CurrencyRate } from "@/lib/currency";
 
+// `amount_usd_cents` is the amount normalized to the user's HOME currency, in
+// hundredths. The column name is historical — USD was the only home currency
+// when it was created — and renaming an encrypted column buys nothing, so it
+// stays; read it as "home cents". `original_currency` / `original_amount` are
+// what was actually typed, and `rate_used` the rate that turned it into home
+// cents (units of original per 1 home; 1 for an entry in the home currency).
 export type Transaction = {
   id: string;
   user_id: string;
@@ -20,7 +26,13 @@ export type Transaction = {
 export type Profile = {
   id: string;
   email: string | null;
+  // Legacy: the single LBP rate from before 0007_currencies.sql. Still on the
+  // row, no longer written; read only as a fallback when `currencies` is
+  // missing (a database the migration hasn't reached yet).
   lbp_per_usd: number;
+  home_currency: Currency;
+  // The secondary currencies, each with its rate per 1 home unit (jsonb).
+  currencies: CurrencyRate[];
   created_at: string;
   updated_at: string;
 };

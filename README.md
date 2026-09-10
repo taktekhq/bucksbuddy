@@ -9,9 +9,12 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
 
 - **Stack:** Vite + React + TypeScript + Tailwind, Supabase (Postgres + Auth) for data,
   deployed as static files on Vercel. PWA via `vite-plugin-pwa`.
-- **Currency:** USD + a per-entry LBP toggle (default 89,500 LBP/$, editable in Settings).
-  Stored normalized to **integer USD cents**, with the original currency/amount/rate kept
-  for auditable export.
+- **Currency:** pick a **main currency** (USD, EUR, LBP, GBP, … — a curated list in
+  `src/lib/currency.ts`) and any number of **other currencies**, each with its own rate
+  ("LBP per $1", "USD per €1"), all in Settings. New accounts start as USD + LBP at
+  89,500. Entries are typed in any of them (tap the code next to the amount to switch)
+  and stored normalized to **integer hundredths of the main currency**, with the original
+  currency/amount/rate kept for auditable export.
 - **Auth:** Supabase **Google sign-in** (plus a hidden email + password for friends
   without Google). No emails sent. Data is isolated per-account via Row Level Security.
 - **Privacy:** the money **values** (amounts, gold grams, notes) are stored encrypted
@@ -45,11 +48,27 @@ needs no migration — it rides along in `transactions`.
 Then run [`0003_e2e.sql`](supabase/migrations/0003_e2e.sql) (the `e2e_keys` vault + the
 encrypted `_enc` value columns on `transactions`) and
 [`0004_e2e_gold.sql`](supabase/migrations/0004_e2e_gold.sql) (the same for the gold ledger).
-Finally run [`0005_drop_plaintext_values.sql`](supabase/migrations/0005_drop_plaintext_values.sql)
+Then run [`0005_drop_plaintext_values.sql`](supabase/migrations/0005_drop_plaintext_values.sql)
 to drop the now-unused plaintext columns. It's guarded — it refuses to run while any row
 still has an unencrypted value, so on a fresh database (nothing to migrate) it's safe to
 apply straight through.
 
+Then [`0006_public_stats.sql`](supabase/migrations/0006_public_stats.sql) (the community
+numbers on the Stats page) and finally
+[`0007_currencies.sql`](supabase/migrations/0007_currencies.sql), which adds the
+per-user main currency and currency list, carries each user's existing LBP rate across,
+and lets `rate_used` hold fractions (0.92 EUR per $1). Everyone already on the app stays
+on USD with nothing to do. Deploying the app before 0007 is harmless — it falls back to
+the old single LBP rate, and the currency card in Settings shows the database's error
+until the migration is in.
+
+> **Changing the main currency** doesn't convert what's already saved: the stored
+> numbers stay as they are and are simply read in the new currency (a fresh account
+> won't notice; one with history gets a confirmation first). The rates for the other
+> currencies are re-based when the new main was one of them, otherwise cleared to set up
+> again. The Safe's live gold price is quoted in USD, so with another main currency it
+> only shows once USD is in the list with a rate.
+>
 > **Savings Safe:** a vault icon next to Settings opens a dark "Safe" screen (available
 > to everyone).
 > - **Cash** moved to the safe is recorded as a normal transaction with the `safe`
@@ -115,11 +134,13 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
 - **No recovery, by design.** There is deliberately no reset: if a user forgets their
   passphrase and has no device that still has it cached, the data is unrecoverable — that's
   the proof it's truly end-to-end.
-- **Scope — only the money *values*.** We encrypt what actually matters: `amount_usd_cents`,
-  `original_amount` and `note` on transactions, and `grams` + `note` on gold. Each goes into
-  its own `_enc` column. The **labels** (category, direction, currency, rate, date) stay as
-  plaintext columns — useful, and not the secret. So the operator can see *"an Out in
-  groceries on June 1"* but not the amount.
+- **Scope — only the money *values*.** We encrypt what actually matters: `amount_usd_cents`
+  (the amount in the main currency — the column kept its name from when USD was the only
+  option), `original_amount` and `note` on transactions, and `grams` + `note` on gold. Each
+  goes into its own `_enc` column. The **labels** (category, direction, currency, rate,
+  date) and the currency settings on the profile stay as plaintext columns — useful, and
+  not the secret. So the operator can see *"an Out in groceries on June 1"* but not the
+  amount.
 
 ## Local development
 
@@ -158,12 +179,12 @@ index.html              app entry
 src/main.tsx            mount + register service worker
 src/App.tsx             auth gate + hash router
 src/screens/            Login, Home, Add, Settings
-src/components/          AddEntryFlow + ui/* building blocks, RecentList, RateEditor, SignOutButton
+src/components/          AddComposer + ui/* building blocks, history rows/stacks, CurrencySettings, ExportCard
 src/lib/                supabase client, store (in-memory cache), router, useSession,
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
-supabase/migrations/    0001_init.sql … 0003_e2e.sql, 0004_e2e_gold.sql, 0005_drop_plaintext_values.sql
+supabase/migrations/    0001_init.sql … 0005_drop_plaintext_values.sql, 0006_public_stats.sql, 0007_currencies.sql
 docs/DESIGN_SYSTEM.md   reusable design system
 ```
 

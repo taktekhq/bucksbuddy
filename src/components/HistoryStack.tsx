@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
-import { amountColorClass, formatSignedUsdCents } from "@/lib/money";
+import type { Currency } from "@/lib/currency";
+import { amountColorClass, formatSignedCents } from "@/lib/money";
 import { SwipeRow } from "@/components/SwipeRow";
 import type { HistoryGroup } from "@/lib/history";
 import type { Transaction } from "@/types/db";
@@ -14,17 +15,27 @@ import type { Transaction } from "@/types/db";
 // crowding the next item in the list.
 export function HistoryStack({
   group,
+  currency,
   onEdit,
   onDelete,
 }: {
   group: HistoryGroup;
+  currency: Currency;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
 }) {
   const [open, setOpen] = useState(false);
 
   if (group.count === 1) {
-    return <SwipeRow tx={group.rows[0]} onEdit={onEdit} onDelete={onDelete} dark />;
+    return (
+      <SwipeRow
+        tx={group.rows[0]}
+        currency={currency}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        dark
+      />
+    );
   }
 
   const Icon = categoryIcon(group.category);
@@ -32,7 +43,7 @@ export function HistoryStack({
   const label = categoryLabel(group.category);
   const total = group.masked
     ? `${group.isIncome ? "+" : "-"}••••`
-    : formatSignedUsdCents(group.totalCents);
+    : formatSignedCents(group.totalCents, currency);
 
   if (open) {
     return (
@@ -45,7 +56,13 @@ export function HistoryStack({
         >
           {group.rows.map((tx) => (
             <li key={tx.id}>
-              <SwipeRow tx={tx} onEdit={onEdit} onDelete={onDelete} dark />
+              <SwipeRow
+                tx={tx}
+                currency={currency}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                dark
+              />
             </li>
           ))}
         </motion.ul>

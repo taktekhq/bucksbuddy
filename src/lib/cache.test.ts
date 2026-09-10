@@ -12,7 +12,7 @@ function tx(overrides: Partial<Transaction> = {}): Transaction {
     amount_usd_cents: 1000,
     original_currency: "USD",
     original_amount: 10,
-    rate_used: 89500,
+    rate_used: 1,
     occurred_at: "2026-01-01T00:00:00.000Z",
     note: null,
     created_at: "2026-01-01T00:00:00.000Z",
@@ -35,7 +35,8 @@ function gold(overrides: Partial<SafeGoldEntry> = {}): SafeGoldEntry {
 
 const snapshot: CacheSnapshot = {
   transactions: [tx()],
-  lbpPerUsd: 90000,
+  homeCurrency: "EUR",
+  currencies: [{ code: "USD", rate: 1.08 }],
   safeGoldEntries: [gold()],
 };
 
@@ -63,9 +64,15 @@ describe("cache", () => {
   });
 
   it("ignores a snapshot written under an older version", () => {
+    // v1 carried a single `lbpPerUsd` instead of the currency settings.
     localStorage.setItem(
       "bb-cache:u1",
-      JSON.stringify({ v: 0, ...snapshot }),
+      JSON.stringify({
+        v: 1,
+        transactions: [tx()],
+        lbpPerUsd: 90000,
+        safeGoldEntries: [],
+      }),
     );
     expect(loadCache("u1")).toBeNull();
   });
@@ -78,7 +85,12 @@ describe("cache", () => {
   it("defaults missing gold entries to an empty list", () => {
     localStorage.setItem(
       "bb-cache:u1",
-      JSON.stringify({ v: 1, transactions: [tx()], lbpPerUsd: 90000 }),
+      JSON.stringify({
+        v: 2,
+        transactions: [tx()],
+        homeCurrency: "USD",
+        currencies: [],
+      }),
     );
     expect(loadCache("u1")?.safeGoldEntries).toEqual([]);
   });

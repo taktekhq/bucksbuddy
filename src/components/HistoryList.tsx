@@ -1,12 +1,15 @@
 import { SwipeRow } from "@/components/SwipeRow";
+import type { Currency } from "@/lib/currency";
 import type { Transaction } from "@/types/db";
 
 export function HistoryList({
   rows,
+  currency,
   onEdit,
   onDelete,
 }: {
   rows: Transaction[];
+  currency: Currency;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
 }) {
@@ -22,7 +25,7 @@ export function HistoryList({
     <ul className="flex flex-col gap-1.5">
       {rows.map((tx) => (
         <li key={tx.id}>
-          <SwipeRow tx={tx} onEdit={onEdit} onDelete={onDelete} />
+          <SwipeRow tx={tx} currency={currency} onEdit={onEdit} onDelete={onDelete} />
         </li>
       ))}
     </ul>

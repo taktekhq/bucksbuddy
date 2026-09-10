@@ -1,4 +1,5 @@
 import type { Transaction } from "@/types/db";
+import type { Currency } from "@/lib/currency";
 import {
   categoryLabel,
   categorySubLabel,
@@ -13,7 +14,12 @@ function escapeCsv(value: string | number): string {
   return s;
 }
 
-export function transactionsToCsv(rows: Transaction[]): string {
+/**
+ * The rows as CSV. `homeCurrency` names the normalized-amount column
+ * ("amount_usd", "amount_eur"); `rate_used` is units of the original currency
+ * per 1 of home at the time of entry (1 for entries typed in home).
+ */
+export function transactionsToCsv(rows: Transaction[], homeCurrency: Currency): string {
   const header = [
     "date",
     "type",
@@ -21,8 +27,8 @@ export function transactionsToCsv(rows: Transaction[]): string {
     "subcategory",
     "original_amount",
     "original_currency",
-    "rate_used_lbp_per_usd",
-    "amount_usd",
+    "rate_used",
+    `amount_${homeCurrency.toLowerCase()}`,
     "note",
   ];
 

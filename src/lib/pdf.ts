@@ -14,7 +14,13 @@ import {
   categorySubLabel,
   splitCategory,
 } from "@/lib/categories";
-import { formatSignedUsdCents, formatUsdCents, netCents } from "@/lib/money";
+import { currencySymbol, type Currency } from "@/lib/currency";
+import {
+  formatCents,
+  formatSignedCents,
+  netCents,
+  type SymbolStyle,
+} from "@/lib/money";
 
 // --- Text metrics -----------------------------------------------------------
 
@@ -135,7 +141,7 @@ const HAIRLINE = "0.898 0.898 0.918";
 const ZEBRA = "0.973 0.973 0.976";
 
 type Column = {
-  key: "date" | "type" | "category" | "original" | "usd" | "note";
+  key: "date" | "type" | "category" | "original" | "home" | "note";
   head: string;
   w: number;
   right?: boolean;
@@ -150,7 +156,8 @@ const COLUMNS: Column[] = [
   // enter — LBP runs to eleven or twelve digits, and "100,000,000,000 LBP" is
   // about 87pt of 9pt type.
   { key: "original", head: "Original", w: 96, right: true },
-  { key: "usd", head: "USD", w: 74, right: true },
+  // Headed with the home currency's code at draw time (see tableHead).
+  { key: "home", head: "", w: 74, right: true },
   // Whatever is left goes to the note — it's the free text, the column most
   // worth reading, and the only one that runs long.
   { key: "note", head: "Note", w: CONTENT_W - 62 - 28 - 120 - 96 - 74 },
@@ -232,14 +239,24 @@ export type PdfMeta = {
   title: string;
   /** What was exported, e.g. "Last month · August 2026". */
   rangeLabel: string;
+  /** The home currency the normalized amounts and totals are in. */
+  currency: Currency;
 };
 
+// The standard fonts draw WinAnsi only, so a symbol outside it ("₺", "₹") would
+// print as "?" — for those the code goes in front of the number instead. ("€"
+// is fine: it folds to WinAnsi's 0x80, not to "?".)
+function symbolStyle(currency: Currency): SymbolStyle {
+  return toWinAnsi(currencySymbol(currency)).includes("?") ? "code" : "symbol";
+}
+
 /** Draws the column headings and returns the baseline for the first row. */
-function tableHead(ops: Ops, y: number): number {
+function tableHead(ops: Ops, y: number, currency: Currency): number {
   let x = MARGIN;
   for (const col of COLUMNS) {
-    if (col.right) textRight(ops, col.head, x + col.w - 6, y, 8, MUTED, true);
-    else text(ops, col.head, x, y, 8, MUTED, true);
+    const head = col.key === "home" ? currency : col.head;
+    if (col.right) textRight(ops, head, x + col.w - 6, y, 8, MUTED, true);
+    else text(ops, head, x, y, 8, MUTED, true);
     x += col.w;
   }
   line(ops, MARGIN, y - 6, PAGE_W - MARGIN, HAIRLINE);
@@ -262,10 +279,11 @@ function documentHead(ops: Ops, rows: Transaction[], meta: PdfMeta, now: Date): 
   y -= 24;
   const inCents = rows.reduce((s, r) => s + (r.is_income ? r.amount_usd_cents : 0), 0);
   const outCents = rows.reduce((s, r) => s + (r.is_income ? 0 : r.amount_usd_cents), 0);
+  const style = symbolStyle(meta.currency);
   const totals: [string, string, string][] = [
-    ["In", formatUsdCents(inCents), INCOME],
-    ["Out", formatUsdCents(outCents), EXPENSE],
-    ["Net", formatSignedUsdCents(netCents(rows)), LABEL],
+    ["In", formatCents(inCents, meta.currency, style), INCOME],
+    ["Out", formatCents(outCents, meta.currency, style), EXPENSE],
+    ["Net", formatSignedCents(netCents(rows), meta.currency, style), LABEL],
   ];
   let x = MARGIN;
   for (const [label, value, color] of totals) {
@@ -280,7 +298,13 @@ function documentHead(ops: Ops, rows: Transaction[], meta: PdfMeta, now: Date): 
 }
 
 /** One transaction as six cells on the baseline `y`. */
-function drawRow(ops: Ops, r: Transaction, y: number, zebra: boolean) {
+function drawRow(
+  ops: Ops,
+  r: Transaction,
+  y: number,
+  zebra: boolean,
+  currency: Currency,
+) {
   if (zebra) rect(ops, MARGIN, y - 4.5, CONTENT_W, ROW_H, ZEBRA);
 
   const signed = r.is_income ? r.amount_usd_cents : -r.amount_usd_cents;
@@ -289,7 +313,10 @@ function drawRow(ops: Ops, r: Transaction, y: number, zebra: boolean) {
     type: [r.is_income ? "In" : "Out", r.is_income ? INCOME : EXPENSE],
     category: [categoryCell(r.category), LABEL],
     original: [originalAmount(r), MUTED],
-    usd: [formatSignedUsdCents(signed), r.is_income ? INCOME : EXPENSE],
+    home: [
+      formatSignedCents(signed, currency, symbolStyle(currency)),
+      r.is_income ? INCOME : EXPENSE,
+    ],
     note: [r.note ?? "", MUTED],
   };
 
@@ -323,15 +350,15 @@ export function transactionsToPdf(
   const pages: Ops[] = [];
   let ops: Ops = [];
   let y = documentHead(ops, rows, meta, now);
-  y = tableHead(ops, y);
+  y = tableHead(ops, y, meta.currency);
 
   rows.forEach((r, i) => {
     if (y < BOTTOM) {
       pages.push(ops);
       ops = [];
-      y = tableHead(ops, PAGE_H - MARGIN - 10);
+      y = tableHead(ops, PAGE_H - MARGIN - 10, meta.currency);
     }
-    drawRow(ops, r, y, i % 2 === 1);
+    drawRow(ops, r, y, i % 2 === 1, meta.currency);
     y -= ROW_H;
   });
 

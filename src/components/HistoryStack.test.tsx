@@ -34,7 +34,7 @@ describe("HistoryStack", () => {
 
   it("renders a multi-entry group collapsed with a count and signed total", () => {
     render(
-      <HistoryStack
+      <HistoryStack currency="USD"
         group={group([tx({ id: "a" }), tx({ id: "b" })])}
         onEdit={() => {}}
         onDelete={() => {}}
@@ -48,7 +48,7 @@ describe("HistoryStack", () => {
 
   it("expands to one row per entry on tap", () => {
     render(
-      <HistoryStack
+      <HistoryStack currency="USD"
         group={group([tx({ id: "a" }), tx({ id: "b" }), tx({ id: "c" })])}
         onEdit={() => {}}
         onDelete={() => {}}
@@ -61,7 +61,7 @@ describe("HistoryStack", () => {
 
   it("renders a single-entry group as a plain row (no stack)", () => {
     render(
-      <HistoryStack group={group([tx()])} onEdit={() => {}} onDelete={() => {}} />,
+      <HistoryStack currency="USD" group={group([tx()])} onEdit={() => {}} onDelete={() => {}} />,
     );
     expect(screen.queryByText(/entries/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe("HistoryStack", () => {
 
   it("hides the numeric total when any entry is masked", () => {
     render(
-      <HistoryStack
+      <HistoryStack currency="USD"
         group={group([tx({ id: "a", amountMask: "a8F2" }), tx({ id: "b" })])}
         onEdit={() => {}}
         onDelete={() => {}}
@@ -81,7 +81,7 @@ describe("HistoryStack", () => {
 
   it("keeps the sign when masking an income group", () => {
     render(
-      <HistoryStack
+      <HistoryStack currency="USD"
         group={group([
           tx({ id: "a", is_income: true, category: "salary", amountMask: "a8F2" }),
           tx({ id: "b", is_income: true, category: "salary" }),
@@ -98,7 +98,7 @@ describe("HistoryStack", () => {
     const onDelete = vi.fn();
     const rows = [tx({ id: "a" }), tx({ id: "b" })];
     render(
-      <HistoryStack group={group(rows)} onEdit={onEdit} onDelete={onDelete} />,
+      <HistoryStack currency="USD" group={group(rows)} onEdit={onEdit} onDelete={onDelete} />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Groceries, 2 entries/ }));
     fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);

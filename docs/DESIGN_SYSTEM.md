@@ -169,9 +169,11 @@ Each lives in `components/ui/` (or `components/`). States:
   **green/red** (via `netColorClass`) directly below.
 - **AddComposer** — **always-visible, money-first** form (Whish-style), under the
   "What's up, Doc?" header:
-  1. **Amount card** — a tinted `$`/`LL` circle + a real `<input inputMode="decimal">`
-     (the **native keyboard**, no custom keypad) + a tappable currency code that
-     toggles `$ ⇄ LBP`.
+  1. **Amount card** — a tinted currency-symbol circle (`$`, `€`, `LL`, …) + a real
+     `<input inputMode="decimal">` (the **native keyboard**, no custom keypad) + a
+     tappable currency code that cycles through the currencies set up in Settings
+     (home first). Typing in a non-home currency shows a small `≈ $10.00` line
+     underneath with what it comes to.
   2. **Category card** — wide; before a pick it's a dashed "Add Category" button,
      after it shows the colored category avatar, an `Income`/`Expense` caption
      above the label, and a `Change ›` button. Opens the `CategorySheet`.

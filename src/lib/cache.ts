@@ -8,17 +8,19 @@
 // (see lib/e2e) — so the snapshot is no more exposed than the key that unlocks
 // it. It's only ever written while unlocked, and it's cleared on sign-out,
 // account deletion, and whenever a device turns out to be locked.
+import type { Currency, CurrencyRate } from "@/lib/currency";
 import type { SafeGoldEntry, Transaction } from "@/types/db";
 
 // Bump when the cached shape changes, so an old snapshot is ignored rather than
-// fed to code that no longer understands it.
-const VERSION = 1;
+// fed to code that no longer understands it. v1 held a single `lbpPerUsd`.
+const VERSION = 2;
 
 const CACHE_KEY = (userId: string) => `bb-cache:${userId}`;
 
 export type CacheSnapshot = {
   transactions: Transaction[];
-  lbpPerUsd: number;
+  homeCurrency: Currency;
+  currencies: CurrencyRate[];
   safeGoldEntries: SafeGoldEntry[];
 };
 
@@ -32,7 +34,8 @@ export function loadCache(userId: string): CacheSnapshot | null {
     if (parsed.v !== VERSION || !Array.isArray(parsed.transactions)) return null;
     return {
       transactions: parsed.transactions,
-      lbpPerUsd: parsed.lbpPerUsd,
+      homeCurrency: parsed.homeCurrency,
+      currencies: parsed.currencies,
       safeGoldEntries: parsed.safeGoldEntries ?? [],
     };
   } catch {
