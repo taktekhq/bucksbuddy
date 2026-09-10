@@ -169,4 +169,4 @@ docs/DESIGN_SYSTEM.md   reusable design system
 
 > A React Native port lived in `mobile/` for a few days in September 2026 and was
 > removed to keep one codebase. It is archived, with its porting notes and
-> store-launch checklist, at the git tag `mobile-archive-0.1.1`.
+> store-launch checklist, at commit `f374605` (tag `mobile-archive-0.1.1`).
