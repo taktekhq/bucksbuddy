@@ -16,6 +16,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe("analytics client", () => {
@@ -25,6 +26,7 @@ describe("analytics client", () => {
     expect(client).not.toBe(lib);
     // The no-op surface is callable and returns nothing.
     expect(client.capture("signed_in")).toBeUndefined();
+    expect(client.captureException(new Error("x"))).toBeUndefined();
     expect(client.identify("u1")).toBeUndefined();
     expect(client.reset()).toBeUndefined();
   });
@@ -43,7 +45,20 @@ describe("analytics client", () => {
     expect(lib.init).toHaveBeenCalledWith("phc_test", {
       api_host: "https://eu.i.posthog.com",
       defaults: "2026-05-30",
+      capture_exceptions: {
+        capture_unhandled_errors: true,
+        capture_unhandled_rejections: true,
+        capture_console_errors: false,
+      },
     });
+    expect(lib.register).toHaveBeenCalledWith({ display_mode: "browser" });
     expect(client).toBe(lib);
+  });
+
+  it("stamps events from a Home Screen install as standalone", async () => {
+    vi.stubEnv("MODE", "production");
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    const { lib } = await load();
+    expect(lib.register).toHaveBeenCalledWith({ display_mode: "standalone" });
   });
 });

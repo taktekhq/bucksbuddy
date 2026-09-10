@@ -8,6 +8,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { ExportCard } from "@/components/ExportCard";
+import { InstallHint } from "@/components/InstallHint";
 import { RateEditor } from "@/components/RateEditor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
@@ -74,6 +75,9 @@ export function Settings() {
         <SectionHeader>Data</SectionHeader>
         <ExportCard />
       </section>
+
+      {/* INSTALL — phone browsers only, gone once it's on the Home Screen. */}
+      <InstallHint header="On your phone" />
 
       {/* DANGER ZONE */}
       <DeleteAccountCard />

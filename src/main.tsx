@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import { Analytics } from "@vercel/analytics/react";
 import App from "@/App";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { redirectBarePath } from "@/lib/router";
 import "@/lib/posthog";
 import "./index.css";
@@ -45,7 +46,9 @@ registerSW({
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
     <Analytics />
   </StrictMode>,
 );
