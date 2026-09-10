@@ -9,7 +9,9 @@ import { cleanup } from "@testing-library/react";
 vi.mock("posthog-js", () => ({
   default: {
     init: vi.fn(),
+    register: vi.fn(),
     capture: vi.fn(),
+    captureException: vi.fn(),
     identify: vi.fn(),
     reset: vi.fn(),
   },

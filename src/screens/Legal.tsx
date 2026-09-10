@@ -83,12 +83,13 @@ export function Legal() {
           <p className="pt-2 font-semibold text-label">Analytics</p>
           <p>
             We count how the app gets used: signing in, adding, editing or
-            deleting an entry, exporting a CSV, and turning encryption on or
-            off. Those counts carry your account ID so that one person using
-            BucksBuddy ten times isn&apos;t counted as ten people. We use
-            PostHog for this. It never receives your amounts, notes, categories
-            or email address, and we never use any of it for advertising or
-            profiling.
+            deleting an entry, exporting a CSV or PDF, turning encryption on or
+            off, and adding the app to your Home Screen. If the app crashes, we
+            also receive a report of what broke, so we can fix it. Those counts
+            carry your account ID so that one person using BucksBuddy ten times
+            isn&apos;t counted as ten people. We use PostHog for this. It never
+            receives your amounts, notes, categories or email address, and we
+            never use any of it for advertising or profiling.
           </p>
 
           <p className="pt-2 font-semibold text-label">On your device</p>

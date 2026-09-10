@@ -226,3 +226,19 @@ describe("Settings — encryption", () => {
     expect(screen.queryByText(/Wrong passphrase/)).not.toBeInTheDocument();
   });
 });
+
+describe("Settings — install hint", () => {
+  it("offers the Home Screen steps to phone browsers", () => {
+    Object.defineProperty(navigator, "userAgent", {
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) Safari/604.1",
+      configurable: true,
+    });
+    try {
+      render(<Settings />);
+      expect(screen.getByRole("heading", { name: "On your phone" })).toBeInTheDocument();
+      expect(screen.getByText("Add to Home Screen")).toBeInTheDocument();
+    } finally {
+      Reflect.deleteProperty(navigator, "userAgent");
+    }
+  });
+});
