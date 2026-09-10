@@ -101,7 +101,8 @@ because jest runs no layout. `Screen.test.tsx` asserts the prop is absent.
 ## 4. Classes that need care
 
 - `shadow-card` / `shadow-segment` / `shadow-carrot` — defined in our config,
-  they work. Don't substitute `boxShadow` or `elevation`.
+  they work on both platforms. Don't substitute `boxShadow` or `elevation` at a
+  call site; the config already maps them (see §4a).
 - `ring-1 ring-inset ring-white/5` — NativeWind maps ring to a box shadow. If a
   ring doesn't render over an opaque child, use `border` + a matching inset,
   and say so in a comment.
@@ -119,6 +120,41 @@ because jest runs no layout. `Screen.test.tsx` asserts the prop is absent.
 - Percentage widths inside a `flex-wrap` grid (`grid-cols-2 gap-2`): React Native
   has no CSS grid. Use `flex-row flex-wrap` and give children an explicit width
   measured with `onLayout` — `(width - gap) / 2` — or `flex-1` in explicit rows.
+
+## 4a. Where the two platforms disagree
+
+The class names are the same on both platforms; a few of them do not *mean* the
+same thing, and NativeWind compiles `tailwind.config.js` once per platform so
+the config is where that gets settled (`process.env.NATIVEWIND_OS`). Don't
+paper over a platform difference at a call site — fix the token, and it stays
+fixed everywhere.
+
+- **`font-sans` / `font-numeric` name no family on Android.** iOS gets
+  `"System"`, React Native's alias for SF Pro at an exact weight. Android has no
+  family by that name, and naming *any* family there routes text through
+  `ReactFontManager`, which keeps a bold bit and drops the numeric weight — so
+  every `font-medium` and `font-semibold` renders as plain Roboto Regular. No
+  family is what lets Android apply the real weight.
+- **`font-display` (Grobold) needs its Android registration.** A font listed as
+  a bare path is looked up per style, `Grobold_bold.ttf` and all, and falls back
+  to Roboto Bold when that file isn't there. `app.json` registers it as a family
+  with a 700 face instead. If you add a font, add it the same way.
+- **`includeFontPadding`.** Android reserves room above and below the glyphs
+  that iOS does not. The config turns it off for the `font-*` and tight
+  `leading-*` utilities; `ui/Input` and `ui/Carrot` do it in their own styles.
+- **`shadow-*` becomes `elevation` on Android**, which is depth *and* stacking
+  order. NativeWind derives one from the blur radius unless the `elevation`
+  theme key names it — and the blur radius is the wrong number for a soft tint.
+  Add a matching `elevation` entry whenever you add a `boxShadow` token.
+- **Emoji are not a shared asset.** The same code point is a different drawing
+  on Android. Anything that is part of the brand ships as a real image instead —
+  `ui/Carrot` is an `<Image>` over `assets/carrot.png` where the web file is
+  still the 🥕 character. That is a deliberate divergence from §1's "keep the
+  markup"; don't port it back.
+
+`src/test/tokens.styles.test.tsx` compiles the config for both platforms and
+asserts all of the above; `src/test/fonts.config.test.ts` covers the font
+registration.
 
 ## 5. Globals the browser has and Hermes does not
 

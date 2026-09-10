@@ -1,44 +1,47 @@
 // Adapted from the web's src/components/ui/Carrot.test.tsx. The web sizes the
-// emoji with a font-size class (`text-5xl`); a React Native Text can only be
-// sized through its fontSize, so the size is a number prop here and that is
-// what the assertions look at.
+// mascot with a font-size class (`text-5xl`); here it is a number prop, and
+// that is what the assertions look at.
+//
+// The mark is Apple's carrot as an asset, not the 🥕 character: the emoji font
+// is Apple's only on Apple devices, and Android drew a different carrot. These
+// assertions are what keep it a picture.
 import { render, screen } from "@testing-library/react-native";
 import { Carrot } from "@/components/ui/Carrot";
 
 describe("Carrot", () => {
-  it("renders the carrot emoji, labelled as an image", async () => {
+  it("draws the carrot artwork, labelled as an image", async () => {
     await render(<Carrot />);
     const el = screen.getByLabelText("carrot");
-    expect(el).toHaveTextContent("🥕");
     expect(el.props.accessibilityRole).toBe("image");
+    expect(el.props.source).toBeDefined();
+  });
+
+  it("ships the carrot as an asset rather than an emoji glyph", async () => {
+    await render(<Carrot />);
+    // A glyph would be text content; the mark must not depend on whichever
+    // emoji font the device happens to have.
+    expect(screen.getByLabelText("carrot")).not.toHaveTextContent("🥕");
   });
 
   it("defaults to the web's text-5xl, i.e. 48pt", async () => {
     await render(<Carrot />);
-    expect(screen.getByLabelText("carrot")).toHaveStyle({ fontSize: 48 });
+    expect(screen.getByLabelText("carrot")).toHaveStyle({ width: 48, height: 48 });
   });
 
   it("takes a custom size", async () => {
     await render(<Carrot size={60} />);
-    expect(screen.getByLabelText("carrot")).toHaveStyle({ fontSize: 60 });
+    expect(screen.getByLabelText("carrot")).toHaveStyle({ width: 60, height: 60 });
   });
 
-  it("gives the glyph 1.15x of headroom so its top isn't clipped", async () => {
+  it("fits the artwork inside that box instead of stretching it", async () => {
     await render(<Carrot size={24} />);
-    // 24 * 1.15 = 27.6 → 28. `leading-none` (lineHeight === fontSize) clips the
-    // color emoji, which overhangs its em box.
-    expect(screen.getByLabelText("carrot")).toHaveStyle({ lineHeight: 28 });
+    expect(screen.getByLabelText("carrot").props.resizeMode).toBe("contain");
   });
 
-  it("does not scale with the OS font size setting", async () => {
-    await render(<Carrot />);
-    expect(screen.getByLabelText("carrot").props.allowFontScaling).toBe(false);
-  });
-
-  it("accepts a className without disturbing the emoji", async () => {
+  it("accepts a className without disturbing the size", async () => {
     await render(<Carrot className="mb-2" size={12} />);
     const el = screen.getByLabelText("carrot");
-    expect(el).toHaveTextContent("🥕");
-    expect(el).toHaveStyle({ fontSize: 12 });
+    expect(el.props.className).toContain("mb-2");
+    expect(el).toHaveStyle({ width: 12, height: 12 });
   });
 });

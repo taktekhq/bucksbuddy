@@ -566,7 +566,7 @@ function InVsOut({
 function PublicTeaser() {
   return (
     <View className="flex flex-col items-center gap-3 rounded-card bg-white/10 px-5 py-8 text-center">
-      {/* The web's `<Carrot className="text-5xl" />`; the emoji is sized by a
+      {/* The web's `<Carrot className="text-5xl" />`; the mark is sized by a
           prop here (see components/ui/Carrot). text-5xl = 48. */}
       <Carrot size={48} />
       <Text className="text-base text-white/85">
