@@ -3,7 +3,6 @@ import { ArrowDownUp, ArrowLeft, Lock, Vault } from "lucide-react";
 import { Carrot } from "@/components/ui/Carrot";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
-import { InstallHint } from "@/components/InstallHint";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { supabase } from "@/lib/supabase";
@@ -249,9 +248,6 @@ export function Landing() {
           Community stats
         </button>
       </section>
-
-      {/* Phone browsers only, and only until the app is on the Home Screen. */}
-      <InstallHint className="mt-6" />
 
       <div aria-hidden className="flex-1" />
     </main>
