@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { makeStoreValue } from "@/test/storeValue";
@@ -40,6 +40,9 @@ function readBlob(blob: Blob): Promise<string> {
     reader.readAsText(blob);
   });
 }
+
+/** Let every promise the click kicked off settle before asserting on it. */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Open the card and hand back the anchor-click spy the download goes through. */
 async function openCard() {
@@ -220,27 +223,115 @@ describe("ExportCard — downloading", () => {
   });
 });
 
+describe("ExportCard — the share sheet", () => {
+  // jsdom has no Web Share API, so the tests above exercise the download
+  // link. These stand the API in, the way Safari on iOS and Chrome on Android
+  // expose it.
+  function offerShare(accepts: boolean, share: () => Promise<void>) {
+    Object.defineProperty(navigator, "canShare", {
+      value: vi.fn(() => accepts),
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "share", { value: vi.fn(share), configurable: true });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "canShare");
+    Reflect.deleteProperty(navigator, "share");
+  });
+
+  it("hands the file to the share sheet instead of a download link", async () => {
+    offerShare(true, () => Promise.resolve());
+    const click = await openCard();
+    const capture = vi.spyOn(posthog, "capture");
+    await userEvent.click(screen.getByRole("button", { name: "CSV" }));
+    await flush();
+
+    expect(navigator.share).toHaveBeenCalledTimes(1);
+    const { files, title } = vi.mocked(navigator.share).mock.calls[0][0] as ShareData;
+    expect(files).toHaveLength(1);
+    const file = files![0];
+    expect(file.name).toMatch(/^bucksbuddy-this-month-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(file.type).toBe("text/csv;charset=utf-8");
+    expect(await readBlob(file)).toContain("date,type,category");
+    expect(title).toBe(file.name);
+    // The browser was asked first whether it can take a file at all.
+    expect(navigator.canShare).toHaveBeenCalledWith({ files: [file] });
+    // And the download path was left alone.
+    expect(click).not.toHaveBeenCalled();
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(capture).toHaveBeenCalledWith("csv_exported", { range: "this_month", row_count: 1 });
+  });
+
+  it("falls back to the download link when the browser cannot share files", async () => {
+    offerShare(false, () => Promise.resolve());
+    const click = await openCard();
+    await userEvent.click(screen.getByRole("button", { name: "PDF" }));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(navigator.share).not.toHaveBeenCalled();
+  });
+
+  it("reports nothing when the user closes the sheet without sharing", async () => {
+    offerShare(true, () => Promise.reject(new DOMException("cancelled", "AbortError")));
+    const click = await openCard();
+    const capture = vi.spyOn(posthog, "capture");
+    await userEvent.click(screen.getByRole("button", { name: "CSV" }));
+    await flush();
+
+    expect(navigator.share).toHaveBeenCalledTimes(1);
+    expect(click).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it("still downloads when a share target refuses the file", async () => {
+    offerShare(true, () => Promise.reject(new DOMException("refused", "NotAllowedError")));
+    const click = await openCard();
+    const capture = vi.spyOn(posthog, "capture");
+    await userEvent.click(screen.getByRole("button", { name: "CSV" }));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(capture).toHaveBeenCalledWith("csv_exported", { range: "this_month", row_count: 1 }),
+    );
+  });
+
+  it("still downloads when sharing fails for any other reason", async () => {
+    offerShare(true, () => Promise.reject(new Error("boom")));
+    const click = await openCard();
+    await userEvent.click(screen.getByRole("button", { name: "CSV" }));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
+  });
+});
+
 describe("ExportCard — analytics", () => {
   it("reports the format, range and row count", async () => {
     const capture = vi.spyOn(posthog, "capture");
     await openCard();
     await userEvent.click(screen.getByRole("button", { name: "CSV" }));
-    expect(capture).toHaveBeenCalledWith("csv_exported", {
-      range: "this_month",
-      row_count: 1,
-    });
+    await waitFor(() =>
+      expect(capture).toHaveBeenCalledWith("csv_exported", {
+        range: "this_month",
+        row_count: 1,
+      }),
+    );
 
     await userEvent.click(screen.getByRole("button", { name: "PDF" }));
-    expect(capture).toHaveBeenCalledWith("pdf_exported", {
-      range: "this_month",
-      row_count: 1,
-    });
+    await waitFor(() =>
+      expect(capture).toHaveBeenCalledWith("pdf_exported", {
+        range: "this_month",
+        row_count: 1,
+      }),
+    );
   });
 
   it("stays quiet about truncation below the fetch cap", async () => {
     const capture = vi.spyOn(posthog, "capture");
     await openCard();
     await userEvent.click(screen.getByRole("button", { name: "CSV" }));
+    await flush();
+    expect(capture).toHaveBeenCalledWith("csv_exported", expect.anything());
     expect(capture).not.toHaveBeenCalledWith("export_truncated", expect.anything());
   });
 
@@ -253,11 +344,13 @@ describe("ExportCard — analytics", () => {
     await userEvent.click(screen.getByRole("radio", { name: "All time" }));
     await userEvent.click(screen.getByRole("button", { name: "CSV" }));
 
-    expect(capture).toHaveBeenCalledWith("export_truncated", {
-      range: "all_time",
-      format: "csv",
-      row_count: FETCH_CAP,
-      fetch_cap: FETCH_CAP,
-    });
+    await waitFor(() =>
+      expect(capture).toHaveBeenCalledWith("export_truncated", {
+        range: "all_time",
+        format: "csv",
+        row_count: FETCH_CAP,
+        fetch_cap: FETCH_CAP,
+      }),
+    );
   });
 });

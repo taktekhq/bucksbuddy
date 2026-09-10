@@ -93,11 +93,10 @@ export function Legal() {
 
           <p className="pt-2 font-semibold text-label">On your device</p>
           <p>
-            The iOS and Android apps keep a copy of your entries on the device
-            so the app opens instantly, and your encryption key in the
-            device&apos;s secure keystore so you aren&apos;t asked for your
-            passphrase every time. Both are erased when you sign out or delete
-            your account.
+            The app keeps a copy of your entries in your browser so it opens
+            instantly, and, once you turn on end-to-end encryption, your
+            passphrase too so you aren&apos;t asked for it every time. Both are
+            erased when you sign out or delete your account.
           </p>
 
           <p>
@@ -129,10 +128,6 @@ export function Legal() {
             <li>Track your own money — nothing illegal.</li>
             <li>
               You&apos;re responsible for your account and what you put in it.
-            </li>
-            <li>
-              The iOS and Android apps are distributed by Apple and Google, so
-              their terms cover the download too.
             </li>
           </ul>
           <p>That&apos;s all, folks. 🥕</p>

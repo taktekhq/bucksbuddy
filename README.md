@@ -166,3 +166,7 @@ vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls nev
 supabase/migrations/    0001_init.sql … 0003_e2e.sql, 0004_e2e_gold.sql, 0005_drop_plaintext_values.sql
 docs/DESIGN_SYSTEM.md   reusable design system
 ```
+
+> A React Native port lived in `mobile/` for a few days in September 2026 and was
+> removed to keep one codebase. It is archived, with its porting notes and
+> store-launch checklist, at the git tag `mobile-archive-0.1.1`.
