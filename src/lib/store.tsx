@@ -253,9 +253,8 @@ export function StoreProvider({
   const loadData = useCallback(async () => {
     setLoading(true);
     // The currency settings aren't encrypted, so they load regardless of lock
-    // state. `*` rather than named columns so a database that predates
-    // 0007_currencies.sql (only `lbp_per_usd`) still answers, and the helper
-    // fills in from whatever the row has.
+    // state. `*` rather than named columns: the helper validates whatever the
+    // row has and falls back to the defaults for anything missing or junk.
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")

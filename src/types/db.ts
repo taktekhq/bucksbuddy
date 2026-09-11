@@ -26,10 +26,6 @@ export type Transaction = {
 export type Profile = {
   id: string;
   email: string | null;
-  // Legacy: the single LBP rate from before 0007_currencies.sql. Still on the
-  // row, no longer written; read only as a fallback when `currencies` is
-  // missing (a database the migration hasn't reached yet).
-  lbp_per_usd: number;
   home_currency: Currency;
   // The secondary currencies, each with its rate per 1 home unit (jsonb).
   currencies: CurrencyRate[];

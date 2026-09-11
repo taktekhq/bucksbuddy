@@ -40,10 +40,8 @@ Then run [`0002_safe_gold.sql`](supabase/migrations/0002_safe_gold.sql) to add t
 degrades gracefully if it isn't applied yet (gold just reads as `0 g`). Cash in the Safe
 needs no migration — it rides along in `transactions`.
 
-> _Tidy-up note: an earlier build created a `safe_entries` table that's no longer used.
-> If you ran that, you can remove the leftover with a one-time
-> `drop table if exists public.safe_entries;` in the SQL Editor — optional, it's empty and
-> ignored either way._
+> _An earlier build created a `safe_entries` table that's no longer used; it's empty and
+> ignored, and `0008_drop_legacy.sql` below removes it._
 
 Then run [`0003_e2e.sql`](supabase/migrations/0003_e2e.sql) (the `e2e_keys` vault + the
 encrypted `_enc` value columns on `transactions`) and
@@ -54,13 +52,18 @@ still has an unencrypted value, so on a fresh database (nothing to migrate) it's
 apply straight through.
 
 Then [`0006_public_stats.sql`](supabase/migrations/0006_public_stats.sql) (the community
-numbers on the Stats page) and finally
+numbers on the Stats page) and
 [`0007_currencies.sql`](supabase/migrations/0007_currencies.sql), which adds the
 per-user main currency and currency list, carries each user's existing LBP rate across,
 and lets `rate_used` hold fractions (0.92 EUR per $1). Everyone already on the app stays
-on USD with nothing to do. Deploying the app before 0007 is harmless — it falls back to
-the old single LBP rate, and the currency card in Settings shows the database's error
-until the migration is in.
+on USD with nothing to do. Run it before deploying the app: the app reads only the new
+columns, so until the migration is in every account shows the defaults (USD + LBP at
+89,500) and the currency card in Settings shows the database's error.
+
+Finally [`0008_drop_legacy.sql`](supabase/migrations/0008_drop_legacy.sql) drops what
+nothing reads any more: the old single-rate `profiles.lbp_per_usd` column (0007 copied it
+into the currency list) and the leftover `safe_entries` table. Run it after 0007, once the
+app that came with 0007 is deployed.
 
 > **Changing the main currency** doesn't convert what's already saved: the stored
 > numbers stay as they are and are simply read in the new currency (a fresh account
@@ -184,7 +187,7 @@ src/lib/                supabase client, store (in-memory cache), router, useSes
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
-supabase/migrations/    0001_init.sql … 0005_drop_plaintext_values.sql, 0006_public_stats.sql, 0007_currencies.sql
+supabase/migrations/    0001_init.sql … 0006_public_stats.sql, 0007_currencies.sql, 0008_drop_legacy.sql
 docs/DESIGN_SYSTEM.md   reusable design system
 ```
 
