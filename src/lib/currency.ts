@@ -161,11 +161,10 @@ export function switchHomeCurrency(
 }
 
 /**
- * The currency settings held in a profile row, with the fallbacks for a
- * database that predates them: a profile from before 0007_currencies.sql has
- * only `lbp_per_usd`, and a missing profile means the defaults. Junk in the
- * jsonb (a code we don't know, a non-positive rate, the home currency itself)
- * is dropped rather than trusted.
+ * The currency settings held in a profile row. A missing profile, or one
+ * without a currency list (a database 0007_currencies.sql hasn't reached),
+ * means the defaults. Junk in the jsonb (a code we don't know, a non-positive
+ * rate, the home currency itself) is dropped rather than trusted.
  */
 export function currencySettingsFromProfile(
   profile: Partial<Profile> | null | undefined,
@@ -174,12 +173,7 @@ export function currencySettingsFromProfile(
     ? profile.home_currency
     : DEFAULT_HOME_CURRENCY;
   const raw = profile?.currencies;
-  if (!Array.isArray(raw)) {
-    // Pre-0007 profile: carry the old single LBP rate across.
-    const lbp = profile?.lbp_per_usd;
-    const rate = typeof lbp === "number" && lbp > 0 ? lbp : DEFAULT_LBP_PER_USD;
-    return { homeCurrency, currencies: [{ code: "LBP", rate }] };
-  }
+  if (!Array.isArray(raw)) return { homeCurrency, currencies: [...DEFAULT_CURRENCIES] };
   const seen = new Set<string>([homeCurrency]);
   const currencies: CurrencyRate[] = [];
   for (const item of raw as unknown[]) {

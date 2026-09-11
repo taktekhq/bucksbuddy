@@ -156,15 +156,6 @@ describe("StoreProvider / useStore", () => {
     expect(result.current.currencies).toEqual([{ code: "LBP", rate: 89500 }]);
   });
 
-  it("carries a pre-migration profile's single LBP rate across", async () => {
-    const { result } = setup({
-      "profiles:select": () => ({ data: { lbp_per_usd: 90000 }, error: null }),
-    });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.homeCurrency).toBe("USD");
-    expect(result.current.currencies).toEqual([{ code: "LBP", rate: 90000 }]);
-  });
-
   it("adds a transaction optimistically", async () => {
     const inserted = tx({ id: "new", amount_usd_cents: 4242 });
     const { result } = setup({

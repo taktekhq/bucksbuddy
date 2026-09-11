@@ -14,6 +14,7 @@ import {
   type Currency,
   type CurrencyRate,
 } from "@/lib/currency";
+import type { Profile } from "@/types/db";
 
 describe("currencyInfo", () => {
   it("knows the listed currencies", () => {
@@ -184,15 +185,10 @@ describe("currencySettingsFromProfile", () => {
     expect(currencySettingsFromProfile(undefined)).toEqual(defaults);
   });
 
-  it("carries a pre-migration profile's LBP rate across", () => {
-    expect(currencySettingsFromProfile({ lbp_per_usd: 90000 })).toEqual({
-      homeCurrency: "USD",
-      currencies: [{ code: "LBP", rate: 90000 }],
-    });
-  });
-
-  it("ignores a junk legacy rate", () => {
-    expect(currencySettingsFromProfile({ lbp_per_usd: 0 })).toEqual(defaults);
+  it("defaults the list when the profile has none, keeping a valid home", () => {
+    expect(
+      currencySettingsFromProfile({ home_currency: "EUR" } as Partial<Profile>),
+    ).toEqual({ homeCurrency: "EUR", currencies: defaults.currencies });
   });
 
   it("reads the new columns", () => {
