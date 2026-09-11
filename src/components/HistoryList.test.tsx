@@ -29,13 +29,13 @@ describe("HistoryList", () => {
   afterEach(() => vi.useRealTimers());
 
   it("shows the empty state with no rows", () => {
-    render(<HistoryList rows={[]} onEdit={() => {}} onDelete={() => {}} />);
+    render(<HistoryList currency="USD" rows={[]} onEdit={() => {}} onDelete={() => {}} />);
     expect(screen.getByText(/Nothin' here yet/)).toBeInTheDocument();
   });
 
   it("renders an expense row with a minus and the date", () => {
     render(
-      <HistoryList rows={[tx({ note: "Milk" })]} onEdit={() => {}} onDelete={() => {}} />,
+      <HistoryList currency="USD" rows={[tx({ note: "Milk" })]} onEdit={() => {}} onDelete={() => {}} />,
     );
     expect(screen.getByText("Groceries")).toBeInTheDocument();
     expect(screen.getByText("Milk")).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe("HistoryList", () => {
 
   it("renders an income row with a plus and an LBP marker", () => {
     render(
-      <HistoryList
+      <HistoryList currency="USD"
         rows={[tx({ is_income: true, original_currency: "LBP" })]}
         onEdit={() => {}}
         onDelete={() => {}}
@@ -59,7 +59,7 @@ describe("HistoryList", () => {
     const onEdit = vi.fn();
     const onDelete = vi.fn();
     const row = tx();
-    render(<HistoryList rows={[row]} onEdit={onEdit} onDelete={onDelete} />);
+    render(<HistoryList currency="USD" rows={[row]} onEdit={onEdit} onDelete={onDelete} />);
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(onEdit).toHaveBeenCalledWith(row);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -68,7 +68,7 @@ describe("HistoryList", () => {
 
   it("handles swipe gestures (open both ways, snap back, swallow click)", () => {
     const { container } = render(
-      <HistoryList rows={[tx()]} onEdit={() => {}} onDelete={() => {}} />,
+      <HistoryList currency="USD" rows={[tx()]} onEdit={() => {}} onDelete={() => {}} />,
     );
     const node = getMotionNode(container);
 
@@ -91,5 +91,30 @@ describe("HistoryList", () => {
     // A sub-threshold drag does not mark moved; the click is a no-op at rest.
     act(() => node.__motion.onDrag?.({}, pan(2)));
     fireEvent.click(node);
+  });
+});
+
+describe("HistoryList — other home currencies", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("shows amounts in the home currency and marks entries typed in another", () => {
+    render(
+      <HistoryList
+        currency="EUR"
+        rows={[
+          tx({ id: "a", original_currency: "EUR" }),
+          tx({ id: "b", original_currency: "USD", amountMask: "a8F2" }),
+        ]}
+        onEdit={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+    // A home-currency entry gets no marker; a foreign one names its currency.
+    expect(screen.getByText("-€12.50")).toBeInTheDocument();
+    expect(screen.queryByText(/· EUR/)).not.toBeInTheDocument();
+    expect(screen.getByText(/· USD/)).toBeInTheDocument();
+    // A masked amount still wears the home symbol.
+    expect(screen.getByText("-€a8F2")).toBeInTheDocument();
   });
 });

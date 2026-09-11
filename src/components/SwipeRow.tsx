@@ -7,7 +7,8 @@ import {
 } from "framer-motion";
 import { Pencil, Trash2 } from "lucide-react";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
-import { amountColorClass, formatUsdCents } from "@/lib/money";
+import type { Currency } from "@/lib/currency";
+import { amountColorClass, formatCents, formatMasked } from "@/lib/money";
 import type { Transaction } from "@/types/db";
 
 const ACTION_W = 76; // px revealed per side
@@ -23,14 +24,18 @@ function dateLabel(iso: string): string {
 // A single history entry with swipe-to-reveal edit/delete actions. Shared by
 // the flat HistoryList on Home (light) and the stacked HistoryStack on the
 // full-history page (dark) — `dark` swaps the white card for a charcoal one
-// that reads on the deep-grey "rabbit hole" page.
+// that reads on the deep-grey "rabbit hole" page. `currency` is the home
+// currency the amount is shown in; an entry typed in another currency gets a
+// small marker saying which.
 export function SwipeRow({
   tx,
+  currency,
   onEdit,
   onDelete,
   dark = false,
 }: {
   tx: Transaction;
+  currency: Currency;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
   dark?: boolean;
@@ -157,14 +162,14 @@ export function SwipeRow({
           )}
           <p className={`text-xs ${tone.meta}`}>
             {dateLabel(tx.occurred_at)}
-            {tx.original_currency === "LBP" && " · LBP"}
+            {tx.original_currency !== currency && ` · ${tx.original_currency}`}
           </p>
         </div>
         <span className={`font-numeric font-medium tabular-nums ${amountColorClass(tx.is_income)}`}>
           {tx.is_income ? "+" : "-"}
           {tx.amountMask != null
-            ? `$${tx.amountMask}`
-            : formatUsdCents(tx.amount_usd_cents)}
+            ? formatMasked(tx.amountMask, currency)
+            : formatCents(tx.amount_usd_cents, currency)}
         </span>
       </motion.div>
     </div>

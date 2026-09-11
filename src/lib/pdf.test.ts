@@ -30,7 +30,11 @@ function tx(overrides: Partial<Transaction> = {}): Transaction {
 const asText = (bytes: Uint8Array) =>
   Array.from(bytes, (b) => String.fromCharCode(b)).join("");
 
-const meta = { title: "BucksBuddy", rangeLabel: "Last month · August 2026" };
+const meta = {
+  title: "BucksBuddy",
+  rangeLabel: "Last month · August 2026",
+  currency: "USD" as const,
+};
 
 describe("textWidth", () => {
   it("measures ASCII from the Helvetica tables", () => {
@@ -170,7 +174,7 @@ describe("transactionsToPdf", () => {
 
   it("draws the title, the range and the generation date on the page", () => {
     const text = asText(
-      transactionsToPdf([tx()], { title: "Ledger", rangeLabel: "Last month" }, NOW),
+      transactionsToPdf([tx()], { title: "Ledger", rangeLabel: "Last month", currency: "USD" }, NOW),
     );
     // Must be DRAWN, not merely present in the Info dictionary — assert on a
     // text-showing operator, which only the masthead emits.
@@ -345,7 +349,7 @@ describe("transactionsToPdf", () => {
   it("never lets a character above 0xFF reach the byte writer", () => {
     const bytes = transactionsToPdf(
       [tx({ note: "emoji 🥕 arabic مرحبا cjk 漢字 curly ’", category: "health/pharmacy" })],
-      { title: "Bücks🥕Buddy", rangeLabel: "Past 3 months · 漢字" },
+      { title: "Bücks🥕Buddy", rangeLabel: "Past 3 months · 漢字", currency: "USD" },
       NOW,
     );
     expect(bytes.every((b) => b <= 0xff)).toBe(true);
@@ -381,5 +385,22 @@ describe("transactionsToPdf", () => {
 
   it("defaults to the real current date", () => {
     expect(asText(transactionsToPdf([tx()], meta))).toContain("/CreationDate");
+  });
+});
+
+describe("transactionsToPdf — home currency", () => {
+  it("heads the normalized column with the home currency and formats in it", () => {
+    const text = asText(transactionsToPdf([tx()], { ...meta, currency: "EUR" }, NOW));
+    expect(text).toContain("(EUR) Tj");
+    expect(text).not.toContain("(USD) Tj");
+    // "€" is WinAnsi 0x80, so the symbol survives into the row and the totals.
+    expect(text).toContain("(-\x8012.50) Tj");
+    expect(text).toContain("(\x8012.50) Tj"); // the Out total
+  });
+
+  it("spells a currency by its code when the font can't draw its symbol", () => {
+    const text = asText(transactionsToPdf([tx()], { ...meta, currency: "TRY" }, NOW));
+    expect(text).toContain("(-TRY 12.50) Tj");
+    expect(text).not.toContain("?12.50");
   });
 });

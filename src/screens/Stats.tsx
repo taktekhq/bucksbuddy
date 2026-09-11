@@ -9,7 +9,8 @@ import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
-import { formatUsdCents } from "@/lib/money";
+import { formatCents } from "@/lib/money";
+import type { Currency } from "@/lib/currency";
 import {
   dailySpendSeries,
   monthInsights,
@@ -146,10 +147,12 @@ function runwayLabel(days: number): string {
 // to that month. The bar for the month currently on screen wears the carrot.
 function MonthlyBars({
   months,
+  currency,
   selectedOffset,
   onSelect,
 }: {
   months: MonthSpend[];
+  currency: Currency;
   selectedOffset: number;
   onSelect: (offset: number) => void;
 }) {
@@ -163,7 +166,7 @@ function MonthlyBars({
             key={m.monthKey}
             type="button"
             onClick={() => onSelect(m.offset)}
-            aria-label={`${m.label}: ${formatUsdCents(m.totalCents)}`}
+            aria-label={`${m.label}: ${formatCents(m.totalCents, currency)}`}
             className="press flex flex-1 flex-col items-center gap-1.5"
           >
             <div className="flex h-24 w-full items-end">
@@ -193,7 +196,7 @@ function MonthlyBars({
 // The signed-in half. Lives in its own component so the top-level Stats never
 // touches useStore() — signed-out renders have no StoreProvider above them.
 function PersonalStats() {
-  const { transactions, locked, safeTotalCents } = useStore();
+  const { transactions, locked, safeTotalCents, homeCurrency } = useStore();
 
   // Which month is on screen: 0 = this month, -1 = last month, … You can page
   // back as long as there's older data and forward only up to the present.
@@ -247,10 +250,10 @@ function PersonalStats() {
       label: categoryLabel(c.category),
       icon: categoryIcon(c.category),
       color: categoryColor(c.category),
-      value: formatUsdCents(c.totalCents),
+      value: formatCents(c.totalCents, homeCurrency),
       fraction: c.totalCents / top,
     }));
-  }, [cats]);
+  }, [cats, homeCurrency]);
 
   // While locked, money values are masked zeros — every stat would be a lie,
   // so the page keeps its shape but wears the cipher: no graphs, and real
@@ -351,10 +354,10 @@ function PersonalStats() {
             {isCurrentMonth ? "Spent this month" : "Spent"}
           </p>
           <p className="mt-1 font-numeric text-4xl font-bold tabular-nums">
-            {formatUsdCents(facts.spentCents)}
+            {formatCents(facts.spentCents, homeCurrency)}
           </p>
           <p className="mt-0.5 text-sm text-white/55">
-            ≈ {formatUsdCents(facts.avgPerDayCents)} a day
+            ≈ {formatCents(facts.avgPerDayCents, homeCurrency)} a day
           </p>
           <p className="mt-auto text-right text-[11px] uppercase tracking-wide text-white/45">
             spent per day · {isCurrentMonth ? "last 30 days" : monthLabel(anchor)}
@@ -370,6 +373,7 @@ function PersonalStats() {
           <Caption>Spending by month</Caption>
           <div className="rounded-card bg-white/10 p-4">
             <MonthlyBars
+              currency={homeCurrency}
               months={monthly}
               selectedOffset={monthOffset}
               onSelect={(o) => setMonthOffset(o)}
@@ -378,12 +382,12 @@ function PersonalStats() {
           <div className="grid grid-cols-2 gap-2">
             <Fact
               caption="Per month"
-              value={avgMonthCents > 0 ? formatUsdCents(avgMonthCents) : EMPTY}
+              value={avgMonthCents > 0 ? formatCents(avgMonthCents, homeCurrency) : EMPTY}
               sub={avgMonthCents > 0 ? "typical month" : undefined}
             />
             <Fact
               caption="Last month"
-              value={lastMonthCents > 0 ? formatUsdCents(lastMonthCents) : EMPTY}
+              value={lastMonthCents > 0 ? formatCents(lastMonthCents, homeCurrency) : EMPTY}
               onClick={lastMonthCents > 0 ? () => setMonthOffset(-1) : undefined}
             />
           </div>
@@ -410,7 +414,7 @@ function PersonalStats() {
             caption="Biggest splurge"
             value={
               facts.biggestExpense
-                ? formatUsdCents(facts.biggestExpense.amount_usd_cents)
+                ? formatCents(facts.biggestExpense.amount_usd_cents, homeCurrency)
                 : EMPTY
             }
             sub={
@@ -426,7 +430,7 @@ function PersonalStats() {
             value={facts.busiestDay ? count(facts.busiestDay.count, "entry", "entries") : EMPTY}
             sub={
               facts.busiestDay
-                ? `${dayLabel(facts.busiestDay.date)} · ${formatUsdCents(facts.busiestDay.totalCents)}`
+                ? `${dayLabel(facts.busiestDay.date)} · ${formatCents(facts.busiestDay.totalCents, homeCurrency)}`
                 : undefined
             }
           />
@@ -442,14 +446,14 @@ function PersonalStats() {
             caption="On pace for"
             value={
               isCurrentMonth && facts.forecastCents > 0
-                ? formatUsdCents(facts.forecastCents)
+                ? formatCents(facts.forecastCents, homeCurrency)
                 : EMPTY
             }
             sub={isCurrentMonth && facts.forecastCents > 0 ? "by month's end" : undefined}
           />
           <Fact
             caption="Treat yourself"
-            value={facts.treatCents > 0 ? formatUsdCents(facts.treatCents) : EMPTY}
+            value={facts.treatCents > 0 ? formatCents(facts.treatCents, homeCurrency) : EMPTY}
             // Only tappable when there are receipts behind it — and only for the
             // current month, since the receipts pages always list this month.
             onClick={
@@ -460,7 +464,7 @@ function PersonalStats() {
           />
           <Fact
             caption="Weekend Spend"
-            value={facts.weekendCents > 0 ? formatUsdCents(facts.weekendCents) : EMPTY}
+            value={facts.weekendCents > 0 ? formatCents(facts.weekendCents, homeCurrency) : EMPTY}
             onClick={
               isCurrentMonth && facts.weekendCents > 0
                 ? () => navigate("/stats/weekend")
@@ -482,8 +486,8 @@ function PersonalStats() {
                 <div className="h-full flex-1" style={{ backgroundColor: "#FF3B30" }} />
               </div>
               <div className="mt-1.5 flex justify-between font-numeric text-xs font-semibold tabular-nums">
-                <span className="text-income">+{formatUsdCents(facts.incomeCents)}</span>
-                <span className="text-expense">-{formatUsdCents(facts.spentCents)}</span>
+                <span className="text-income">+{formatCents(facts.incomeCents, homeCurrency)}</span>
+                <span className="text-expense">-{formatCents(facts.spentCents, homeCurrency)}</span>
               </div>
             </div>
           )}

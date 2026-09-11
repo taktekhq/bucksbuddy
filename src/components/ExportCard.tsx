@@ -56,7 +56,7 @@ async function deliverFile(blob: Blob, filename: string): Promise<boolean> {
 // comes from the decrypted rows already in memory (the database only holds
 // ciphertext), so there's no query and nothing to await.
 export function ExportCard() {
-  const { transactions, locked } = useStore();
+  const { transactions, locked, homeCurrency } = useStore();
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState<ExportRangeId>(DEFAULT_EXPORT_RANGE);
 
@@ -80,12 +80,18 @@ export function ExportCard() {
     const picked = filterByExportRange(transactions, range, now);
     const blob =
       format === "csv"
-        ? new Blob([transactionsToCsv(picked)], { type: "text/csv;charset=utf-8" })
+        ? new Blob([transactionsToCsv(picked, homeCurrency)], {
+            type: "text/csv;charset=utf-8",
+          })
         : new Blob(
             [
               transactionsToPdf(
                 picked,
-                { title: "BucksBuddy", rangeLabel: exportRangeLabel(range, now) },
+                {
+                  title: "BucksBuddy",
+                  rangeLabel: exportRangeLabel(range, now),
+                  currency: homeCurrency,
+                },
                 now,
               ),
             ],

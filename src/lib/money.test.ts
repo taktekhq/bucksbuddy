@@ -1,25 +1,61 @@
 import { describe, it, expect } from "vitest";
 import {
   amountColorClass,
-  formatSignedUsdCents,
-  formatUsdCents,
+  formatCents,
+  formatMasked,
+  formatSignedCents,
   netCents,
   netColorClass,
+  symbolPrefix,
 } from "@/lib/money";
 
-describe("formatUsdCents", () => {
-  it("formats cents as USD with no sign", () => {
-    expect(formatUsdCents(1250)).toBe("$12.50");
-    expect(formatUsdCents(-1250)).toBe("$12.50"); // abs value
-    expect(formatUsdCents(0)).toBe("$0.00");
+describe("formatCents", () => {
+  it("formats home cents with the currency's symbol and no sign", () => {
+    expect(formatCents(1250, "USD")).toBe("$12.50");
+    expect(formatCents(-1250, "USD")).toBe("$12.50"); // abs value
+    expect(formatCents(0, "USD")).toBe("$0.00");
+    expect(formatCents(1250, "EUR")).toBe("€12.50");
+  });
+
+  it("spaces a lettered symbol and follows the currency's decimals", () => {
+    expect(formatCents(8950000, "LBP")).toBe("LL 89,500");
+    expect(formatCents(1250, "CHF")).toBe("CHF 12.50");
+    expect(formatCents(1250, "KWD")).toBe("KWD 12.500");
+    expect(formatCents(1250, "CAD")).toBe("CA$12.50");
+  });
+
+  it("can spell the currency by code instead of symbol", () => {
+    expect(formatCents(1250, "USD", "code")).toBe("USD 12.50");
+    expect(formatCents(1250, "TRY", "code")).toBe("TRY 12.50");
+  });
+
+  it("uses the code as the symbol for a currency it doesn't know", () => {
+    expect(formatCents(1250, "XXX")).toBe("XXX 12.50");
   });
 });
 
-describe("formatSignedUsdCents", () => {
+describe("formatSignedCents", () => {
   it("prefixes a minus for negatives only", () => {
-    expect(formatSignedUsdCents(8750)).toBe("$87.50");
-    expect(formatSignedUsdCents(-1250)).toBe("-$12.50");
-    expect(formatSignedUsdCents(0)).toBe("$0.00");
+    expect(formatSignedCents(8750, "USD")).toBe("$87.50");
+    expect(formatSignedCents(-1250, "USD")).toBe("-$12.50");
+    expect(formatSignedCents(0, "USD")).toBe("$0.00");
+    expect(formatSignedCents(-1250, "EUR")).toBe("-€12.50");
+    expect(formatSignedCents(-1250, "USD", "code")).toBe("-USD 12.50");
+  });
+});
+
+describe("symbolPrefix", () => {
+  it("is the bare symbol, spaced when it's letters", () => {
+    expect(symbolPrefix("USD")).toBe("$");
+    expect(symbolPrefix("EUR")).toBe("€");
+    expect(symbolPrefix("LBP")).toBe("LL ");
+  });
+});
+
+describe("formatMasked", () => {
+  it("puts the symbol in front of the obscured stand-in", () => {
+    expect(formatMasked("•••••", "USD")).toBe("$•••••");
+    expect(formatMasked("a8F2", "LBP")).toBe("LL a8F2");
   });
 });
 

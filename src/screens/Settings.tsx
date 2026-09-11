@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { ExportCard } from "@/components/ExportCard";
 import { InstallHint } from "@/components/InstallHint";
-import { RateEditor } from "@/components/RateEditor";
+import { CurrencySettings } from "@/components/CurrencySettings";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { supabase } from "@/lib/supabase";
 import { navigate } from "@/lib/router";
@@ -64,10 +64,10 @@ export function Settings() {
       {/* PRIVACY / ENCRYPTION */}
       <EncryptionCard />
 
-      {/* EXCHANGE RATE */}
+      {/* CURRENCIES */}
       <section className="flex flex-col gap-2">
-        <SectionHeader>Exchange rate</SectionHeader>
-        <RateEditor />
+        <SectionHeader>Currencies</SectionHeader>
+        <CurrencySettings />
       </section>
 
       {/* DATA */}

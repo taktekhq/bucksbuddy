@@ -312,3 +312,105 @@ describe("Safe", () => {
     ).toBeDisabled();
   });
 });
+
+describe("Safe — other home currencies", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchGoldUsdPerGram.mockResolvedValue(null);
+  });
+
+  it("shows cash in the home currency and converts the USD gold price", async () => {
+    fetchGoldUsdPerGram.mockResolvedValue(100); // $100 / gram
+    storeValue = makeStoreValue({
+      homeCurrency: "EUR",
+      currencies: [{ code: "USD", rate: 1.25 }], // 1.25 USD per €1
+      safeTotalCents: 5000,
+      safeGoldGrams: 2,
+    });
+    render(<Safe />);
+    expect(screen.getByText("€50.00")).toBeInTheDocument();
+    // 2 g × $100 = $200 = €160 at 1.25 USD per €1; $100/g = €80/g.
+    expect(await screen.findByText(/≈ €160\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/€80\.00\/g \(live\)/)).toBeInTheDocument();
+  });
+
+  it("can't price gold without a USD rate, and says so", async () => {
+    fetchGoldUsdPerGram.mockResolvedValue(100);
+    storeValue = makeStoreValue({ homeCurrency: "EUR", currencies: [], safeGoldGrams: 2 });
+    render(<Safe />);
+    expect(
+      await screen.findByText(/add USD in Settings to see a live value/),
+    ).toBeInTheDocument();
+    // Typing grams gives no estimate either.
+    await userEvent.click(screen.getByRole("button", { name: /Gold/ }));
+    await userEvent.type(screen.getByLabelText("Grams"), "1");
+    expect(screen.queryByText(/at the live price/)).not.toBeInTheDocument();
+  });
+
+  it("converts cash typed in a secondary currency at its rate", async () => {
+    storeValue = makeStoreValue({
+      homeCurrency: "EUR",
+      currencies: [{ code: "USD", rate: 1.25 }],
+    });
+    render(<Safe />);
+    expect(screen.getByText("€")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Switch currency" }));
+    expect(screen.getByText("$")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Amount"), "12.5");
+    expect(screen.getByText("≈ €10.00")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Add 12\.5 USD to safe/ }));
+    expect(storeValue.addTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount_usd_cents: 1000,
+        original_currency: "USD",
+        original_amount: 12.5,
+        rate_used: 1.25,
+      }),
+    );
+  });
+
+  it("has nothing to switch to with only the home currency set up", () => {
+    storeValue = makeStoreValue({ currencies: [] });
+    render(<Safe />);
+    expect(screen.queryByRole("button", { name: "Switch currency" })).not.toBeInTheDocument();
+    expect(screen.getByText("USD")).toBeInTheDocument();
+  });
+
+  it("folds a pick that Settings no longer offers back to home", async () => {
+    storeValue = makeStoreValue({ currencies: [{ code: "LBP", rate: 89500 }] });
+    const { rerender } = render(<Safe />);
+    await userEvent.click(screen.getByRole("button", { name: "Switch currency" }));
+    expect(screen.getByText("LL")).toBeInTheDocument();
+    // LBP disappears from Settings underneath the open composer.
+    storeValue = makeStoreValue({ currencies: [] });
+    rerender(<Safe />);
+    expect(screen.getByText("$")).toBeInTheDocument();
+    expect(screen.getByText("USD")).toBeInTheDocument();
+  });
+
+  it("marks cash moves typed in a currency other than home", () => {
+    storeValue = makeStoreValue({
+      homeCurrency: "EUR",
+      currencies: [{ code: "USD", rate: 1.25 }],
+      transactions: [
+        cashTx({ id: "a", original_currency: "USD" }),
+        cashTx({ id: "b", original_currency: "EUR", note: null }),
+      ],
+    });
+    render(<Safe />);
+    expect(screen.getByText(/· USD/)).toBeInTheDocument();
+    expect(screen.queryByText(/· EUR/)).not.toBeInTheDocument();
+  });
+
+  it("obscures amounts behind the home currency's symbol while locked", () => {
+    storeValue = makeStoreValue({
+      homeCurrency: "LBP",
+      currencies: [],
+      locked: true,
+      transactions: [cashTx({ amountMask: "ab12" })],
+    });
+    render(<Safe />);
+    expect(screen.getByText("LL •••••")).toBeInTheDocument();
+    expect(screen.getByText("+LL ab12")).toBeInTheDocument();
+  });
+});

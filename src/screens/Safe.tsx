@@ -14,14 +14,19 @@ import posthog from "@/lib/posthog";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
-import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
-import { formatSignedUsdCents, formatUsdCents } from "@/lib/money";
+import {
+  currencySymbol,
+  parseAmountString,
+  rateFor,
+  toHomeCents,
+  type Currency,
+  type CurrencyRate,
+} from "@/lib/currency";
+import { formatCents, formatMasked, formatSignedCents } from "@/lib/money";
 import { fetchGoldUsdPerGram, formatGrams } from "@/lib/gold";
 import type { SafeGoldEntry, Transaction } from "@/types/db";
 
 type Asset = "cash" | "gold";
-
-const SYMBOL: Record<Currency, string> = { USD: "$", LBP: "LL" };
 
 // The Safe lives in its own dark "vault" world — a deliberately different
 // mentality from the bright daily tracker. The gradient is painted on the
@@ -92,7 +97,7 @@ type Move = {
   note: string | null;
   cents?: number;
   grams?: number;
-  isLbp?: boolean;
+  foreign?: Currency; // set when the cash was typed in a non-home currency
   mask?: string; // obscured stand-in shown while locked
   onDelete: () => void | Promise<void>;
 };
@@ -107,13 +112,14 @@ export function Safe() {
     safeGoldEntries,
     addSafeGoldEntry,
     deleteSafeGoldEntry,
-    lbpPerUsd,
+    homeCurrency,
+    currencies,
     locked,
   } = useStore();
 
   const [asset, setAsset] = useState<Asset>("cash");
   const [isDeposit, setIsDeposit] = useState(true);
-  const [currency, setCurrency] = useState<Currency>("USD");
+  const [currency, setCurrency] = useState<Currency>(homeCurrency);
   const [display, setDisplay] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -135,10 +141,21 @@ export function Safe() {
     };
   }, []);
 
-  // Paint the entire page the vault color while this screen is mounted.
+  // The live price is quoted in USD; it only reads in the user's money when
+  // USD is home or is set up as a secondary currency with a rate.
+  const usdPerHome = rateFor("USD", homeCurrency, currencies);
+  const goldPerGramHome =
+    goldPerGram != null && usdPerHome != null ? goldPerGram / usdPerHome : null;
+
+  // The currencies on offer for cash: home first (rate 1), then the
+  // secondaries from Settings. A stale pick folds back to home.
+  const choices: CurrencyRate[] = [{ code: homeCurrency, rate: 1 }, ...currencies];
+  const selected = choices.find((c) => c.code === currency) ?? choices[0];
+  const isHome = selected.code === homeCurrency;
+
   const isGold = asset === "gold";
   const amount = parseAmountString(display);
-  const usdCents = toUsdCents(amount, currency, lbpPerUsd);
+  const cents = toHomeCents(amount, selected.rate);
   const grams = parseGrams(display);
   const canSave = (isGold ? grams > 0 : amount > 0) && !saving && !locked;
 
@@ -146,6 +163,11 @@ export function Safe() {
     setAsset(next);
     setDisplay("");
     setError(null);
+  }
+
+  function cycleCurrency() {
+    const i = choices.findIndex((c) => c.code === selected.code);
+    setCurrency(choices[(i + 1) % choices.length].code);
   }
 
   async function save() {
@@ -165,10 +187,10 @@ export function Safe() {
           // Taking it back comes in → income (In).
           is_income: !isDeposit,
           category: SAFE_CATEGORY_ID,
-          amount_usd_cents: usdCents,
-          original_currency: currency,
+          amount_usd_cents: cents,
+          original_currency: selected.code,
           original_amount: amount,
-          rate_used: lbpPerUsd,
+          rate_used: selected.rate,
           note: noteValue,
         });
 
@@ -181,7 +203,7 @@ export function Safe() {
       posthog.capture(isDeposit ? "safe_gold_deposited" : "safe_gold_withdrawn");
     } else {
       posthog.capture(isDeposit ? "safe_cash_deposited" : "safe_cash_withdrawn", {
-        currency,
+        currency: selected.code,
       });
     }
     setDisplay("");
@@ -202,7 +224,7 @@ export function Safe() {
       occurredAt: t.occurred_at,
       note: t.note,
       cents: t.amount_usd_cents,
-      isLbp: t.original_currency === "LBP",
+      foreign: t.original_currency === homeCurrency ? undefined : t.original_currency,
       mask: t.amountMask,
       onDelete: () => confirmDelete(() => deleteTransaction(t.id)),
     }));
@@ -221,18 +243,16 @@ export function Safe() {
       new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
   );
 
-  const goldValueCents =
-    goldPerGram != null ? Math.round(safeGoldGrams * goldPerGram * 100) : null;
   const enteredGoldValueCents =
-    goldPerGram != null && grams > 0
-      ? Math.round(grams * goldPerGram * 100)
+    goldPerGramHome != null && grams > 0
+      ? Math.round(grams * goldPerGramHome * 100)
       : null;
 
   const amountLabel = isGold
     ? formatGrams(grams)
-    : currency === "USD"
-      ? formatUsdCents(usdCents)
-      : `${groupInt(display)} LBP`;
+    : isHome
+      ? formatCents(cents, homeCurrency)
+      : `${groupInt(display)} ${selected.code}`;
   const cta = locked
     ? "Unlock in Settings to move money"
     : saving
@@ -292,7 +312,9 @@ export function Safe() {
             className="font-numeric text-4xl font-bold tabular-nums"
             style={{ color: safeTotalCents < 0 ? "#FF8A8A" : MINT }}
           >
-            {locked ? "$•••••" : formatSignedUsdCents(safeTotalCents)}
+            {locked
+              ? formatMasked("•••••", homeCurrency)
+              : formatSignedCents(safeTotalCents, homeCurrency)}
           </p>
 
           <div className="mt-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-white/45">
@@ -308,14 +330,14 @@ export function Safe() {
             <p className="mt-0.5 text-xs text-white/30">
               Locked — unlock in Settings to see the safe.
             </p>
-          ) : goldValueCents != null ? (
+          ) : goldPerGramHome != null ? (
             <p className="mt-0.5 text-xs text-white/45">
-              ≈ {formatUsdCents(goldValueCents)} ·{" "}
-              {/* goldValueCents != null implies goldPerGram != null; the `?? 0`
-                  is defensive for the type-checker only. */}
-              {/* v8 ignore start */}
-              {formatUsdCents(Math.round((goldPerGram ?? 0) * 100))}/g (live)
-              {/* v8 ignore stop */}
+              ≈ {formatCents(Math.round(safeGoldGrams * goldPerGramHome * 100), homeCurrency)}{" "}
+              · {formatCents(Math.round(goldPerGramHome * 100), homeCurrency)}/g (live)
+            </p>
+          ) : usdPerHome == null ? (
+            <p className="mt-0.5 text-xs text-white/30">
+              Tracked in grams — add USD in Settings to see a live value.
             </p>
           ) : (
             <p className="mt-0.5 text-xs text-white/30">
@@ -395,7 +417,7 @@ export function Safe() {
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-base font-bold"
               style={{ color: isGold ? GOLD : MINT }}
             >
-              {isGold ? "g" : SYMBOL[currency]}
+              {isGold ? "g" : currencySymbol(selected.code)}
             </span>
             <input
               inputMode="decimal"
@@ -411,25 +433,29 @@ export function Safe() {
             />
             {isGold ? (
               <span className="shrink-0 px-2 py-1 text-sm font-bold text-white/60">grams</span>
-            ) : (
+            ) : choices.length > 1 ? (
               <button
                 type="button"
-                onClick={() => setCurrency((c) => (c === "USD" ? "LBP" : "USD"))}
+                onClick={cycleCurrency}
                 aria-label="Switch currency"
                 className="press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-white/70 active:bg-white/10"
               >
-                {currency}
+                {selected.code}
               </button>
+            ) : (
+              <span className="shrink-0 px-2 py-1 text-sm font-bold text-white/60">
+                {selected.code}
+              </span>
             )}
           </div>
           {isGold && enteredGoldValueCents != null && (
             <p className="-mt-1 px-1 text-xs text-white/45">
-              ≈ {formatUsdCents(enteredGoldValueCents)} at the live price
+              ≈ {formatCents(enteredGoldValueCents, homeCurrency)} at the live price
             </p>
           )}
-          {!isGold && currency === "LBP" && amount > 0 && (
+          {!isGold && !isHome && amount > 0 && (
             <p className="-mt-1 px-1 text-xs text-white/45">
-              ≈ {formatUsdCents(usdCents)}
+              ≈ {formatCents(cents, homeCurrency)}
             </p>
           )}
 
@@ -488,10 +514,10 @@ export function Safe() {
               // While locked, `mask` holds an obscured stand-in instead.
               const right =
                 m.mask != null
-                  ? `${sign}${m.kind === "gold" ? m.mask : `$${m.mask}`}`
+                  ? `${sign}${m.kind === "gold" ? m.mask : formatMasked(m.mask, homeCurrency)}`
                   : m.kind === "gold"
                     ? `${sign}${formatGrams(m.grams!)}`
-                    : `${sign}${formatUsdCents(m.cents!)}`;
+                    : `${sign}${formatCents(m.cents!, homeCurrency)}`;
               const Icon =
                 m.kind === "gold"
                   ? Coins
@@ -521,7 +547,7 @@ export function Safe() {
                       )}
                       <p className="text-xs text-white/50">
                         {dateLabel(m.occurredAt)}
-                        {m.kind === "cash" && m.isLbp && " · LBP"}
+                        {m.kind === "cash" && m.foreign && ` · ${m.foreign}`}
                       </p>
                     </div>
                     <span

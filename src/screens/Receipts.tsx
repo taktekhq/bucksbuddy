@@ -5,7 +5,7 @@ import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { monthLabel } from "@/lib/dates";
-import { formatUsdCents } from "@/lib/money";
+import { formatCents } from "@/lib/money";
 import { treatTransactions, weekendTransactions } from "@/lib/stats";
 
 // The receipts behind a tappable fun-fact chip: a read-only page listing this
@@ -33,7 +33,7 @@ function shortDate(iso: string): string {
 }
 
 export function Receipts({ kind }: { kind: "treats" | "weekend" }) {
-  const { transactions, locked } = useStore();
+  const { transactions, locked, homeCurrency } = useStore();
 
   // Tint the status bar to match the top of the page.
   useThemeColor("#23234A");
@@ -100,7 +100,7 @@ export function Receipts({ kind }: { kind: "treats" | "weekend" }) {
                 {monthLabel()}
               </p>
               <p className="font-numeric text-xl font-bold tabular-nums">
-                {formatUsdCents(totalCents)}
+                {formatCents(totalCents, homeCurrency)}
               </p>
             </div>
             <p className="text-xs text-white/55">{count(rows.length, "entry", "entries")}</p>
@@ -137,7 +137,7 @@ export function Receipts({ kind }: { kind: "treats" | "weekend" }) {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="font-numeric text-sm font-bold tabular-nums">
-                          {formatUsdCents(tx.amount_usd_cents)}
+                          {formatCents(tx.amount_usd_cents, homeCurrency)}
                         </p>
                         <p className="text-xs text-white/45">{shortDate(tx.occurred_at)}</p>
                       </div>

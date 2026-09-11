@@ -26,7 +26,7 @@ const RABBIT_HOLE_BG =
 const RABBIT_HOLE_FLOOR = "#1C1C1E";
 
 export function History() {
-  const { transactions, deleteTransaction } = useStore();
+  const { transactions, deleteTransaction, homeCurrency } = useStore();
   const [grouping, setGrouping] = useHistoryGrouping();
   const days = useMemo(() => groupByDay(transactions), [transactions]);
 
@@ -132,6 +132,7 @@ export function History() {
           {grouping === "timeline" ? (
             <HistoryTimeline
               days={days}
+              currency={homeCurrency}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />
@@ -154,6 +155,7 @@ export function History() {
                     <li key={g.key}>
                       <HistoryStack
                         group={g}
+                        currency={homeCurrency}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                       />

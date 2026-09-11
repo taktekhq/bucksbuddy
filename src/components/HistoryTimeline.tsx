@@ -1,5 +1,6 @@
 import { HistoryStack } from "@/components/HistoryStack";
-import { formatSignedUsdCents, netColorClass } from "@/lib/money";
+import type { Currency } from "@/lib/currency";
+import { formatSignedCents, netColorClass } from "@/lib/money";
 import type { TimelineDay } from "@/lib/history";
 import type { Transaction } from "@/types/db";
 
@@ -9,10 +10,12 @@ import type { Transaction } from "@/types/db";
 // entry is just a row. This is the "did I log everything yesterday?" view.
 export function HistoryTimeline({
   days,
+  currency,
   onEdit,
   onDelete,
 }: {
   days: TimelineDay[];
+  currency: Currency;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
 }) {
@@ -29,13 +32,18 @@ export function HistoryTimeline({
                 day.totalCents === 0 ? "text-white/55" : netColorClass(day.totalCents)
               }`}
             >
-              {day.masked ? "••••" : formatSignedUsdCents(day.totalCents)}
+              {day.masked ? "••••" : formatSignedCents(day.totalCents, currency)}
             </span>
           </header>
           <ul className="flex flex-col gap-1.5">
             {day.groups.map((g, i) => (
               <li key={`${day.key}:${i}`}>
-                <HistoryStack group={g} onEdit={onEdit} onDelete={onDelete} />
+                <HistoryStack
+                  group={g}
+                  currency={currency}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                />
               </li>
             ))}
           </ul>

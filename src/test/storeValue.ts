@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { DEFAULT_LBP_PER_USD } from "@/lib/currency";
+import { DEFAULT_CURRENCIES, DEFAULT_HOME_CURRENCY } from "@/lib/currency";
 
 // A complete, overridable Store value for components that call useStore().
 // Mutating methods default to resolving with no error.
@@ -7,13 +7,15 @@ export function makeStoreValue(overrides: Record<string, unknown> = {}) {
   return {
     loading: false,
     transactions: [],
-    lbpPerUsd: DEFAULT_LBP_PER_USD,
+    homeCurrency: DEFAULT_HOME_CURRENCY,
+    currencies: [...DEFAULT_CURRENCIES],
     balanceCents: 0,
     monthlyNetCents: 0,
     addTransaction: vi.fn(async () => ({ error: null })),
     updateTransaction: vi.fn(async () => ({ error: null })),
     deleteTransaction: vi.fn(async () => ({ error: null })),
-    setRate: vi.fn(async () => ({ error: null })),
+    setHomeCurrency: vi.fn(async () => ({ error: null })),
+    setCurrencies: vi.fn(async () => ({ error: null })),
     e2eMode: "default",
     locked: false,
     passphrase: null,

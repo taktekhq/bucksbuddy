@@ -39,7 +39,7 @@ function day(overrides: Partial<TimelineDay>): TimelineDay {
 describe("HistoryTimeline", () => {
   it("colors a non-zero, unmasked day's signed total", () => {
     render(
-      <HistoryTimeline
+      <HistoryTimeline currency="USD"
         days={[day({ key: "spent", totalCents: -9900, masked: false })]}
         onEdit={() => {}}
         onDelete={() => {}}
@@ -51,7 +51,7 @@ describe("HistoryTimeline", () => {
 
   it("renders an even day's zero total in the muted label color", () => {
     render(
-      <HistoryTimeline
+      <HistoryTimeline currency="USD"
         days={[day({ key: "even", totalCents: 0, masked: false })]}
         onEdit={() => {}}
         onDelete={() => {}}
@@ -62,7 +62,7 @@ describe("HistoryTimeline", () => {
 
   it("masks the day total when any entry is obscured", () => {
     render(
-      <HistoryTimeline
+      <HistoryTimeline currency="USD"
         days={[day({ key: "locked", totalCents: 1250, masked: true })]}
         onEdit={() => {}}
         onDelete={() => {}}

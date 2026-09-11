@@ -3,14 +3,19 @@ import { ChevronRight, StickyNote, Tag } from "lucide-react";
 import { CategorySheet } from "@/components/ui/CategorySheet";
 import { useStore } from "@/lib/store";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
-import { type Currency, parseAmountString, toUsdCents } from "@/lib/currency";
-import { formatUsdCents } from "@/lib/money";
+import {
+  currencySymbol,
+  parseAmountString,
+  toHomeCents,
+  type Currency,
+  type CurrencyRate,
+} from "@/lib/currency";
+import { formatCents } from "@/lib/money";
 import posthog from "@/lib/posthog";
 import type { Transaction } from "@/types/db";
 
 const INCOME_COLOR = "#34C759";
 const EXPENSE_COLOR = "#FF3B30";
-const SYMBOL: Record<Currency, string> = { USD: "$", LBP: "LL" };
 
 // Keep the typed string clean: digits, a single dot, max two decimals.
 function sanitizeAmount(raw: string): string {
@@ -35,16 +40,19 @@ export function AddComposer({
   editing: Transaction | null;
   onClearEdit: () => void;
 }) {
-  const { lbpPerUsd, addTransaction, updateTransaction } = useStore();
+  const { homeCurrency, currencies, addTransaction, updateTransaction } = useStore();
   const [isIncome, setIsIncome] = useState(false);
   const [category, setCategory] = useState<string | null>(null);
-  const [currency, setCurrency] = useState<Currency>("USD");
+  const [currency, setCurrency] = useState<Currency>(homeCurrency);
   const [display, setDisplay] = useState("");
   const [note, setNote] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Only `editing` drives this reset: the home currency is read at that
+  // moment, not watched, so a settings refresh landing mid-typing can't wipe
+  // the form. (A stale pick is folded back to home by `selected` below.)
   useEffect(() => {
     if (editing) {
       setIsIncome(editing.is_income);
@@ -56,7 +64,7 @@ export function AddComposer({
     } else {
       setIsIncome(false);
       setCategory(null);
-      setCurrency("USD");
+      setCurrency(homeCurrency);
       setDisplay("");
       setNote("");
       setError(null);
@@ -64,9 +72,25 @@ export function AddComposer({
     setSheetOpen(false);
   }, [editing]);
 
+  // The currencies on offer: home first (rate 1), then the secondaries from
+  // Settings. Editing an entry typed in a currency that has since been removed
+  // keeps that currency available, at the rate the entry was saved with, so
+  // the edit doesn't silently change what was typed.
+  const choices: CurrencyRate[] = [{ code: homeCurrency, rate: 1 }, ...currencies];
+  if (editing && !choices.some((c) => c.code === editing.original_currency)) {
+    choices.push({ code: editing.original_currency, rate: editing.rate_used });
+  }
+  const selected = choices.find((c) => c.code === currency) ?? choices[0];
+  const isHome = selected.code === homeCurrency;
+
   const amount = parseAmountString(display);
-  const usdCents = toUsdCents(amount, currency, lbpPerUsd);
+  const cents = toHomeCents(amount, selected.rate);
   const canSave = category !== null && amount > 0 && !saving;
+
+  function cycleCurrency() {
+    const i = choices.findIndex((c) => c.code === selected.code);
+    setCurrency(choices[(i + 1) % choices.length].code);
+  }
 
   function changeDirection(next: boolean) {
     setIsIncome(next);
@@ -91,10 +115,10 @@ export function AddComposer({
     const payload = {
       is_income: isIncome,
       category,
-      amount_usd_cents: usdCents,
-      original_currency: currency,
+      amount_usd_cents: cents,
+      original_currency: selected.code,
       original_amount: amount,
-      rate_used: lbpPerUsd,
+      rate_used: selected.rate,
       note: trimmedNote === "" ? null : trimmedNote,
     };
 
@@ -111,7 +135,7 @@ export function AddComposer({
       posthog.capture("transaction_updated", {
         category,
         is_income: isIncome,
-        currency,
+        currency: selected.code,
       });
       onClearEdit();
     }
@@ -119,7 +143,7 @@ export function AddComposer({
       posthog.capture("transaction_added", {
         category,
         is_income: isIncome,
-        currency,
+        currency: selected.code,
       });
       setDisplay("");
       setCategory(null);
@@ -131,8 +155,9 @@ export function AddComposer({
   const catColor = category ? categoryColor(category) : "#8E8E93";
   const dirColor = isIncome ? INCOME_COLOR : EXPENSE_COLOR;
 
-  const amountLabel =
-    currency === "USD" ? formatUsdCents(usdCents) : `${groupInt(display)} LBP`;
+  const amountLabel = isHome
+    ? formatCents(cents, homeCurrency)
+    : `${groupInt(display)} ${selected.code}`;
   const cta = saving
     ? "Saving…"
     : !canSave
@@ -146,7 +171,7 @@ export function AddComposer({
       {/* AMOUNT — always visible, edited with the native keyboard. */}
       <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3.5">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-base font-bold text-carrot">
-          {SYMBOL[currency]}
+          {currencySymbol(selected.code)}
         </span>
         <input
           inputMode="decimal"
@@ -156,18 +181,26 @@ export function AddComposer({
           aria-label="Amount"
           className="min-w-0 flex-1 bg-transparent font-numeric text-3xl font-bold tabular-nums text-label outline-none placeholder:text-label-secondary"
         />
-        <button
-          type="button"
-          onClick={() => setCurrency((c) => (c === "USD" ? "LBP" : "USD"))}
-          aria-label="Switch currency"
-          className="press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-grouped"
-        >
-          {currency}
-        </button>
+        {/* Tap to cycle through the currencies from Settings; with only the
+            home currency set up there's nothing to switch to. */}
+        {choices.length > 1 ? (
+          <button
+            type="button"
+            onClick={cycleCurrency}
+            aria-label="Switch currency"
+            className="press shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-label-secondary active:bg-grouped"
+          >
+            {selected.code}
+          </button>
+        ) : (
+          <span className="shrink-0 px-2 py-1 text-sm font-bold text-label-secondary">
+            {selected.code}
+          </span>
+        )}
       </div>
-      {currency === "LBP" && amount > 0 && (
+      {!isHome && amount > 0 && (
         <p className="-mt-1 px-1 text-xs text-label-secondary">
-          ≈ {formatUsdCents(usdCents)}
+          ≈ {formatCents(cents, homeCurrency)}
         </p>
       )}
 

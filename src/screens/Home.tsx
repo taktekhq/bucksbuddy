@@ -22,7 +22,7 @@ import { takePendingEdit } from "@/lib/editIntent";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { isToday, monthLabel } from "@/lib/dates";
 import { dailySpendSeries } from "@/lib/stats";
-import { formatUsdCents } from "@/lib/money";
+import { formatCents } from "@/lib/money";
 import { formatGrams } from "@/lib/gold";
 import type { Transaction } from "@/types/db";
 
@@ -38,6 +38,7 @@ export function Home() {
     safeTotalCents,
     safeGoldGrams,
     locked,
+    homeCurrency,
   } = useStore();
   const [editing, setEditing] = useState<Transaction | null>(null);
 
@@ -176,7 +177,12 @@ export function Home() {
                 underneath for context: a per-month net would be misleading here,
                 since a carried-over surplus or deficit isn't money earned or
                 lost this month. (Per-month spending lives on the Stats page.) */}
-            <NetTotal cents={balanceCents} label="Balance" masked={locked} />
+            <NetTotal
+              cents={balanceCents}
+              label="Balance"
+              currency={homeCurrency}
+              masked={locked}
+            />
             <p className="mt-1 text-[13px] font-medium text-label-secondary">
               {monthLabel()}
             </p>
@@ -207,7 +213,7 @@ export function Home() {
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                   <span className="flex items-center gap-1 font-numeric text-xl font-bold tabular-nums text-income">
                     <Banknote className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    {reveal ? formatUsdCents(safeTotalCents) : "••••"}
+                    {reveal ? formatCents(safeTotalCents, homeCurrency) : "••••"}
                   </span>
                   <span
                     className="flex items-center gap-1 font-numeric text-sm font-bold tabular-nums"
@@ -278,7 +284,12 @@ export function Home() {
         {loading && transactions.length === 0 ? (
           <p className="py-10 text-center text-label-secondary">Loading…</p>
         ) : todays.length > 0 ? (
-          <HistoryList rows={todays} onEdit={handleEdit} onDelete={handleDelete} />
+          <HistoryList
+            rows={todays}
+            currency={homeCurrency}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
         ) : (
           <p className="py-10 text-center text-label-secondary">
             {transactions.length > 0
