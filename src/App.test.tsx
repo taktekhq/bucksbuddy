@@ -24,6 +24,7 @@ vi.mock("@/screens/Stats", () => ({
 vi.mock("@/screens/Receipts", () => ({
   Receipts: ({ kind }: { kind: string }) => <div>ReceiptsScreen {kind}</div>,
 }));
+vi.mock("@/screens/Review", () => ({ Review: () => <div>ReviewScreen</div> }));
 vi.mock("@/screens/Settings", () => ({ Settings: () => <div>SettingsScreen</div> }));
 vi.mock("@/screens/Safe", () => ({ Safe: () => <div>SafeScreen</div> }));
 vi.mock("@/screens/Reset", () => ({ Reset: () => <div>ResetScreen</div> }));
@@ -117,5 +118,9 @@ describe("App", () => {
     useRoute.mockReturnValue("/stats/weekend");
     rerender(<App />);
     expect(screen.getByText("ReceiptsScreen weekend")).toBeInTheDocument();
+
+    useRoute.mockReturnValue("/review");
+    rerender(<App />);
+    expect(screen.getByText("ReviewScreen")).toBeInTheDocument();
   });
 });

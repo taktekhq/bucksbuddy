@@ -46,11 +46,6 @@ export function isReportPeriodId(value: unknown): value is ReportPeriodId {
   return REPORT_PERIODS.some((p) => p.id === value);
 }
 
-/** How many whole calendar months the period spans. */
-export function reportPeriodMonths(id: ReportPeriodId): number {
-  return period(id).months;
-}
-
 /**
  * Half-open [from, to) bounds. Both periods end at the start of the current
  * month, so `to` is always in the past and the window is always complete.
@@ -86,20 +81,10 @@ export function reportPeriodLabel(id: ReportPeriodId, now = new Date()): string 
  */
 export function reportWindowLabel(from: Date, to: Date): string {
   const first = monthLabel(from);
-  // `to` is exclusive, so step back inside the window for its last month.
-  const last = monthLabel(new Date(to.getTime() - 86_400_000));
+  // `to` is exclusive, so step back inside the window for its last month — by one
+  // millisecond, which lands inside the final local day whatever its length.
+  const last = monthLabel(new Date(to.getTime() - 1));
   return first === last ? first : `${first} – ${last}`;
-}
-
-/** "june-2026-august-2026" — the slug half of a stored review's title. */
-export function reportPeriodSlug(id: ReportPeriodId, now = new Date()): string {
-  const { from, to } = reportPeriodBounds(id, now);
-  const stamp = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  const last = new Date(to.getTime() - 1);
-  const start = stamp(from);
-  const end = stamp(last);
-  return start === end ? start : `${start}-to-${end}`;
 }
 
 /** A calendar date string ("2026-06-01") for a period bound, in local time. */

@@ -56,6 +56,14 @@ describe("Settings — account & data", () => {
     expect(storeValue.signOut).toHaveBeenCalled();
   });
 
+  it("opens the spending review", async () => {
+    render(<Settings />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /Spending review/ }),
+    );
+    expect(navigate).toHaveBeenCalledWith("/review");
+  });
+
   it("offers the export card", () => {
     render(<Settings />);
     expect(screen.getByRole("button", { name: /Export/ })).toBeInTheDocument();

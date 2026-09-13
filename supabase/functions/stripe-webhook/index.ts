@@ -123,10 +123,26 @@ Deno.serve(async (req) => {
     .from("stripe_events")
     .insert({ id: event.id, type: event.type, review_id: reviewId });
   if (claimErr) {
-    // Already applied (or unclaimable). Either way there is nothing to do, and
-    // 200 stops Stripe retrying.
-    return new Response("ok", { status: 200 });
+    // A unique violation is the one error that means "already applied"; 200
+    // stops Stripe retrying. Anything else — a timeout, a lost connection — must
+    // NOT be absorbed as a duplicate, or the payment it carried is dropped for
+    // good. Answer 500 and let Stripe deliver it again.
+    if (claimErr.code === "23505") return new Response("ok", { status: 200 });
+    return new Response("Could not claim event", { status: 500 });
   }
+
+  // supabase-js RESOLVES with `{ error }` rather than throwing, so a mutation
+  // whose result is discarded fails silently — which would leave the event
+  // claimed and never applied. Every write below is wrapped so a failure reaches
+  // the catch, releases the claim, and asks Stripe to deliver again.
+  const applied = async (
+    query: PromiseLike<{ error: { message: string } | null }>,
+  ) => {
+    const { error } = await query;
+    if (error) throw new Error(error.message);
+  };
+
+  const reviews = () => admin.from("spending_reviews");
 
   try {
     switch (event.type) {
@@ -140,41 +156,56 @@ Deno.serve(async (req) => {
           typeof object.payment_intent === "string" ? object.payment_intent : null;
         // Conditional on `pending`, so a replay — or a completion arriving after
         // a refund — cannot resurrect or re-pay a review.
-        await admin
-          .from("spending_reviews")
-          .update({
-            status: "paid",
-            paid_at: new Date().toISOString(),
-            payment_intent_id: paymentIntent,
-          })
-          .eq("id", reviewId)
-          .eq("status", "pending");
+        await applied(
+          reviews()
+            .update({
+              status: "paid",
+              paid_at: new Date().toISOString(),
+              payment_intent_id: paymentIntent,
+            })
+            .eq("id", reviewId)
+            .eq("status", "pending"),
+        );
         break;
       }
       case "checkout.session.async_payment_failed": {
         if (!reviewId) break;
-        await admin
-          .from("spending_reviews")
-          .update({ status: "failed", error: "The payment did not go through." })
-          .eq("id", reviewId)
-          .eq("status", "pending");
+        await applied(
+          reviews()
+            .update({ status: "failed", error: "The payment did not go through." })
+            .eq("id", reviewId)
+            .eq("status", "pending"),
+        );
         break;
       }
       case "charge.refunded":
       case "charge.dispute.created": {
+        // `charge.refunded` also fires for a PARTIAL refund, which is not the
+        // entitlement going away — only revoke when the charge is actually
+        // refunded in full. A dispute is money at risk, so it locks immediately;
+        // if the merchant later wins it, the owner can move the row back with the
+        // service role (see the README).
+        if (event.type === "charge.refunded" && object.refunded !== true) break;
         // Charge events carry no session, so they are matched by the review id
         // copied onto the PaymentIntent at checkout, and by payment intent id as
         // a fallback.
         const paymentIntent =
           typeof object.payment_intent === "string" ? object.payment_intent : null;
-        const patch = { status: "refunded", refunded_at: new Date().toISOString() };
+        // The review goes with the money: without clearing the body, someone could
+        // read the review and then take the $5 back, and the archive would happily
+        // keep showing it. The browser cannot put it back — the RLS update policy
+        // only allows a write while the row is `paid` or `ready`.
+        const patch = {
+          status: "refunded",
+          refunded_at: new Date().toISOString(),
+          body_enc: null,
+        };
         if (reviewId) {
-          await admin.from("spending_reviews").update(patch).eq("id", reviewId);
+          await applied(reviews().update(patch).eq("id", reviewId));
         } else if (paymentIntent) {
-          await admin
-            .from("spending_reviews")
-            .update(patch)
-            .eq("payment_intent_id", paymentIntent);
+          await applied(
+            reviews().update(patch).eq("payment_intent_id", paymentIntent),
+          );
         }
         break;
       }
@@ -184,6 +215,13 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     // Release the claim so Stripe's retry gets a real attempt.
+    //
+    // Residual, accepted: if this delete ALSO fails, the claim stays and the
+    // retry is absorbed as a duplicate. That needs two failures in the same
+    // request, and it is recoverable by hand — Stripe keeps retrying for days and
+    // any delivery can be replayed from its dashboard once the cause is fixed.
+    // Closing it properly means a two-phase claim (an `applied_at` column), which
+    // is more machinery than the failure rate justifies today.
     await admin.from("stripe_events").delete().eq("id", event.id);
     return new Response(e instanceof Error ? e.message : "Error", { status: 500 });
   }

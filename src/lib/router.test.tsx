@@ -45,6 +45,11 @@ describe("router", () => {
     expect(renderHook(() => useRoute()).result.current).toBe("/stats/weekend");
   });
 
+  it("recognizes the /review route", () => {
+    act(() => navigate("/review"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/review");
+  });
+
   it("navigate is a no-op when already on the route", () => {
     act(() => navigate("/safe"));
     const before = window.location.hash;

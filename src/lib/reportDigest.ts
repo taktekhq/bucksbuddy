@@ -19,7 +19,7 @@
 import { dayKey } from "@/lib/dates";
 import { categoryLabel, categorySubLabel, splitCategory } from "@/lib/categories";
 import { currencyInfo, type Currency } from "@/lib/currency";
-import { formatCents } from "@/lib/money";
+import { formatCents, formatSignedCents } from "@/lib/money";
 import { isSpending } from "@/lib/stats";
 import {
   boundDate,
@@ -191,6 +191,14 @@ export function buildDigest(
     cents,
     display: formatCents(cents, homeCurrency),
   });
+  // `net` is the one figure here that can be negative, and formatCents is
+  // unsigned by design (it takes Math.abs) — so a month that spent more than it
+  // logged coming in would hand the model "$711.00" for a deficit of $711, and
+  // the review would read it back as a surplus. Nets get the signed formatter.
+  const signedMoney = (cents: number): DigestMoney => ({
+    cents,
+    display: formatSignedCents(cents, homeCurrency),
+  });
 
   const start = from.getTime();
   const end = to.getTime();
@@ -276,7 +284,7 @@ export function buildDigest(
   for (const month of months) {
     month.spent = money(month.spent.cents);
     month.income = money(month.income.cents);
-    month.net = money(month.income.cents - month.spent.cents);
+    month.net = signedMoney(month.income.cents - month.spent.cents);
     month.daysLogged = monthLoggedDays.get(month.key)?.size ?? 0;
     month.dailyAverage = money(divide(month.spent.cents, month.days));
   }
@@ -410,7 +418,10 @@ export function buildDigest(
       id: periodId,
       label: reportWindowLabel(from, to),
       from: boundDate(from),
-      to: boundDate(new Date(to.getTime() - 86_400_000)),
+      // One millisecond back, not one day: the last local day of the window can
+      // be 23 hours long across a spring-forward, and a fixed 24 hours would then
+      // name the day before.
+      to: boundDate(new Date(to.getTime() - 1)),
       days: days.length,
       months: months.length,
     },
@@ -418,7 +429,7 @@ export function buildDigest(
     totals: {
       spent: money(spentCents),
       income: money(incomeCents),
-      net: money(incomeCents - spentCents),
+      net: signedMoney(incomeCents - spentCents),
       spendCount: spending.length,
       entryCount: inPeriod.length,
       dailyAverage: money(divide(spentCents, days.length)),

@@ -22,7 +22,9 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   By default the key is wrapped with a public constant — so it's operator-readable, the same
   as plain storage — but any user can turn on **end-to-end encryption** in Settings with a
   passphrase, after which *no one but them* (not even whoever runs the server) can read their
-  amounts or notes. See **Encryption** below.
+  amounts or notes — with one exception they opt into per purchase, a **spending review**, which
+  sends that period's finished totals (never notes, never rows) through the review function to the
+  model. See **Encryption** and **Spending reviews** below.
 - **Export:** CSV or PDF, for this month, last month, the past 3 months, or all time.
   Generated client-side from the decrypted rows, so it works on encrypted data.
 - **Spending review (paid, $5 once per review):** an AI-written read-back of a logged
@@ -140,6 +142,15 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
 - **Turning it on:** Settings → Encryption → type a passphrase and turn it on. The key is
   re-wrapped under a PBKDF2 key derived from it; from then on the server only ever sees
   ciphertext for that user. Any passphrase is allowed (no strength gate).
+
+  > **The one exception, and it is opt-in per use:** buying a **spending review** sends that
+  > period's *finished figures* — per-category and per-month totals, counts, day coverage, the
+  > biggest few expenses, repeated charges — through the review function to Anthropic's Claude,
+  > which writes the prose. Notes are never sent, individual rows are never sent, and nothing
+  > outside the chosen period is sent. The purchase screen states this before the button, and
+  > nobody who does not buy a review is affected. The review that comes back is encrypted with
+  > the same master key before it is stored, so it is at rest under your passphrase like
+  > everything else. See **Spending reviews (paid)** below.
 - **Stored on the device, shown in Settings.** The passphrase is cached in this browser, so
   the app stays unlocked across restarts and you can see/change it in the Encryption card. It
   **never leaves the device** — the server still can't read it. A brand-new device (or one
@@ -223,8 +234,14 @@ loses nothing: set a new one from any unlocked device.
 **If something goes wrong after paying.** A generation may be retried three times while no
 body has been stored, so a dropped response costs nothing. After that the row goes `failed`
 with the reason, which is the owner's cue to refund — the standing policy is refunds
-instantly, no questions, within 30 days. A refund or dispute webhook marks the row
-`refunded`.
+instantly, no questions, within 30 days.
+
+A **full** refund (or an opened dispute) marks the row `refunded` and clears the review body, so
+the review goes with the money rather than staying readable in the archive. A partial refund
+deliberately does not. An opened dispute locks the row straight away because the money is at
+risk; if it is later resolved in your favour, move it back by hand in the Supabase table editor —
+set `status` to `ready` — remembering that the body is gone, so the customer will need a fresh
+generation (`attempts` may need lowering too).
 
 ### Setting it up
 

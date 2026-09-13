@@ -7,8 +7,6 @@ import {
   reportPeriodBounds,
   reportPeriodDays,
   reportPeriodLabel,
-  reportPeriodMonths,
-  reportPeriodSlug,
   reportWindowLabel,
 } from "@/lib/reportPeriod";
 import { exportRangeBounds } from "@/lib/exportRange";
@@ -56,13 +54,6 @@ describe("isReportPeriodId", () => {
     expect(isReportPeriodId(undefined)).toBe(false);
     expect(isReportPeriodId(3)).toBe(false);
     expect(isReportPeriodId({ id: "last_month" })).toBe(false);
-  });
-});
-
-describe("reportPeriodMonths", () => {
-  it("counts whole calendar months", () => {
-    expect(reportPeriodMonths("last_month")).toBe(1);
-    expect(reportPeriodMonths("past_3_months")).toBe(3);
   });
 });
 
@@ -198,27 +189,6 @@ describe("reportWindowLabel", () => {
     expect(reportWindowLabel(new Date(2025, 9, 1), new Date(2026, 0, 1))).toBe(
       "October 2025 – December 2025",
     );
-  });
-});
-
-describe("reportPeriodSlug", () => {
-  it("collapses a single-month window to one stamp", () => {
-    expect(reportPeriodSlug("last_month", NOW)).toBe("2026-08");
-  });
-
-  it("joins the two ends of a span", () => {
-    expect(reportPeriodSlug("past_3_months", NOW)).toBe("2026-06-to-2026-08");
-  });
-
-  it("zero-pads single-digit months and crosses the year", () => {
-    const mar = new Date(2026, 2, 12, 12);
-    expect(reportPeriodSlug("last_month", mar)).toBe("2026-02");
-    expect(reportPeriodSlug("past_3_months", mar)).toBe("2025-12-to-2026-02");
-  });
-
-  it("ends on the last month inside the window, not on the exclusive bound", () => {
-    // `to` is 01 Sep 2026; the slug must not mention 2026-09.
-    expect(reportPeriodSlug("past_3_months", NOW)).not.toContain("2026-09");
   });
 });
 

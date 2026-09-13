@@ -53,15 +53,31 @@ describe("hasReviewPassphrase", () => {
     vi.clearAllMocks();
   });
 
-  it("is true when the account has a review_access row", async () => {
+  it("is set, with no error, when the account has a review_access row", async () => {
     set({ "review_access:select": () => ({ data: { verifier: "v1.a.b.c" } }) });
-    expect(await hasReviewPassphrase("u1")).toBe(true);
+    expect(await hasReviewPassphrase("u1")).toEqual({ set: true, error: null });
     expect(mock.calls).toEqual([{ table: "review_access", op: "select" }]);
   });
 
-  it("is false when there is no row at all", async () => {
+  it("is not set, with no error, when there is no row at all", async () => {
     set(); // unmatched handler resolves { data: null, error: null }
-    expect(await hasReviewPassphrase("u1")).toBe(false);
+    expect(await hasReviewPassphrase("u1")).toEqual({ set: false, error: null });
+  });
+
+  it("reports the read failure instead of answering 'no passphrase'", async () => {
+    // The one wrong answer. A bare false here would leave the archive open on
+    // the strength of a row nobody could read, so the message comes back with
+    // it and the screen keeps the archive locked.
+    set({
+      "review_access:select": () => ({
+        data: null,
+        error: { message: "permission denied for table review_access" },
+      }),
+    });
+    expect(await hasReviewPassphrase("u1")).toEqual({
+      set: false,
+      error: "permission denied for table review_access",
+    });
   });
 });
 

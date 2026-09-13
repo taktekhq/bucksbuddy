@@ -13,7 +13,7 @@ import type { Currency } from "@/lib/currency";
 import { formatCents } from "@/lib/money";
 import { reportPeriodBounds, type ReportPeriodId } from "@/lib/reportPeriod";
 import type { SpendingDigest } from "@/lib/reportDigest";
-import type { ReportFacts } from "@/lib/reportEligibility";
+import { MIN_SPEND_ENTRIES, type ReportFacts } from "@/lib/reportEligibility";
 import type { SpendingReview, SpendingReviewRow } from "@/types/db";
 
 // What a review costs, for the offer copy. The charge itself is set by the
@@ -74,7 +74,16 @@ export async function fetchEligibility(
     p_to: to.toISOString(),
   });
   if (error) return { facts: null, error: error.message };
-  return { facts: (data as ReportFacts | null) ?? null, error: null };
+  const facts = (data as ReportFacts | null) ?? null;
+  if (facts === null) return { facts: null, error: null };
+  // The threshold is echoed by the database so the copy can quote what was
+  // actually applied. A deployment running an older function would not send it,
+  // and an undefined threshold makes every comparison against it false — which
+  // would drop the blocker instead of showing it.
+  return {
+    facts: { ...facts, minSpendEntries: facts.minSpendEntries ?? MIN_SPEND_ENTRIES },
+    error: null,
+  };
 }
 
 /** Every review this account has bought, newest first. */

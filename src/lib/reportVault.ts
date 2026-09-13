@@ -26,18 +26,30 @@ import { generateMasterKey, unwrapMasterKey, wrapMasterKey } from "@/lib/crypto"
 
 type AccessRow = { verifier: string };
 
-/** True when this account has set an archive passphrase. */
-export async function hasReviewPassphrase(userId: string): Promise<boolean> {
-  return (await fetchAccess(userId)) !== null;
+/**
+ * Whether this account has set an archive passphrase — and, separately, whether
+ * the answer is trustworthy. A failed read must not read as "no passphrase set":
+ * that is the one wrong answer, because it would open the archive.
+ */
+export async function hasReviewPassphrase(
+  userId: string,
+): Promise<{ set: boolean; error: string | null }> {
+  const { row, error } = await fetchAccess(userId);
+  return { set: row !== null, error };
 }
 
-async function fetchAccess(userId: string): Promise<AccessRow | null> {
-  const { data } = await supabase
+async function fetchAccess(
+  userId: string,
+): Promise<{ row: AccessRow | null; error: string | null }> {
+  const { data, error } = await supabase
     .from("review_access")
     .select("verifier")
     .eq("user_id", userId)
     .maybeSingle();
-  return (data as AccessRow | null) ?? null;
+  return {
+    row: (data as AccessRow | null) ?? null,
+    error: error?.message ?? null,
+  };
 }
 
 // The stored token is a random AES key wrapped under the passphrase. The key
@@ -64,7 +76,7 @@ export async function checkReviewPassphrase(
   userId: string,
   passphrase: string,
 ): Promise<boolean> {
-  const row = await fetchAccess(userId);
+  const { row } = await fetchAccess(userId);
   if (!row) return false;
   try {
     await unwrapMasterKey(row.verifier, passphrase);

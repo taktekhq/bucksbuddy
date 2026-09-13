@@ -61,14 +61,6 @@ export function coverageRatio(facts: ReportFacts): number {
   return facts.periodDays === 0 ? 0 : facts.loggedDays / facts.periodDays;
 }
 
-export function unloggedDays(facts: ReportFacts): number {
-  return Math.max(facts.periodDays - facts.loggedDays, 0);
-}
-
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 /**
  * The two hard gates the owner set — a month of logged expenses, and at least
  * 40 expenses — plus the soft one ("ideally not many unlogged days"), which is
@@ -84,9 +76,10 @@ export function describeEligibility(
   const threshold = facts.minSpendEntries;
 
   if (facts.spendCount < threshold) {
-    const short = threshold - facts.spendCount;
+    // The threshold is the server's, not ours, so don't assume it is plural.
+    const noun = threshold === 1 ? "logged expense" : "logged expenses";
     blockers.push(
-      `${plural(threshold, "logged expense", "logged expenses")} needed — you have ${facts.spendCount} in this window, so ${plural(short, "more", "more")} to go.`,
+      `${threshold} ${noun} needed — you have ${facts.spendCount} in this window, so ${threshold - facts.spendCount} to go.`,
     );
   }
   if (!facts.coversPeriod) {
@@ -101,13 +94,16 @@ export function describeEligibility(
 
   const coverage = coverageRatio(facts);
   if (facts.loggedDays > 0 && coverage < LOW_COVERAGE) {
+    // Phrased from the unlogged side: this only fires under half coverage, so the
+    // count is always plural and the sentence needs no singular form.
     warnings.push(
-      `Only ${plural(facts.loggedDays, "day", "days")} of ${facts.periodDays} have anything logged, so the review will be reading a partial picture.`,
+      `${facts.periodDays - facts.loggedDays} of the ${facts.periodDays} days have nothing logged, so the review will be reading a partial picture.`,
     );
   }
   if (facts.longestGapDays > LONG_GAP_DAYS) {
+    // Likewise: only fires above LONG_GAP_DAYS, so never "1 days".
     warnings.push(
-      `There's a ${plural(facts.longestGapDays, "day", "days")} stretch with nothing logged.`,
+      `${facts.longestGapDays} days in a row have nothing logged.`,
     );
   }
 
