@@ -110,6 +110,12 @@ describe("Stats", () => {
     monthlySpendTotals.mockReturnValue([]);
   });
 
+  it("carries the selected month to Recap", async () => {
+    render(<Stats signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: "Recap" }));
+    expect(navigate).toHaveBeenCalledWith(expect.stringMatching(/^\/recap\?month=\d{4}-\d{2}$/));
+  });
+
   it("shows the month's money picture when signed in", () => {
     storeValue = makeStoreValue({ safeTotalCents: 90000 });
     render(<Stats signedIn />);

@@ -26,6 +26,7 @@ vi.mock("@/screens/Receipts", () => ({
 }));
 vi.mock("@/screens/Settings", () => ({ Settings: () => <div>SettingsScreen</div> }));
 vi.mock("@/screens/Safe", () => ({ Safe: () => <div>SafeScreen</div> }));
+vi.mock("@/screens/Recap", () => ({ RecapScreen: () => <div>RecapScreen</div> }));
 vi.mock("@/screens/Reset", () => ({ Reset: () => <div>ResetScreen</div> }));
 
 import App from "@/App";
@@ -36,6 +37,13 @@ describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useRoute.mockReturnValue("/");
+  });
+
+  it.each(["/recap", "/recap?month=2025-12"])("routes authenticated Recap at %s", async route => {
+    useSession.mockReturnValue({ session, ready: true, recoveryMode: false });
+    useRoute.mockReturnValue(route);
+    render(<App />);
+    expect(await screen.findByText("RecapScreen")).toBeInTheDocument();
   });
 
   it("shows the splash carrot until the session is ready", () => {

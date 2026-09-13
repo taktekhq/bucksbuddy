@@ -48,10 +48,13 @@ import type {
   TransactionRow,
 } from "@/types/db";
 
+import { fetchRecapMonth } from "./recapQuery";
+
 type Result = { error: string | null };
 
 type Store = {
   loading: boolean;
+  initializationError: boolean;
   transactions: Transaction[];
   // Currency settings (see lib/currency): totals are kept and shown in
   // `homeCurrency`; `currencies` are the secondary ones, each with its rate
@@ -99,6 +102,7 @@ type Store = {
   addSafeGoldEntry: (entry: NewSafeGoldEntry) => Promise<Result>;
   deleteSafeGoldEntry: (id: string) => Promise<Result>;
   refresh: () => Promise<void>;
+  loadRecapMonth: (month: Date, signal: AbortSignal) => Promise<Transaction[]>;
 };
 
 const StoreContext = createContext<Store | null>(null);
@@ -219,7 +223,9 @@ function txInMemory(row: TransactionRow, tx: NewTransaction): Transaction {
 export function StoreProvider({
   userId,
   children,
+  loadHistory = true,
 }: {
+  loadHistory?: boolean;
   userId: string;
   children: ReactNode;
 }) {
@@ -228,6 +234,7 @@ export function StoreProvider({
   // only starts true when there's nothing cached to show.
   const cached = useMemo(() => loadCache(userId), [userId]);
   const [loading, setLoading] = useState(cached === null);
+  const [initializationError, setInitializationError] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>(
     cached?.transactions ?? [],
   );
@@ -255,15 +262,24 @@ export function StoreProvider({
     // The currency settings aren't encrypted, so they load regardless of lock
     // state. `*` rather than named columns: the helper validates whatever the
     // row has and falls back to the defaults for anything missing or junk.
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .single();
+    if (!loadHistory && (profileError || !profile)) throw new Error("profile_unavailable");
     if (profile) {
       const settings = currencySettingsFromProfile(profile as Partial<Profile>);
       setHome(settings.homeCurrency);
       setCurrencyList(settings.currencies);
+    }
+
+    // Recap owns a complete selected-month query; loading the capped recent
+    // history here would unnecessarily decrypt unrelated months first.
+    if (!loadHistory) {
+      if (!masterKey.current) clearCache(userId);
+      setLoading(false);
+      return;
     }
 
     const [{ data: txData }, { data: goldData }] = await Promise.all([
@@ -300,10 +316,11 @@ export function StoreProvider({
     );
     setSafeGoldEntries(await Promise.all(goldRows.map((r) => rowToGold(r, key))));
     setLoading(false);
-  }, [userId]);
+  }, [userId, loadHistory]);
 
-  useEffect(() => {
-    void (async () => {
+  const initialize = useCallback(async () => {
+    setInitializationError(false);
+    try {
       const vault = await loadVault(userId);
       if (vault.status === "unlocked") {
         // Default tier: no user passphrase, always unlocked.
@@ -329,17 +346,32 @@ export function StoreProvider({
         }
       }
       await loadData();
-    })();
+    } catch {
+      // Keep exports blocked and avoid reporting raw decryption/auth payloads.
+      setInitializationError(true);
+    }
   }, [userId, loadData]);
+
+  useEffect(() => { void initialize(); }, [initialize]);
 
   // Keep the on-device snapshot in step with what's on screen, so a later cold
   // start paints the latest data instantly. Only while unlocked and settled:
   // `loading` skips the empty first frame, and `locked` keeps masked stand-ins
   // (and the cleared cache) from being written back as if they were real.
   useEffect(() => {
-    if (loading || locked) return;
+    if (!loadHistory || loading || locked) return;
     saveCache(userId, { transactions, homeCurrency, currencies, safeGoldEntries });
-  }, [userId, loading, locked, transactions, homeCurrency, currencies, safeGoldEntries]);
+  }, [userId, loading, locked, transactions, homeCurrency, currencies, safeGoldEntries, loadHistory]);
+
+  const loadRecapMonth = useCallback(async (month: Date, signal: AbortSignal) => {
+    const key = masterKey.current;
+    if (!key) throw new Error(LOCKED_MSG);
+    const rows = await fetchRecapMonth(
+      userId, month, row => rowToTransaction(row, key), signal,
+    );
+    if (masterKey.current !== key) throw new Error(LOCKED_MSG);
+    return rows;
+  }, [userId]);
 
   const unlock = useCallback(
     async (pass: string) => {
@@ -386,6 +418,7 @@ export function StoreProvider({
     clearStoredPassphrase(userId);
     clearCache(userId);
     masterKey.current = null;
+    setLocked(true);
     setPassphrase(null);
     await supabase.auth.signOut();
     navigate("/");
@@ -402,6 +435,7 @@ export function StoreProvider({
     clearStoredPassphrase(userId);
     clearCache(userId);
     masterKey.current = null;
+    setLocked(true);
     setPassphrase(null);
     await supabase.auth.signOut();
     navigate("/");
@@ -571,6 +605,7 @@ export function StoreProvider({
 
   const value: Store = {
     loading,
+    initializationError,
     transactions,
     homeCurrency,
     currencies,
@@ -594,7 +629,8 @@ export function StoreProvider({
     safeGoldGrams,
     addSafeGoldEntry,
     deleteSafeGoldEntry,
-    refresh: loadData,
+    refresh: initialize,
+    loadRecapMonth,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

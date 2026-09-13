@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { useSession } from "@/lib/useSession";
 import { useRoute } from "@/lib/router";
 import { StoreProvider } from "@/lib/store";
@@ -12,6 +13,10 @@ import { Receipts } from "@/screens/Receipts";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
 import { Reset } from "@/screens/Reset";
+
+const RecapScreen = lazy(() =>
+  import("@/screens/Recap").then(module => ({ default: module.RecapScreen })),
+);
 
 function Splash() {
   return (
@@ -42,6 +47,7 @@ function StatusBarScrim() {
 export default function App() {
   const { session, ready, recoveryMode } = useSession();
   const route = useRoute();
+  const isRecap = route === "/recap" || route.startsWith("/recap?");
 
   let content;
   if (recoveryMode) {
@@ -64,7 +70,7 @@ export default function App() {
     // after the splash gate so a signed-in user never flashes the public
     // variant while the session loads.
     content = session ? (
-      <StoreProvider userId={session.user.id}>
+      <StoreProvider key={session.user.id} userId={session.user.id}>
         <Stats signedIn />
       </StoreProvider>
     ) : (
@@ -76,8 +82,12 @@ export default function App() {
     content = <Landing />;
   } else {
     content = (
-      <StoreProvider userId={session.user.id}>
-        {route === "/settings" ? (
+      <StoreProvider key={session.user.id} userId={session.user.id} loadHistory={!isRecap}>
+        {isRecap ? (
+          <Suspense fallback={<Splash />}>
+            <RecapScreen />
+          </Suspense>
+        ) : route === "/settings" ? (
           <Settings />
         ) : route === "/safe" ? (
           <Safe />

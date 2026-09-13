@@ -7,6 +7,11 @@ describe("router", () => {
     window.location.hash = "";
   });
 
+  it.each(["/recap", "/recap?month=2025-12"] as const)("recognizes %s", route => {
+    act(() => navigate(route));
+    expect(renderHook(() => useRoute()).result.current).toBe(route);
+  });
+
   it("defaults to '/' for unknown or empty hashes", () => {
     const { result } = renderHook(() => useRoute());
     expect(result.current).toBe("/");

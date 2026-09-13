@@ -9,6 +9,7 @@ import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
+import { monthKey } from "@/lib/recap";
 import { formatCents } from "@/lib/money";
 import type { Currency } from "@/lib/currency";
 import {
@@ -234,13 +235,24 @@ function PersonalStats() {
   const lastMonthCents = monthly.find((m) => m.offset === -1)?.totalCents ?? 0;
 
   const monthNav = (
-    <MonthSwitcher
-      label={monthLabel(anchor)}
-      onPrev={() => setMonthOffset((o) => o - 1)}
-      onNext={() => setMonthOffset((o) => Math.min(o + 1, 0))}
-      canPrev={hasOlder}
-      canNext={!isCurrentMonth}
-    />
+    <div className="flex items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <MonthSwitcher
+          label={monthLabel(anchor)}
+          onPrev={() => setMonthOffset((o) => o - 1)}
+          onNext={() => setMonthOffset((o) => Math.min(o + 1, 0))}
+          canPrev={hasOlder}
+          canNext={!isCurrentMonth}
+        />
+      </div>
+      <button
+        type="button"
+        className="press rounded-pill bg-white/10 px-4 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-carrot"
+        onClick={() => navigate(`/recap?month=${monthKey(anchor)}`)}
+      >
+        Recap
+      </button>
+    </div>
   );
 
   const barItems = useMemo<StatBarItem[]>(() => {
