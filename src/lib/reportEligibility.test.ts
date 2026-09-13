@@ -5,7 +5,6 @@ import {
   MIN_SPEND_ENTRIES,
   coverageRatio,
   describeEligibility,
-  unloggedDays,
   type ReportFacts,
 } from "@/lib/reportEligibility";
 
@@ -53,19 +52,6 @@ describe("coverageRatio", () => {
   });
 });
 
-describe("unloggedDays", () => {
-  it("counts the days in the window with nothing on them", () => {
-    expect(unloggedDays(facts({ periodDays: 92, loggedDays: 80 }))).toBe(12);
-    expect(unloggedDays(facts({ periodDays: 31, loggedDays: 31 }))).toBe(0);
-  });
-
-  it("clamps at zero when the server reports more logged days than the period has", () => {
-    // Can happen if a window shrinks between the count and the read; a negative
-    // "unlogged days" would render as nonsense.
-    expect(unloggedDays(facts({ periodDays: 30, loggedDays: 34 }))).toBe(0);
-  });
-});
-
 describe("describeEligibility — the spend-count gate", () => {
   it("passes a comfortable account with no blockers and no warnings", () => {
     const copy = describeEligibility(facts(), "past_3_months");
@@ -79,7 +65,7 @@ describe("describeEligibility — the spend-count gate", () => {
     );
     expect(copy.ok).toBe(false);
     expect(copy.blockers).toEqual([
-      "40 logged expenses needed — you have 39 in this window, so 1 more to go.",
+      "40 logged expenses needed — you have 39 in this window, so 1 to go.",
     ]);
   });
 
@@ -91,20 +77,21 @@ describe("describeEligibility — the spend-count gate", () => {
       "past_3_months",
     );
     expect(copy.blockers[0]).toBe(
-      "25 logged expenses needed — you have 20 in this window, so 5 more to go.",
+      "25 logged expenses needed — you have 20 in this window, so 5 to go.",
     );
     expect(copy.blockers[0]).not.toContain(String(MIN_SPEND_ENTRIES));
     expect(MIN_SPEND_ENTRIES).toBe(40);
   });
 
   it("reads correctly when the threshold itself is 1", () => {
-    // The singular arm of the plural helper, on the threshold slot.
+    // The singular arm of the threshold noun: the server's number, so the copy
+    // cannot assume it is plural.
     const copy = describeEligibility(
       facts({ spendCount: 0, minSpendEntries: 1, ok: false }),
       "past_3_months",
     );
     expect(copy.blockers[0]).toBe(
-      "1 logged expense needed — you have 0 in this window, so 1 more to go.",
+      "1 logged expense needed — you have 0 in this window, so 1 to go.",
     );
   });
 
@@ -177,7 +164,7 @@ describe("describeEligibility — warnings", () => {
     expect(copy.ok).toBe(true);
     expect(copy.blockers).toEqual([]);
     expect(copy.warnings).toEqual([
-      "Only 20 days of 92 have anything logged, so the review will be reading a partial picture.",
+      "72 of the 92 days have nothing logged, so the review will be reading a partial picture.",
     ]);
   });
 
@@ -191,19 +178,22 @@ describe("describeEligibility — warnings", () => {
     expect(describeEligibility(justUnder, "past_3_months").warnings).toHaveLength(1);
   });
 
-  it("uses the singular day form for a one-day window", () => {
+  it("counts the unlogged days, not the logged ones", () => {
+    // A single logged day out of thirty: the sentence is phrased from the
+    // unlogged side, so the number in it is 29 rather than 1.
     const copy = describeEligibility(
       facts({ periodDays: 30, loggedDays: 1, spendCount: 40 }),
       "last_month",
     );
     expect(copy.warnings[0]).toBe(
-      "Only 1 day of 30 have anything logged, so the review will be reading a partial picture.",
+      "29 of the 30 days have nothing logged, so the review will be reading a partial picture.",
     );
   });
 
   it("suppresses the coverage warning entirely when nothing is logged", () => {
-    // 0/92 is the lowest coverage there is, but "only 0 days of 92" is noise on
-    // top of the blocker that already says the account is empty.
+    // 0/92 is the lowest coverage there is, but "92 of the 92 days have nothing
+    // logged" is noise on top of the blocker that already says the account is
+    // empty.
     const copy = describeEligibility(
       facts({
         periodDays: 92,
@@ -230,7 +220,7 @@ describe("describeEligibility — warnings", () => {
       facts({ longestGapDays: LONG_GAP_DAYS + 1 }),
       "past_3_months",
     );
-    expect(copy.warnings).toEqual(["There's a 8 days stretch with nothing logged."]);
+    expect(copy.warnings).toEqual(["8 days in a row have nothing logged."]);
     expect(copy.ok).toBe(true);
   });
 
@@ -240,8 +230,10 @@ describe("describeEligibility — warnings", () => {
       "past_3_months",
     );
     expect(copy.warnings).toHaveLength(2);
-    expect(copy.warnings[0]).toContain("Only 10 days of 92");
-    expect(copy.warnings[1]).toContain("40 days stretch");
+    expect(copy.warnings[0]).toBe(
+      "82 of the 92 days have nothing logged, so the review will be reading a partial picture.",
+    );
+    expect(copy.warnings[1]).toBe("40 days in a row have nothing logged.");
     expect(copy.ok).toBe(true);
   });
 });

@@ -110,7 +110,12 @@ type Store = {
   // `transactions`: that list is capped at the newest FETCH_CAP rows, and a
   // three-month review of a busy account has to total every row in the window or
   // its figures are quietly wrong.
-  reviewRange: (from: Date, to: Date) => Promise<Transaction[]>;
+  //
+  // It returns NULL rather than an empty array when the rows cannot be read —
+  // the vault has not finished unlocking, or a page failed. An empty array would
+  // be indistinguishable from "this window has nothing in it", and a review
+  // computed from that is a paid document full of zeroes.
+  reviewRange: (from: Date, to: Date) => Promise<Transaction[] | null>;
   sealReview: (review: unknown) => Promise<string | null>;
   openReview: (bodyEnc: string) => Promise<unknown | null>;
 };
@@ -554,19 +559,26 @@ export function StoreProvider({
   );
 
   // Every transaction in [from, to), decrypted — paged, so the review's totals
-  // cover the whole window rather than the newest FETCH_CAP rows.
+  // cover the whole window rather than the newest FETCH_CAP rows. Null on any
+  // reason the window could not be read in full.
   const reviewRange = useCallback(async (from: Date, to: Date) => {
     const key = masterKey.current;
-    if (!key) return [];
+    // The vault loads in the provider's own effect, which runs AFTER a child
+    // screen's — and unwrapping costs a 600k-iteration derive. So a screen that
+    // asks this early legitimately gets "not yet", never "nothing there".
+    if (!key) return null;
     const rows: TransactionRow[] = [];
     for (let page = 0; page < REVIEW_MAX_PAGES; page++) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("transactions")
         .select("*")
         .gte("occurred_at", from.toISOString())
         .lt("occurred_at", to.toISOString())
         .order("occurred_at", { ascending: false })
         .range(page * REVIEW_PAGE, page * REVIEW_PAGE + REVIEW_PAGE - 1);
+      // A failed page must not read as the end of the window: that would silently
+      // truncate the totals a review is about to be written from.
+      if (error) return null;
       const batch = (data ?? []) as TransactionRow[];
       rows.push(...batch);
       if (batch.length < REVIEW_PAGE) break;

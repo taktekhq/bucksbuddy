@@ -132,6 +132,15 @@ revoke all on public.stripe_events from anon, authenticated;
 -- calendar months (lib/reportPeriod). Days are then counted as offsets from
 -- `p_from`, so "days logged" means the same thing here as it does on screen.
 --
+-- Known limit, accepted rather than fixed: those offsets are fixed 24-hour
+-- blocks, while the app buckets by local calendar day. Across a daylight-saving
+-- change inside the window the two can disagree by one on `loggedDays` and
+-- `longestGapDays`. Neither hard gate is affected — `spend_count` comes from a
+-- range filter on the timestamps themselves, and `covers_period` from a single
+-- comparison — so the worst case is an advisory warning appearing or not
+-- appearing at the margin, twice a year. Fixing it properly means passing the
+-- user's IANA zone and bucketing with `at time zone`.
+--
 -- SECURITY INVOKER (the default): row-level security on `transactions` already
 -- limits this to the caller's own rows, and the explicit user_id filter says so
 -- out loud. It returns nothing but counts.

@@ -22,6 +22,7 @@ import {
 import { checkReviewPassphrase, hasReviewPassphrase, setReviewPassphrase } from "@/lib/reportVault";
 import {
   fetchEligibility,
+  fetchReview,
   generateReview,
   listReviews,
   reviewPrice,
@@ -82,9 +83,9 @@ export function Review() {
   const [error, setError] = useState<string | null>(null);
 
   const refreshRows = useCallback(async () => {
-    const { reviews } = await listReviews();
+    const { reviews, error: listError } = await listReviews();
     setRows(reviews);
-    return reviews;
+    return { reviews, error: listError };
   }, []);
 
   // Write a review that has been paid for: read the window, total it here, have
@@ -100,6 +101,18 @@ export function Review() {
       const from = new Date(row.period_from);
       const to = new Date(row.period_to);
       const entries = await reviewRange(from, to);
+      // Null means the rows could not be read — the encryption vault is still
+      // unwrapping (its 600k-iteration derive runs in the provider's effect,
+      // after this screen's), or a page failed. Either way, refuse: a review
+      // written from what we could not read would be a paid page of zeroes, and
+      // this returns before generateReview so the attempt is not spent.
+      if (entries === null || entries.length === 0) {
+        setBusy(null);
+        setError(
+          "Couldn't read your entries just yet. Nothing has been used up — tap the review below to try again.",
+        );
+        return;
+      }
       const digest = buildDigest(
         entries,
         { id: row.period_id, from, to },
@@ -135,12 +148,15 @@ export function Review() {
       const returned = takeStripeReturn();
       // Eligibility is the period effect's job — it runs on mount too, so
       // fetching it here as well would just be a second identical round trip.
-      const [reviews, passphraseSet] = await Promise.all([
+      const [{ reviews, error: listError }, passphrase] = await Promise.all([
         refreshRows(),
         hasReviewPassphrase(userId),
       ]);
       if (!live) return;
-      setHasPassphrase(passphraseSet);
+      // An unreadable answer must not read as "no passphrase set" — that would
+      // leave the archive open.
+      setHasPassphrase(passphrase.set || passphrase.error !== null);
+      if (listError !== null) setError(listError);
       if (!returned) return;
       if (returned.cancelled) {
         // They came back through the cancel link: nothing was charged, and the
@@ -149,8 +165,13 @@ export function Review() {
         return;
       }
 
-      const row = reviews.find((r) => r.id === returned.id);
-      if (row && row.status === "pending") {
+      // The archive read can race the webhook, and the callback id has already
+      // been scrubbed from the URL — so when the list doesn't have the row yet,
+      // ask for it directly rather than losing the return.
+      const row =
+        reviews.find((r) => r.id === returned.id) ?? (await fetchReview(returned.id));
+      if (!row) return;
+      if (row.status === "pending") {
         setBusy("Waiting for the payment to confirm…");
         const paid = await waitForPaidReview(returned.id);
         if (!live) return;
@@ -164,7 +185,11 @@ export function Review() {
         }
         return;
       }
-      if (row?.status === "paid" && !row.body_enc) await write(row);
+      // Paid but unwritten, or written but never delivered to this device: both
+      // are the generating function's to retry, so pick it up now.
+      if ((row.status === "paid" || row.status === "ready") && !row.body_enc) {
+        await write(row);
+      }
     })();
     return () => {
       live = false;
@@ -182,6 +207,13 @@ export function Review() {
       if (!live) return;
       setFacts(f);
       setFactsError(e);
+      posthog.capture("review_gate_seen", {
+        period: periodId,
+        eligible: f?.ok ?? null,
+        expenses_logged: f?.spendCount ?? null,
+        days_logged: f?.loggedDays ?? null,
+        days_in_period: f?.periodDays ?? null,
+      });
     })();
     return () => {
       live = false;
@@ -206,12 +238,20 @@ export function Review() {
   const show = useCallback(
     async (row: SpendingReviewRow) => {
       setError(null);
+      if (row.status === "refunded") {
+        setError("That review was refunded.");
+        return;
+      }
       if (!row.body_enc) {
         // "ready" with no body means it was written but the reply never reached
         // this device; the generating function lets that be retried, so both
         // states are worth a tap rather than an apology.
         if (row.status === "paid" || row.status === "ready") await write(row);
-        else setError("That review hasn't been written yet.");
+        else {
+          setError(
+            "That review was never written. If you were charged for it, get in touch and it'll be refunded.",
+          );
+        }
         return;
       }
       const review = asSpendingReview(await openReview(row.body_enc));
@@ -286,6 +326,7 @@ export function Review() {
 
       <Archive
         rows={rows}
+        busy={busy !== null}
         hasPassphrase={hasPassphrase}
         unlocked={unlocked}
         openId={open?.row.id ?? null}
@@ -391,7 +432,9 @@ function Offer({
 
         <div className="flex flex-col gap-3 p-4">
           {factsError !== null && (
-            <p className="text-sm leading-relaxed text-expense">{factsError}</p>
+            <p className="text-sm leading-relaxed text-expense">
+              Reviews aren&apos;t set up on this database yet. {factsError}
+            </p>
           )}
           {facts !== null && copy !== null && (
             <Standing facts={facts} copy={copy} />
@@ -409,7 +452,7 @@ function Offer({
             <PassphraseForm
               id="review-passphrase-new"
               label="Set a passphrase for your review archive"
-              hint="You'll need it to open past reviews. It never leaves this device, and forgetting it doesn't lose a review — you can set a new one."
+              hint="You'll need it to open past reviews, and it's asked for again each time — so a borrowed phone doesn't come with them open. It locks the screen, not the data: it won't stop anyone who can already read your entries. Forgetting it loses nothing; set a new one any time."
               submitLabel="Save and continue"
               onSubmit={async (passphrase) => {
                 const saved = await onPassphrase(passphrase);
@@ -424,9 +467,11 @@ function Offer({
               onClick={() => (hasPassphrase ? onBuy() : setAsking(true))}
               className="press rounded-pill bg-carrot py-3.5 text-lg font-semibold text-surface shadow-carrot transition disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
             >
-              {copy !== null && !copy.ok
-                ? "Not enough logged yet"
-                : `Unlock a review · ${reviewPriceLabel()}`}
+              {copy === null
+                ? "Can't check your history right now"
+                : !copy.ok
+                  ? "Not enough logged yet"
+                  : `Unlock a review · ${reviewPriceLabel()}`}
             </button>
           )}
           <p className="text-center text-xs text-label-secondary">
@@ -491,6 +536,7 @@ function Standing({
 // prices show, and opening one needs the passphrase.
 function Archive({
   rows,
+  busy,
   hasPassphrase,
   unlocked,
   openId,
@@ -498,6 +544,7 @@ function Archive({
   onShow,
 }: {
   rows: SpendingReviewRow[];
+  busy: boolean;
   hasPassphrase: boolean;
   unlocked: boolean;
   openId: string | null;
@@ -526,7 +573,7 @@ function Archive({
           <button
             key={row.id}
             type="button"
-            disabled={needsUnlock}
+            disabled={needsUnlock || busy}
             onClick={() => onShow(row)}
             className="press flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left disabled:opacity-60"
           >
@@ -558,7 +605,7 @@ function statusLine(row: SpendingReviewRow): string {
   const price = reviewPrice(row);
   if (row.status === "refunded") return `Refunded · ${price}`;
   if (row.status === "failed") return row.error ?? "Didn't complete";
-  if (row.status === "pending") return "Payment not completed";
+  if (row.status === "pending") return "Not completed — nothing was charged";
   if (!row.body_enc) return `Paid ${price} · tap to write it`;
   return `${price} · tap to read`;
 }

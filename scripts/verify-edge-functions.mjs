@@ -95,14 +95,16 @@ async function verifyWebhookSignatures() {
 // --------------------------------------------------------------- numbers ----
 async function verifyNumberGuard() {
   console.log("\ngenerate-review — the no-invented-amounts guard");
-  const { collectAllowed, unsupportedAmounts } = await loadRegion(
+  const { collectAmounts, collectNumbers, unsupportedAmounts } = await loadRegion(
     "supabase/functions/generate-review/index.ts",
-    ["collectAllowed", "unsupportedAmounts"],
+    ["collectAmounts", "collectNumbers", "unsupportedAmounts"],
   );
 
-  // Shaped like a real digest: every amount carries the string the app prints.
+  // Shaped like a real digest: every amount carries the string the app prints,
+  // alongside the raw cents and the counts that must NOT become quotable amounts.
   const digest = {
     version: 1,
+    period: { label: "June 2026 – August 2026", from: "2026-06-01", to: "2026-08-31", days: 92 },
     totals: {
       spent: { cents: 124050, display: "$1,240.50" },
       spendCount: 41,
@@ -116,32 +118,67 @@ async function verifyNumberGuard() {
       { date: "2026-07-04", category: "Fun", amount: { cents: 9000, display: "$90.00" } },
     ],
   };
-  const allowed = new Set();
-  collectAllowed(digest, allowed);
-  const clean = (text) => unsupportedAmounts(text, allowed).length === 0;
+  const amounts = new Set();
+  collectAmounts(digest, amounts);
+  const numbers = new Set();
+  collectNumbers(digest, numbers);
+  const bad = (text) => unsupportedAmounts(text, amounts, numbers);
+  const clean = (text) => bad(text).length === 0;
 
+  console.log("  amounts the device computed:");
   check("an amount copied exactly passes", clean("You spent $1,240.50 over the period."), true);
   check("the same amount without its symbol passes", clean("That is 1,240.50 in all."), true);
   check("a category total passes", clean("Food came to $472.00 across 22 entries."), true);
   check("several real amounts in one sentence pass",
     clean("Of $1,240.50, Food was $472.00 and the largest single entry $90.00."), true);
+
+  console.log("  amounts it did not:");
   check("one changed digit is caught", clean("You spent $1,240.51."), false);
-  check("an amount that is simply absent is caught", clean("You spent $999.00 on coffee."), false);
+  check("an absent amount is caught", clean("You spent $999.00 on coffee."), false);
   check("a total the model added up itself is caught",
     clean("Food and fun together came to $562.00."), false);
   check("a rounded version of a real amount is caught", clean("You spent about $1,240.00."), false);
+  // The pool used to hold every number in the digest, so a raw `cents` field
+  // could be printed as if it were an amount.
+  check("a raw cents field printed as money is caught", clean("You spent $124050."), false);
+  check("another raw cents field is caught", clean("Food came to $47200."), false);
+  // These forms used not to be tokenized at all, so nothing checked them.
+  check("a trailing currency code is caught", clean("Rent took 1200 USD."), false);
+  check("a trailing currency symbol is caught", clean("Flights were 1200€."), false);
+  check("a bare four-digit amount is caught", clean("Food came to 2400 last month."), false);
+
+  console.log("  counts, percentages and dates are not amounts:");
   check("counts are left alone", clean("You logged 41 expenses across 92 days."), true);
   check("percentages are left alone", clean("Food was 38.1% of it."), true);
-  check("dates are left alone", clean("The biggest was on 2026-07-04."), true);
+  check("a date is left alone", clean("The biggest was on 2026-07-04."), true);
+  check("a year in prose is left alone", clean("Through the summer of 2026."), true);
+  check("two years in prose are left alone", clean("From 2025 into 2026."), true);
   check("small integers are left alone", clean("3 of your 5 biggest were food."), true);
+  check("a large count that IS in the digest passes",
+    clean("Across 124050 cents of spending."), true);
+  // A comma-grouped integer is ambiguous — "1,234 entries" is a truthful count —
+  // so it may come from either pool. A separator-formatted count that IS in the
+  // digest must not be thrown away as an invented amount.
+  check("a separator-formatted count in the digest passes",
+    unsupportedAmounts(
+      "You logged 1,234 expenses.",
+      amounts,
+      new Set([...numbers, "1234"]),
+    ).length === 0, true);
+  check("a separator-formatted number in NEITHER pool is caught",
+    clean("You logged 9,876 expenses."), false);
+  check("two decimals without a symbol are still held strictly",
+    clean("It came to 562.00 in all."), false);
 
-  // A currency whose symbol is letters, and where the decimals are none.
+  console.log("  other currencies:");
   const lbp = new Set();
-  collectAllowed({ spent: { cents: 8950000, display: "LL 89,500" } }, lbp);
+  const lbpNumbers = new Set();
+  collectAmounts({ spent: { cents: 8950000, display: "LL 89,500" } }, lbp);
+  collectNumbers({ spent: { cents: 8950000, display: "LL 89,500" } }, lbpNumbers);
   check("a letter-symbol currency passes",
-    unsupportedAmounts("You spent LL 89,500 this month.", lbp).length === 0, true);
+    unsupportedAmounts("You spent LL 89,500 this month.", lbp, lbpNumbers).length === 0, true);
   check("a wrong letter-symbol amount is caught",
-    unsupportedAmounts("You spent LL 95,000 this month.", lbp).length === 0, false);
+    unsupportedAmounts("You spent LL 95,000 this month.", lbp, lbpNumbers).length === 0, false);
 }
 
 await verifyWebhookSignatures();

@@ -138,13 +138,19 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceKey);
 
     // --- don't let pending rows pile up ---
-    const { count: pending } = await admin
+    // postgrest returns a failure as `{ error, count: null }` rather than
+    // throwing, and a null count coalesced to 0 would switch this limit off
+    // exactly when the database is struggling. Fail closed instead.
+    const { count: pending, error: countErr } = await admin
       .from("spending_reviews")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("status", "pending")
       .gte("created_at", new Date(Date.now() - 3_600_000).toISOString());
-    if ((pending ?? 0) >= MAX_PENDING_PER_HOUR) {
+    if (countErr || pending === null) {
+      return json({ error: "Could not start checkout. Try again shortly." }, 503);
+    }
+    if (pending >= MAX_PENDING_PER_HOUR) {
       return json(
         { error: "Too many checkouts started just now. Try again shortly." },
         429,

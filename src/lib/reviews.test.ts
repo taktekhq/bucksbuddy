@@ -34,7 +34,7 @@ import {
   waitForPaidReview,
 } from "@/lib/reviews";
 import { buildDigest } from "@/lib/reportDigest";
-import type { ReportFacts } from "@/lib/reportEligibility";
+import { MIN_SPEND_ENTRIES, type ReportFacts } from "@/lib/reportEligibility";
 import type { SpendingReview, SpendingReviewRow } from "@/types/db";
 
 function set(handlers: Record<string, Handler> = {}) {
@@ -243,6 +243,38 @@ describe("fetchEligibility", () => {
       facts: null,
       error: null,
     });
+  });
+
+  it("fills in the built-in threshold when an older function omits it", async () => {
+    // A deployment still running the pre-threshold function sends no
+    // minSpendEntries, and every comparison against undefined is false — so the
+    // shortfall blocker would vanish and the copy would read "12 / undefined".
+    const partial: Partial<ReportFacts> = facts({ spendCount: 12, ok: false });
+    delete partial.minSpendEntries;
+    set({ "rpc:report_eligibility": () => ({ data: partial, error: null }) });
+    const { facts: got, error } = await fetchEligibility("last_month", NOW);
+    expect(error).toBeNull();
+    expect(got?.minSpendEntries).toBe(MIN_SPEND_ENTRIES);
+    expect(got?.minSpendEntries).toBe(40);
+    // …and nothing else is touched on the way through.
+    expect(got).toEqual({ ...partial, minSpendEntries: MIN_SPEND_ENTRIES });
+  });
+
+  it("keeps the server's threshold when it is not the built-in one", async () => {
+    // The database is the authority on the bar it applied; the constant is only
+    // ever a fallback.
+    expect(MIN_SPEND_ENTRIES).not.toBe(60);
+    set({
+      "rpc:report_eligibility": () => ({
+        data: facts({ minSpendEntries: 60, spendCount: 50, ok: false }),
+        error: null,
+      }),
+    });
+    const { facts: got, error } = await fetchEligibility("last_month", NOW);
+    expect(error).toBeNull();
+    expect(got?.minSpendEntries).toBe(60);
+    expect(got?.spendCount).toBe(50);
+    expect(got?.ok).toBe(false);
   });
 });
 

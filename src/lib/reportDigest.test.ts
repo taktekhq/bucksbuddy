@@ -338,10 +338,11 @@ describe("buildDigest — per calendar month", () => {
       daysLogged: 4,
       dailyAverage: { cents: 2294, display: "$22.94" }, // round(71100 / 31)
     });
-    // The net is negative, and `formatCents` is unsigned — so the display
-    // string reads as if August had been in the black.
+    // A negative net has to LOOK negative: the model is told to copy these
+    // display strings verbatim, so an unsigned "$711.00" would have it report a
+    // deficit month as a surplus.
     expect(MAIN.months[2].net.cents).toBe(-71100);
-    expect(MAIN.months[2].net.display).toBe("$711.00");
+    expect(MAIN.months[2].net.display).toBe("-$711.00");
   });
 });
 

@@ -110,21 +110,43 @@ const SCHEMA = {
 // #region verifiable — lifted out and exercised by scripts/verify-edge-functions.mjs
 
 /**
- * Every string and number anywhere in the digest, as normalized text — plus, for
- * anything that starts with a currency mark, the bare number on its own. The
- * digest holds "$1,240.50"; a review that writes "1,240.50 on groceries" is
- * quoting it correctly and must not be thrown away for dropping the symbol.
+ * The amounts a review may quote: the digest's `display` strings — the ones the
+ * app itself would print — and each one's bare form, so "1,240.50 on groceries"
+ * is accepted as a correct quote of "$1,240.50".
+ *
+ * Deliberately NOT every number in the digest. The digest also carries raw
+ * `cents` integers and counts, and pooling those with the amounts would let a
+ * review print "$124050" or "$47200" — digits that exist, as a figure the device
+ * never computed — and pass.
  */
-function collectAllowed(value: unknown, into: Set<string>): void {
-  if (typeof value === "number") into.add(normalize(String(value)));
-  else if (typeof value === "string") {
-    const text = normalize(value);
-    into.add(text);
-    const bare = text.replace(/^[^\d]+/, "");
-    if (bare !== "") into.add(bare);
-  } else if (Array.isArray(value)) for (const v of value) collectAllowed(v, into);
+function collectAmounts(value: unknown, into: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const v of value) collectAmounts(v, into);
+  } else if (value && typeof value === "object") {
+    for (const [key, v] of Object.entries(value)) {
+      if (key === "display" && typeof v === "string") {
+        const text = normalize(v);
+        into.add(text);
+        const bare = text.replace(/^[^\d]+/, "");
+        if (bare !== "") into.add(bare);
+      } else {
+        collectAmounts(v, into);
+      }
+    }
+  }
+}
+
+/**
+ * Every scalar in the digest, for judging a bare number. Counts, day totals and
+ * percentages are legitimately quotable and are not amounts, so they get the
+ * looser pool.
+ */
+function collectNumbers(value: unknown, into: Set<string>): void {
+  if (typeof value === "number" || typeof value === "string") {
+    into.add(normalize(String(value)));
+  } else if (Array.isArray(value)) for (const v of value) collectNumbers(v, into);
   else if (value && typeof value === "object") {
-    for (const v of Object.values(value)) collectAllowed(v, into);
+    for (const v of Object.values(value)) collectNumbers(v, into);
   }
 }
 
@@ -132,22 +154,68 @@ function normalize(text: string): string {
   return text.replace(/\s+/g, "").toLowerCase();
 }
 
-// Money-shaped tokens only: a currency symbol or code in front of a number, or a
-// number carrying thousands separators or decimal places. Bare small integers
-// (counts, day numbers, years) are left alone — they are all over the digest
-// anyway, and the figure worth guarding is the amount.
-const MONEY_TOKEN =
-  /(?:\p{Sc}|\b[A-Z]{2,3}\s?)\s?\d[\d,]*(?:\.\d+)?|\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d+\.\d{2}\b/gu;
+// Two classes of figure, judged differently.
+//
+// CURRENCY-MARKED — a symbol or code before or after the number ("$12.50",
+// "LL 89,500", "1200 USD", "1200€"). Unambiguously an amount, so it is held
+// strictly to the strings the device formatted.
+const CURRENCY_TOKEN =
+  /(?:\p{Sc}|\b[A-Z]{2,3}\s?)\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s?(?:\p{Sc}|\b[A-Z]{3}\b)/gu;
 
-/** Money-shaped tokens in `text` that the digest does not contain. */
-function unsupportedAmounts(text: string, allowed: Set<string>): string[] {
+// PLAIN NUMERIC — a decimal, a separator-grouped integer, or a run of four or
+// more digits. Ambiguous: "38.1" is a percentage, "1,234" a count, "2400" could
+// be an amount written without its symbol. These are accepted if they appear
+// anywhere in the digest at all, so a truthful count is never thrown away, while
+// an invented figure still has nothing to stand on. Years are skipped — a review
+// may name one and they are not in the digest as bare numbers — and small bare
+// integers are left alone entirely, since guarding them would reject ordinary
+// prose.
+const NUMERIC_TOKEN = /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d+\.\d+\b|\b\d{4,}\b/g;
+const YEAR = /^(19|20)\d{2}$/;
+
+/**
+ * The figures in `text` the digest does not support.
+ *
+ * `amounts` holds what the device formatted; `numbers` holds every scalar in the
+ * digest. A currency-marked token must be in `amounts`. A plain number may be in
+ * either.
+ */
+function unsupportedAmounts(
+  text: string,
+  amounts: Set<string>,
+  numbers: Set<string>,
+): string[] {
   const bad: string[] = [];
-  for (const match of text.matchAll(MONEY_TOKEN)) {
+  const seen = new Set<string>();
+  const flag = (raw: string) => {
+    if (seen.has(raw)) return;
+    seen.add(raw);
+    bad.push(raw);
+  };
+
+  for (const match of text.matchAll(CURRENCY_TOKEN)) {
     const token = normalize(match[0]);
-    // Also accept the bare number inside a quoted amount, so "$1,240.50" passes
-    // when the digest holds it with or without its symbol.
-    const bare = token.replace(/^[^\d]+/, "");
-    if (!allowed.has(token) && !allowed.has(bare)) bad.push(match[0]);
+    // Accept the bare number inside a quoted amount, so a dropped symbol is not
+    // mistaken for an invention.
+    const bare = token.replace(/^[^\d]+/, "").replace(/[^\d.,]+$/, "");
+    if (!amounts.has(token) && !amounts.has(bare)) flag(match[0]);
+  }
+
+  // Strip the currency-marked tokens first, so the digits inside "$1,240.50" are
+  // not judged a second time under the looser rule.
+  for (const match of text.replace(CURRENCY_TOKEN, " ").matchAll(NUMERIC_TOKEN)) {
+    const token = match[0];
+    if (YEAR.test(token)) continue;
+    const plain = normalize(token);
+    const ungrouped = plain.replace(/,/g, "");
+    if (
+      !amounts.has(plain) &&
+      !amounts.has(ungrouped) &&
+      !numbers.has(plain) &&
+      !numbers.has(ungrouped)
+    ) {
+      flag(token);
+    }
   }
   return bad;
 }
@@ -271,7 +339,7 @@ Deno.serve(async (req) => {
     // --- the paywall ---
     const { data: review } = await admin
       .from("spending_reviews")
-      .select("id, status, attempts, period_id, body_enc")
+      .select("id, status, attempts, period_id, period_from, period_to, body_enc")
       .eq("id", reviewId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -291,23 +359,46 @@ Deno.serve(async (req) => {
         409,
       );
     }
-    // The digest has to describe the window that was actually bought.
-    const period = digest.period as { id?: unknown } | undefined;
-    if (period?.id !== review.period_id) {
+    // The digest has to describe the window that was actually bought — not just
+    // a window of the same shape. Otherwise a crafted pair of requests could pay
+    // for one period and be handed a review of another.
+    const period = digest.period as { id?: unknown; from?: unknown; to?: unknown } | undefined;
+    const sameDay = (a: unknown, b: string) =>
+      typeof a === "string" && a === new Date(b).toISOString().slice(0, 10);
+    if (
+      !period ||
+      period.id !== review.period_id ||
+      !sameDay(period.from, review.period_from) ||
+      // `to` is stored exclusive and the digest carries the last day inside it.
+      !sameDay(
+        period.to,
+        new Date(new Date(review.period_to).getTime() - 86_400_000).toISOString(),
+      )
+    ) {
       return json({ error: "That digest is for a different period." }, 400);
     }
 
-    // Spent before the call, so a request that dies mid-flight still costs an
-    // attempt and a loop cannot mint free generations.
-    await admin
+    // Spend the attempt as a COMPARE-AND-SWAP, not a read-then-write: it is the
+    // claim on this generation. Without the `attempts` predicate, N concurrent
+    // requests for the same paid review would all read the same count, all pass
+    // the cap above, and all call the model — one payment, unlimited spend.
+    const { data: claimed, error: claimErr } = await admin
       .from("spending_reviews")
       .update({ attempts: review.attempts + 1 })
-      .eq("id", reviewId);
+      .eq("id", reviewId)
+      .eq("attempts", review.attempts)
+      .select("id");
+    if (claimErr) return json({ error: claimErr.message }, 500);
+    if (!claimed || claimed.length === 0) {
+      return json({ error: "This review is already being written." }, 409);
+    }
 
     // --- write it ---
     const anthropic = new Anthropic({ apiKey });
-    const allowed = new Set<string>();
-    collectAllowed(digest, allowed);
+    const amounts = new Set<string>();
+    collectAmounts(digest, amounts);
+    const numbers = new Set<string>();
+    collectNumbers(digest, numbers);
 
     const messages: { role: "user" | "assistant"; content: string }[] = [
       {
@@ -352,7 +443,7 @@ Deno.serve(async (req) => {
     }
 
     let { review: written, raw } = await ask();
-    let unsupported = unsupportedAmounts(reviewText(written), allowed);
+    let unsupported = unsupportedAmounts(reviewText(written), amounts, numbers);
 
     // The guard fails closed, and it is the reason this is safe to sell — but a
     // single dropped decimal would otherwise cost someone a paid generation. So
@@ -367,13 +458,32 @@ Deno.serve(async (req) => {
           .join(", ")}. Every amount must be copied character-for-character from a "display" field. Write the review again, using only figures that are in the digest, and leaving out any claim you cannot support with one.`,
       });
       ({ review: written } = await ask());
-      unsupported = unsupportedAmounts(reviewText(written), allowed);
+      unsupported = unsupportedAmounts(reviewText(written), amounts, numbers);
     }
     if (unsupported.length > 0) {
-      throw new Error(
-        `The review quoted amounts that aren't in your figures (${unsupported
-          .slice(0, 3)
-          .join(", ")}), twice over, so it was thrown away rather than shown to you.`,
+      // The rejected tokens are usually the user's own amount in a slightly
+      // different format, and `error` is a plaintext column that the archive
+      // renders — so the count goes in the record and the values go only to the
+      // device that asked.
+      const spent = review.attempts + 1;
+      await admin
+        .from("spending_reviews")
+        .update({
+          error: `The review quoted ${unsupported.length} figure(s) that aren't in your own totals, twice over, so it was thrown away rather than shown to you.`,
+          // This path returns instead of throwing (to keep the rejected values
+          // out of the database), so it has to apply the terminal transition
+          // itself — otherwise the row stays `paid` with no attempts left and the
+          // archive keeps offering a tap that can only fail.
+          ...(spent >= MAX_ATTEMPTS ? { status: "failed" } : {}),
+        })
+        .eq("id", reviewId);
+      return json(
+        {
+          error:
+            "That review quoted figures that aren't in your own totals, so it was thrown away rather than shown to you. Try again.",
+          unsupported: unsupported.slice(0, 8),
+        },
+        502,
       );
     }
 

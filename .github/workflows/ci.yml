@@ -26,7 +26,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22, not 20: scripts/verify-edge-functions.mjs imports the Edge
+          # Functions' own TypeScript through Node's type stripping, which landed
+          # in 22.6 and is unflagged from 22.18.
+          node-version: 22
           cache: npm
       - run: npm ci
       # Type-check + production build must succeed.
