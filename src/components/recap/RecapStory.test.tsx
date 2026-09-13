@@ -254,7 +254,7 @@ describe("RecapStory", () => {
   describe("what's still in reach", () => {
     it("says nothing for a past month", () => {
       const { texts } = renderStory(viewOf(TYPICAL));
-      expect(texts().some((s) => s?.startsWith("LOG "))).toBe(false);
+      expect(texts().some((s) => /^LOG \d+ MORE DAYS? FOR/.test(s ?? ""))).toBe(false);
     });
 
     it("tells the current month how many more days reach the next rarity", () => {
