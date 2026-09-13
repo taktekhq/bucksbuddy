@@ -1,6 +1,11 @@
 import { vi } from "vitest";
 
-export type QueryResult = { data?: unknown; error?: { message: string } | null };
+export type QueryResult = {
+  data?: unknown;
+  error?: { message: string } | null;
+  // Only present when the query asked for one (`select("*", { count })`).
+  count?: number | null;
+};
 export type Handler = () => QueryResult | Promise<QueryResult>;
 
 // A chainable Supabase query-builder mock. Every builder method returns the
@@ -10,10 +15,13 @@ export type Handler = () => QueryResult | Promise<QueryResult>;
 // Ops are inferred from which mutating method was called: insert/update/delete,
 // defaulting to "select" for plain reads.
 export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
-  const calls: { table: string; op: string }[] = [];
+  // `range` records the row window a paginated read asked for, so a test can
+  // check the pages line up.
+  const calls: { table: string; op: string; range?: [number, number] }[] = [];
 
   function from(table: string) {
     let op = "select";
+    let range: [number, number] | undefined;
     const builder: Record<string, unknown> = {
       select: () => builder,
       insert: () => {
@@ -33,15 +41,22 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
         return builder;
       },
       eq: () => builder,
+      gte: () => builder,
+      lt: () => builder,
       order: () => builder,
       limit: () => builder,
+      range: (from: number, to: number) => {
+        range = [from, to];
+        return builder;
+      },
+      abortSignal: () => builder,
       single: () => builder,
       maybeSingle: () => builder,
       then: (
         resolve: (v: QueryResult) => unknown,
         reject?: (e: unknown) => unknown,
       ) => {
-        calls.push({ table, op });
+        calls.push(range ? { table, op, range } : { table, op });
         const key = `${table}:${op}`;
         const handler = handlers[key] ?? handlers[table];
         const result = handler ? handler() : { data: null, error: null };

@@ -23,6 +23,7 @@ import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import { FETCH_CAP } from "@/lib/stats";
+import { fetchMonthRows, RecapLoadError } from "@/lib/recapQuery";
 import {
   cipherMask,
   clearStoredPassphrase,
@@ -79,6 +80,10 @@ type Store = {
   e2eMode: E2EMode;
   locked: boolean;
   passphrase: string | null;
+  // True once the vault has been looked up for this user, whichever way it
+  // came back. Until then `locked` is only a default, so a screen that fetches
+  // on its own (Recap) waits for this before reading it.
+  vaultReady: boolean;
   unlock: (passphrase: string) => Promise<Result>;
   enableEncryption: (passphrase: string) => Promise<Result>;
   disableEncryption: () => Promise<Result>;
@@ -99,6 +104,10 @@ type Store = {
   addSafeGoldEntry: (entry: NewSafeGoldEntry) => Promise<Result>;
   deleteSafeGoldEntry: (id: string) => Promise<Result>;
   refresh: () => Promise<void>;
+  // Every transaction of one local calendar month, complete and decrypted with
+  // this session's key — fetched fresh, not read off the capped list above.
+  // Rejects with RecapLoadError("locked") while this device can't decrypt.
+  loadMonth: (month: Date, signal?: AbortSignal) => Promise<Transaction[]>;
 };
 
 const StoreContext = createContext<Store | null>(null);
@@ -243,6 +252,7 @@ export function StoreProvider({
   const [e2eMode, setE2eMode] = useState<E2EMode>("default");
   const [locked, setLocked] = useState(false);
   const [passphrase, setPassphrase] = useState<string | null>(null);
+  const [vaultReady, setVaultReady] = useState(false);
   // The decrypted master key for this session. A ref (not state) so it never
   // lands in React state / devtools and changing it doesn't trigger renders.
   const masterKey = useRef<CryptoKey | null>(null);
@@ -304,6 +314,7 @@ export function StoreProvider({
 
   useEffect(() => {
     void (async () => {
+      setVaultReady(false);
       const vault = await loadVault(userId);
       if (vault.status === "unlocked") {
         // Default tier: no user passphrase, always unlocked.
@@ -328,6 +339,7 @@ export function StoreProvider({
           setPassphrase(null);
         }
       }
+      setVaultReady(true);
       await loadData();
     })();
   }, [userId, loadData]);
@@ -340,6 +352,15 @@ export function StoreProvider({
     if (loading || locked) return;
     saveCache(userId, { transactions, homeCurrency, currencies, safeGoldEntries });
   }, [userId, loading, locked, transactions, homeCurrency, currencies, safeGoldEntries]);
+
+  const loadMonth = useCallback(
+    (month: Date, signal?: AbortSignal) => {
+      const key = masterKey.current;
+      if (!key) return Promise.reject(new RecapLoadError("locked"));
+      return fetchMonthRows(userId, month, (row) => rowToTransaction(row, key), signal);
+    },
+    [userId],
+  );
 
   const unlock = useCallback(
     async (pass: string) => {
@@ -584,6 +605,7 @@ export function StoreProvider({
     e2eMode,
     locked,
     passphrase,
+    vaultReady,
     unlock,
     enableEncryption,
     disableEncryption,
@@ -595,6 +617,7 @@ export function StoreProvider({
     addSafeGoldEntry,
     deleteSafeGoldEntry,
     refresh: loadData,
+    loadMonth,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

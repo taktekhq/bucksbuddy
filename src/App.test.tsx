@@ -24,6 +24,7 @@ vi.mock("@/screens/Stats", () => ({
 vi.mock("@/screens/Receipts", () => ({
   Receipts: ({ kind }: { kind: string }) => <div>ReceiptsScreen {kind}</div>,
 }));
+vi.mock("@/screens/Recap", () => ({ Recap: () => <div>RecapScreen</div> }));
 vi.mock("@/screens/Settings", () => ({ Settings: () => <div>SettingsScreen</div> }));
 vi.mock("@/screens/Safe", () => ({ Safe: () => <div>SafeScreen</div> }));
 vi.mock("@/screens/Reset", () => ({ Reset: () => <div>ResetScreen</div> }));
@@ -91,7 +92,7 @@ describe("App", () => {
     expect(screen.queryByTestId("store")).not.toBeInTheDocument();
   });
 
-  it("routes to Home, Settings, Safe and History when signed in", () => {
+  it("routes to Home, Settings, Safe and History when signed in", async () => {
     useSession.mockReturnValue({ session, ready: true, recoveryMode: false });
 
     useRoute.mockReturnValue("/");
@@ -117,5 +118,19 @@ describe("App", () => {
     useRoute.mockReturnValue("/stats/weekend");
     rerender(<App />);
     expect(screen.getByText("ReceiptsScreen weekend")).toBeInTheDocument();
+
+    // The Recap room is code-split: the splash carrot holds the spot while
+    // its chunk loads, then the screen takes over.
+    useRoute.mockReturnValue("/recap");
+    rerender(<App />);
+    expect(await screen.findByText("RecapScreen")).toBeInTheDocument();
+  });
+
+  it("keeps the Recap behind sign-in: signed out, /recap is the landing page", () => {
+    useSession.mockReturnValue({ session: null, ready: true, recoveryMode: false });
+    useRoute.mockReturnValue("/recap");
+    render(<App />);
+    expect(screen.getByText("LandingScreen")).toBeInTheDocument();
+    expect(screen.queryByText("RecapScreen")).not.toBeInTheDocument();
   });
 });

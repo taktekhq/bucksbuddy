@@ -52,6 +52,24 @@ describe("router", () => {
     expect(window.location.hash).toBe(before);
   });
 
+  it("recognizes the /recap route, with or without its month query", () => {
+    act(() => navigate("/recap"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/recap");
+    act(() => navigate("/recap", "month=2026-09"));
+    expect(window.location.hash).toBe("#/recap?month=2026-09");
+    expect(renderHook(() => useRoute()).result.current).toBe("/recap");
+  });
+
+  it("treats the same route with a different query as a real navigation", () => {
+    act(() => navigate("/recap", "month=2026-09"));
+    act(() => navigate("/recap", "month=2026-08"));
+    expect(window.location.hash).toBe("#/recap?month=2026-08");
+    // …but the exact same URL again is still a no-op.
+    const before = window.location.hash;
+    act(() => navigate("/recap", "month=2026-08"));
+    expect(window.location.hash).toBe(before);
+  });
+
   it("updates the route on hashchange and cleans up", async () => {
     const { result, unmount } = renderHook(() => useRoute());
     expect(result.current).toBe("/");

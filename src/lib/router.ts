@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 
 // Minimal hash router. Routes are "/", "/settings", "/safe", "/history",
-// "/stats", "/legal", "/contact", "/reset". Hash-based so the static SPA needs
-// no server rewrites and the back button works.
+// "/stats", "/recap", "/legal", "/contact", "/reset". Hash-based so the static
+// SPA needs no server rewrites and the back button works.
 //
 // "/" is the home/landing entry (the marketing landing for signed-out visitors,
 // the app for signed-in ones); "/history" is the full-history page; "/stats" is
 // the stats page (personal breakdown when signed in, community numbers for
-// everyone); "/legal" is the public privacy + terms page; "/contact" is the
-// public contact page; "/reset" is the post-recovery URL after useSession
-// parses the tokens out of a Supabase reset-password email.
+// everyone); "/recap" is the shareable month card (it takes a "?month=YYYY-MM"
+// query, which the screen reads itself); "/legal" is the public privacy +
+// terms page; "/contact" is the public contact page; "/reset" is the
+// post-recovery URL after useSession parses the tokens out of a Supabase
+// reset-password email.
 //
 // The bare paths "/privacy", "/terms", "/contact" and "/stats" (no hash) are
 // normalized onto the matching hash routes at startup by redirectBarePath()
@@ -22,6 +24,7 @@ export type Route =
   | "/stats"
   | "/stats/treats"
   | "/stats/weekend"
+  | "/recap"
   | "/legal"
   | "/contact"
   | "/reset";
@@ -30,8 +33,9 @@ function current(): Route {
   // A Supabase recovery email appends "#access_token=…" to the redirect URL.
   // When that URL already has a hash (e.g. "#/reset"), the result is the
   // double-fragment "#/reset#access_token=…". Take only what's before the
-  // second '#' so the route resolves cleanly.
-  const h = window.location.hash.replace(/^#/, "").split("#")[0];
+  // second '#' so the route resolves cleanly. A "?query" after the path
+  // belongs to the screen, not the route.
+  const h = window.location.hash.replace(/^#/, "").split("#")[0].split("?")[0];
   if (
     h === "/settings" ||
     h === "/safe" ||
@@ -39,6 +43,7 @@ function current(): Route {
     h === "/stats" ||
     h === "/stats/treats" ||
     h === "/stats/weekend" ||
+    h === "/recap" ||
     h === "/legal" ||
     h === "/contact" ||
     h === "/reset"
@@ -70,9 +75,15 @@ export function redirectBarePath() {
   if (dest) window.history.replaceState(null, "", dest);
 }
 
-export function navigate(to: Route) {
-  if (current() === to) return;
-  window.location.hash = to;
+/**
+ * Go to a route. `query` (already-encoded "a=b" pairs) rides along after a
+ * "?" for screens that take one; navigating to the exact current URL is a
+ * no-op so the history doesn't fill with duplicates.
+ */
+export function navigate(to: Route, query?: string) {
+  const target = query ? `${to}?${query}` : to;
+  if (window.location.hash.replace(/^#/, "") === target) return;
+  window.location.hash = target;
 }
 
 export function useRoute(): Route {

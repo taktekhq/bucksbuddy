@@ -206,6 +206,40 @@ Keep it light. The personality is in the color and voice, not heavy animation.
 - **Drag (sheet):** the `CategorySheet` is `drag="y"`; a downward drag past a
   small threshold (or a fast flick) dismisses it.
 
+## Rooms
+
+Each screen beyond Home is its own "room", a distinct dark palette you step into
+and back out of: History's charcoal rabbit hole, Stats' indigo observatory, the
+Safe's green vault, and the Recap's near-black **binder** (`#141416` under a
+single carrot spotlight, `radial-gradient` at the top). Every room keeps the
+same chrome: a centered Grobold title, a carrot back chevron, `bg-white/10`
+cards with white text, and a fixed floor behind the content so an overscroll
+never flashes the light canvas through.
+
+## The Recap card
+
+The Recap card is the one surface that leaves the app: an image people post.
+It bends two rules on purpose and keeps the rest.
+
+- **The palette comes from the data.** The card's "type" is the month's
+  leading category, and its colors are that category's own (`categoryColor()`),
+  so a Coffee month is a latte card and a Parking month a teal one. Carrot
+  appears only on the brand mark and the URL. Rarity — earned purely by days
+  logged, never by money — puts a foil on the frame: plain, sheen, silver, holo,
+  gold.
+- **Grobold stays grey on white.** The title and wordmark sit on a white plate
+  in `label-muted` exactly as everywhere else; the type color surrounds the
+  plate rather than sitting under the letters. Numbers and labels use
+  **Nunito** (700/900, self-hosted, OFL) instead of the system stack, because an
+  image has to look the same on the friend's phone as on yours; both fonts are
+  embedded into the exported PNG.
+- **The carrot on a card is a drawn mark** (`components/recap/CarrotMark`), not
+  the emoji: an emoji baked into a PNG comes out as whichever emoji font the
+  exporting phone had.
+- **Motion:** one iris reveal when a month's card first appears
+  (`.recap-reveal`), still for anyone who asked for reduced motion. The carrot
+  never moves.
+
 ## Reuse guide
 
 1. Consume tokens via Tailwind classes (`bg-canvas`, `bg-surface`, `shadow-card`,

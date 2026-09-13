@@ -3,12 +3,13 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { makeSupabaseMock, type Handler } from "@/test/supabaseMock";
 import {
+  DEFAULT_PASSPHRASE,
   generateMasterKey,
   makeVerifier,
   wrapMasterKey,
 } from "@/lib/crypto";
 import { encryptGoldValues, encryptTxValues } from "@/lib/e2e";
-import type { Transaction } from "@/types/db";
+import type { Transaction, TransactionRow } from "@/types/db";
 
 type Res = { error: string | null };
 
@@ -36,7 +37,17 @@ vi.mock("@/lib/supabase", () => ({
 const navigate = vi.fn();
 vi.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => navigate(...a) }));
 
+// The month fetch is stubbed (its paging is covered in recapQuery.test.ts);
+// RecapLoadError stays real so the store's "locked" rejection is the same
+// class the Recap screen checks with `instanceof`.
+const fetchMonthRows = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/recapQuery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/recapQuery")>()),
+  fetchMonthRows: (...a: unknown[]) => fetchMonthRows(...a),
+}));
+
 import { StoreProvider, useStore } from "@/lib/store";
+import { RecapLoadError } from "@/lib/recapQuery";
 
 function setup(handlers: Record<string, Handler> = {}) {
   mock = makeSupabaseMock(handlers);
@@ -702,5 +713,111 @@ describe("StoreProvider / useStore", () => {
       );
     });
     for (const r of results) expect(r.error).toMatch(/Locked/);
+  });
+
+  it("flags the vault as ready only once it has been looked up", async () => {
+    const { result } = setup();
+    // Before the lookup resolves `locked` is just its default — a screen that
+    // fetches on its own must not trust it yet.
+    expect(result.current.vaultReady).toBe(false);
+    await waitFor(() => expect(result.current.vaultReady).toBe(true));
+    expect(result.current.locked).toBe(false);
+  });
+
+  it("flags the vault as ready for a passphrase user who stays locked", async () => {
+    const mk = await generateMasterKey();
+    const row = {
+      wrapped_key: await wrapMasterKey(mk, "pw"),
+      wrap_type: "passphrase",
+      verifier: await makeVerifier(mk),
+    };
+    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    expect(result.current.vaultReady).toBe(false);
+    // "Ready" means looked up, not unlocked: locked is now a real answer.
+    await waitFor(() => expect(result.current.vaultReady).toBe(true));
+    expect(result.current.locked).toBe(true);
+  });
+
+  it("rejects loadMonth with a locked RecapLoadError while locked", async () => {
+    const mk = await generateMasterKey();
+    const row = {
+      wrapped_key: await wrapMasterKey(mk, "pw"),
+      wrap_type: "passphrase",
+      verifier: await makeVerifier(mk),
+    };
+    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    await waitFor(() => expect(result.current.vaultReady).toBe(true));
+    expect(result.current.locked).toBe(true);
+
+    const err = await result.current
+      .loadMonth(new Date(2026, 5, 10, 12))
+      .then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(RecapLoadError);
+    expect((err as RecapLoadError).kind).toBe("locked");
+    // No key, no query: nothing is fetched that couldn't be read anyway.
+    expect(fetchMonthRows).not.toHaveBeenCalled();
+  });
+
+  it("loadMonth fetches the month with a decrypt callback bound to the session key", async () => {
+    // A default-tier vault whose key we hold, so the fixture can be encrypted
+    // under the very key the store will unwrap.
+    const mk = await generateMasterKey();
+    const row = {
+      wrapped_key: await wrapMasterKey(mk, DEFAULT_PASSPHRASE),
+      wrap_type: "default",
+      verifier: await makeVerifier(mk),
+    };
+    const encRow: TransactionRow = {
+      id: "enc",
+      user_id: "u1",
+      occurred_at: new Date(2026, 5, 10, 12).toISOString(),
+      created_at: new Date(2026, 5, 10, 12).toISOString(),
+      is_income: false,
+      category: "groceries",
+      original_currency: "USD",
+      rate_used: 89500,
+      ...(await encryptTxValues(mk, {
+        amount_usd_cents: 3131,
+        original_amount: 31.31,
+        note: "secret",
+      })),
+    } as TransactionRow;
+    // A row from before the backfill: plaintext columns, no `_enc`.
+    const legacyRow = tx({
+      id: "legacy",
+      amount_usd_cents: 4242,
+      note: "plain",
+      occurred_at: new Date(2026, 5, 3, 12).toISOString(),
+    }) as unknown as TransactionRow;
+    fetchMonthRows.mockImplementation(
+      async (
+        _userId: string,
+        _month: Date,
+        decrypt: (r: TransactionRow) => Promise<Transaction>,
+      ) => [await decrypt(encRow), await decrypt(legacyRow)],
+    );
+
+    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    await waitFor(() => expect(result.current.vaultReady).toBe(true));
+    expect(result.current.locked).toBe(false);
+
+    const month = new Date(2026, 5, 1, 12);
+    const controller = new AbortController();
+    const rows = await result.current.loadMonth(month, controller.signal);
+
+    expect(fetchMonthRows).toHaveBeenCalledTimes(1);
+    const [userId, monthArg, decrypt, signal] = fetchMonthRows.mock.calls[0];
+    expect(userId).toBe("u1");
+    expect(monthArg).toBe(month);
+    expect(decrypt).toEqual(expect.any(Function));
+    expect(signal).toBe(controller.signal); // cancellation reaches the query
+    // The callback really decrypts: ciphertext in, plaintext out — and legacy
+    // plaintext rows pass through untouched.
+    expect(rows.map((r) => r.id)).toEqual(["enc", "legacy"]);
+    expect(rows[0].amount_usd_cents).toBe(3131);
+    expect(rows[0].original_amount).toBe(31.31);
+    expect(rows[0].note).toBe("secret");
+    expect(rows[1].amount_usd_cents).toBe(4242);
+    expect(rows[1].note).toBe("plain");
   });
 });

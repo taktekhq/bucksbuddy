@@ -186,6 +186,24 @@ describe("Stats", () => {
     expect(navigate).toHaveBeenCalledWith("/");
   });
 
+  it("opens the Recap for the month on screen", async () => {
+    storeValue = makeStoreValue({
+      transactions: [{ occurred_at: "2000-01-01T10:00:00.000Z" } as Transaction],
+    });
+    render(<Stats signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: /Recap for/ }));
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    expect(navigate).toHaveBeenCalledWith("/recap", `month=${thisMonth}`);
+
+    // Paging back carries the month along, so the card matches the stats.
+    await userEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    await userEvent.click(screen.getByRole("button", { name: /Recap for/ }));
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+    expect(navigate).toHaveBeenLastCalledWith("/recap", `month=${lastMonth}`);
+  });
+
   it("shows the empty state before there's anything to chart", () => {
     dailySpendSeries.mockReturnValue([point("2026-06-09", 0, 0), point("2026-06-10", 0, 0)]);
     topCategories.mockReturnValue([]);

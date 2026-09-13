@@ -25,6 +25,11 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   amounts or notes. See **Encryption** below.
 - **Export:** CSV or PDF, for this month, last month, the past 3 months, or all time.
   Generated client-side from the decrypted rows, so it works on encrypted data.
+- **Recap:** every month of logging becomes a collectible **trading card** (or a 9:16
+  **story**) to share: a title the month earned from a 60-strong catalogue, the leading
+  category as the card's "type" and palette, and a rarity foil earned purely by how many
+  days you logged. Percentages and counts only, unless you flip amounts on; drawn as SVG
+  and exported to PNG on the device. See [`docs/RECAP.md`](docs/RECAP.md).
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -181,14 +186,18 @@ Sign-in is email + password (no email link), so you stay inside the app the whol
 index.html              app entry
 src/main.tsx            mount + register service worker
 src/App.tsx             auth gate + hash router
-src/screens/            Login, Home, Add, Settings
-src/components/          AddComposer + ui/* building blocks, history rows/stacks, CurrencySettings, ExportCard
+src/screens/            Landing, Home, History, Stats, Receipts, Recap, Safe, Settings, …
+src/components/          AddComposer + ui/* building blocks, history rows/stacks, CurrencySettings, ExportCard,
+                        recap/* (the SVG trading card and story)
 src/lib/                supabase client, store (in-memory cache), router, useSession,
-                        crypto + e2e (encryption vault), currency/money/dates/csv/categories
+                        crypto + e2e (encryption vault), currency/money/dates/csv/categories,
+                        recap* (month facts, titles, text metrics, PNG export, complete-month query)
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0006_public_stats.sql, 0007_currencies.sql, 0008_drop_legacy.sql
 docs/DESIGN_SYSTEM.md   reusable design system
+docs/RECAP.md           how the Recap card works, and what to check before shipping it wider
+scripts/recap-preview/  `npm run recap:preview` — the card, story and screen on fictional rows
 ```
 
 > A React Native port lived in `mobile/` for a few days in September 2026 and was

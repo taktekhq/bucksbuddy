@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Sparkles } from "lucide-react";
 import { Carrot } from "@/components/ui/Carrot";
 import { SparkArea } from "@/components/ui/SparkArea";
 import { StatBars, type StatBarItem } from "@/components/ui/StatBars";
@@ -9,6 +9,7 @@ import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
+import { monthKey } from "@/lib/recap";
 import { formatCents } from "@/lib/money";
 import type { Currency } from "@/lib/currency";
 import {
@@ -233,14 +234,29 @@ function PersonalStats() {
     : 0;
   const lastMonthCents = monthly.find((m) => m.offset === -1)?.totalCents ?? 0;
 
+  // The month switcher, with the way into the Recap — this month's
+  // collectible card — riding along beside it.
   const monthNav = (
-    <MonthSwitcher
-      label={monthLabel(anchor)}
-      onPrev={() => setMonthOffset((o) => o - 1)}
-      onNext={() => setMonthOffset((o) => Math.min(o + 1, 0))}
-      canPrev={hasOlder}
-      canNext={!isCurrentMonth}
-    />
+    <div className="flex items-stretch gap-2">
+      <div className="min-w-0 flex-1">
+        <MonthSwitcher
+          label={monthLabel(anchor)}
+          onPrev={() => setMonthOffset((o) => o - 1)}
+          onNext={() => setMonthOffset((o) => Math.min(o + 1, 0))}
+          canPrev={hasOlder}
+          canNext={!isCurrentMonth}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => navigate("/recap", `month=${monthKey(anchor)}`)}
+        aria-label={`Recap for ${monthLabel(anchor)}`}
+        className="press flex shrink-0 items-center gap-1.5 rounded-card bg-carrot px-3.5 text-sm font-semibold text-white shadow-carrot"
+      >
+        <Sparkles className="h-4 w-4" strokeWidth={2.25} />
+        Recap
+      </button>
+    </div>
   );
 
   const barItems = useMemo<StatBarItem[]>(() => {

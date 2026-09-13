@@ -19,6 +19,7 @@ export function makeStoreValue(overrides: Record<string, unknown> = {}) {
     e2eMode: "default",
     locked: false,
     passphrase: null,
+    vaultReady: true,
     unlock: vi.fn(async () => ({ error: null })),
     enableEncryption: vi.fn(async () => ({ error: null })),
     disableEncryption: vi.fn(async () => ({ error: null })),
@@ -30,6 +31,7 @@ export function makeStoreValue(overrides: Record<string, unknown> = {}) {
     addSafeGoldEntry: vi.fn(async () => ({ error: null })),
     deleteSafeGoldEntry: vi.fn(async () => ({ error: null })),
     refresh: vi.fn(async () => {}),
+    loadMonth: vi.fn(async () => []),
     ...overrides,
   };
 }

@@ -21,6 +21,8 @@ export default defineConfig({
         "icons/icon-192.png",
         "fonts/grobold.woff2",
         "fonts/grobold.ttf",
+        "fonts/nunito-700.woff2",
+        "fonts/nunito-900.woff2",
       ],
       // Never cache Supabase auth/data — always go to the network.
       workbox: {

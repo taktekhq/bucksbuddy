@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { useSession } from "@/lib/useSession";
 import { useRoute } from "@/lib/router";
 import { StoreProvider } from "@/lib/store";
@@ -12,6 +13,11 @@ import { Receipts } from "@/screens/Receipts";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
 import { Reset } from "@/screens/Reset";
+
+// The Recap room (the card drawings, the title catalogue, the glyph tables
+// and the PNG export) only loads when someone opens it, so the everyday
+// tracker stays as light as before.
+const Recap = lazy(() => import("@/screens/Recap").then((m) => ({ default: m.Recap })));
 
 function Splash() {
   return (
@@ -87,6 +93,10 @@ export default function App() {
           <Receipts kind="treats" />
         ) : route === "/stats/weekend" ? (
           <Receipts kind="weekend" />
+        ) : route === "/recap" ? (
+          <Suspense fallback={<Splash />}>
+            <Recap />
+          </Suspense>
         ) : (
           <Home />
         )}

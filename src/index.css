@@ -16,6 +16,24 @@
   font-display: swap;
 }
 
+/* Nunito — the rounded body face of the Recap card (self-hosted, OFL). The
+   card is an image people share, so its text can't depend on whichever system
+   font a phone has; the same two files are embedded into the exported PNG. */
+@font-face {
+  font-family: "Nunito";
+  src: url("/fonts/nunito-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Nunito";
+  src: url("/fonts/nunito-900.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
@@ -88,4 +106,25 @@ select {
 /* Gentle entrance for confirmations / freshly shown elements. */
 .animate-pop {
   animation: pop-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The Recap card's reveal: an iris opening from the middle of the card, the
+   one motion on that screen. Static for anyone who has asked for less motion. */
+.recap-reveal {
+  animation: recap-iris 0.52s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes recap-iris {
+  from {
+    clip-path: circle(0% at 50% 45%);
+    opacity: 0.6;
+  }
+  to {
+    clip-path: circle(90% at 50% 45%);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recap-reveal {
+    animation: none;
+  }
 }
