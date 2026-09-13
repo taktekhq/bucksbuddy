@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 // "/stats", "/legal", "/contact", "/reset". Hash-based so the static SPA needs
 // no server rewrites and the back button works.
 //
+// "/review" is the paid spending-review screen (signed-in only).
+//
 // "/" is the home/landing entry (the marketing landing for signed-out visitors,
 // the app for signed-in ones); "/history" is the full-history page; "/stats" is
 // the stats page (personal breakdown when signed in, community numbers for
@@ -22,6 +24,7 @@ export type Route =
   | "/stats"
   | "/stats/treats"
   | "/stats/weekend"
+  | "/review"
   | "/legal"
   | "/contact"
   | "/reset";
@@ -39,6 +42,7 @@ function current(): Route {
     h === "/stats" ||
     h === "/stats/treats" ||
     h === "/stats/weekend" ||
+    h === "/review" ||
     h === "/legal" ||
     h === "/contact" ||
     h === "/reset"

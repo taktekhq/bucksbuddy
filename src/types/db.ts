@@ -105,3 +105,47 @@ export type SafeGoldEntryRow = {
   grams?: number | null;
   note?: string | null;
 };
+
+// --- paid spending reviews (see lib/reviews, migration 0009) ---
+
+// pending  — checkout started, money not confirmed
+// paid     — Stripe confirmed it; the review may be generated
+// ready    — the model wrote it (the body may not have reached us yet)
+// failed   — generation gave up, or the payment didn't complete
+// refunded — money returned
+export type ReviewStatus = "pending" | "paid" | "ready" | "failed" | "refunded";
+
+// A review row as stored. Only `body_enc` is encrypted — with the account's
+// master key, like every amount — and only the browser can write it.
+export type SpendingReviewRow = {
+  id: string;
+  status: ReviewStatus;
+  period_id: string;
+  period_from: string;
+  period_to: string;
+  home_currency: Currency;
+  price_cents: number;
+  price_currency: string;
+  paid_at: string | null;
+  refunded_at: string | null;
+  body_enc: string | null;
+  attempts: number;
+  error: string | null;
+  created_at: string;
+};
+
+// The written review itself, as the generating function returns it and as it is
+// stored (encrypted) in `body_enc`. Rendered field by field — never as markup.
+export type ReviewFigure = { label: string; value: string };
+export type ReviewSection = {
+  heading: string;
+  body: string;
+  figures: ReviewFigure[];
+};
+export type SpendingReview = {
+  title: string;
+  summary: string;
+  sections: ReviewSection[];
+  notables: string[];
+  caveats: string[];
+};

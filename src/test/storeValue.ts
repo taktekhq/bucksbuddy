@@ -6,6 +6,7 @@ import { DEFAULT_CURRENCIES, DEFAULT_HOME_CURRENCY } from "@/lib/currency";
 export function makeStoreValue(overrides: Record<string, unknown> = {}) {
   return {
     loading: false,
+    userId: "u1",
     transactions: [],
     homeCurrency: DEFAULT_HOME_CURRENCY,
     currencies: [...DEFAULT_CURRENCIES],
@@ -30,6 +31,9 @@ export function makeStoreValue(overrides: Record<string, unknown> = {}) {
     addSafeGoldEntry: vi.fn(async () => ({ error: null })),
     deleteSafeGoldEntry: vi.fn(async () => ({ error: null })),
     refresh: vi.fn(async () => {}),
+    reviewRange: vi.fn(async () => []),
+    sealReview: vi.fn(async () => "sealed"),
+    openReview: vi.fn(async () => null),
     ...overrides,
   };
 }
