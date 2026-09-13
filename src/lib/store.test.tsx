@@ -38,10 +38,10 @@ vi.mock("@/lib/router", () => ({ navigate: (...a: unknown[]) => navigate(...a) }
 
 import { StoreProvider, useStore } from "@/lib/store";
 
-function setup(handlers: Record<string, Handler> = {}, loadHistory = true) {
+function setup(handlers: Record<string, Handler> = {}) {
   mock = makeSupabaseMock(handlers);
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <StoreProvider userId="u1" loadHistory={loadHistory}>{children}</StoreProvider>
+    <StoreProvider userId="u1">{children}</StoreProvider>
   );
   return renderHook(() => useStore(), { wrapper });
 }
@@ -67,59 +67,6 @@ describe("StoreProvider / useStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear(); // the passphrase is cached here per device
-  });
-
-  it("loads a complete Recap through authorized decryption and refuses locked or revoked keys", async () => {
-    let pendingResolve!: (value: { data: Transaction[]; count: number }) => void;
-    let deferredRead = false;
-    const { result } = setup({ "transactions:select": () => deferredRead
-      ? new Promise(resolve => { pendingResolve = resolve; })
-      : ({ data: [tx()], count: 1, error: null }) });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(await result.current.loadRecapMonth(new Date(), new AbortController().signal)).toEqual([expect.objectContaining({ id: "t1", amount_usd_cents: 1000 })]);
-    deferredRead = true;
-    const pending = result.current.loadRecapMonth(new Date(), new AbortController().signal);
-    // Observe the rejection immediately so Vitest sees no unhandled promise.
-    const rejected = expect(pending).rejects.toThrow(/Locked/);
-    await act(async () => { await result.current.signOut(); });
-    pendingResolve({ data: [tx()], count: 1 });
-    await rejected;
-    await expect(result.current.loadRecapMonth(new Date(), new AbortController().signal)).rejects.toThrow(/Locked/);
-  });
-
-  it("initializes Recap without capped history and leaves its cache untouched", async () => {
-    const { result } = setup({ "profiles:select": () => ({ data: { home_currency: "EUR" } }) }, false);
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.homeCurrency).toBe("EUR");
-    expect(mock.calls.some(c => c.table === "transactions")).toBe(false);
-    expect(localStorage.getItem("bb-cache:u1")).toBeNull();
-  });
-
-  it("reports initialization errors and retries without leaking raw errors", async () => {
-    let fails = true;
-    const { result } = setup({ "profiles:select": () => fails
-      ? ({ data: null, error: { message: "private failure" } })
-      : ({ data: { home_currency: "EUR" } }) }, false);
-    await waitFor(() => expect(result.current.initializationError).toBe(true));
-    expect(result.current.loading).toBe(true);
-    fails = false;
-    await act(async () => { await result.current.refresh(); });
-    expect(result.current.initializationError).toBe(false);
-    expect(result.current.loading).toBe(false);
-  });
-
-  it("blocks Recap when its home-currency profile is missing", async () => {
-    const { result } = setup({}, false);
-    await waitFor(() => expect(result.current.initializationError).toBe(true));
-  });
-
-  it("clears a locked Recap device's plaintext cache without reading history", async () => {
-    const mk = await generateMasterKey();
-    const row = { wrapped_key: await wrapMasterKey(mk, "pw"), wrap_type: "passphrase", verifier: await makeVerifier(mk) };
-    const { result } = setup({ "profiles:select": () => ({ data: { home_currency: "EUR" } }), "e2e_keys:select": () => ({ data: row }) }, false);
-    await waitFor(() => expect(result.current.locked).toBe(true));
-    expect(localStorage.getItem("bb-cache:u1")).toBeNull();
-    expect(mock.calls.some(c => c.table === "transactions")).toBe(false);
   });
 
   it("throws when used outside the provider", () => {
@@ -497,7 +444,7 @@ describe("StoreProvider / useStore", () => {
     };
     const { result } = setup({
       "e2e_keys:select": () => ({ data: row }),
-      "transactions:select": () => ({ data: [encRow], count: 1 }),
+      "transactions:select": () => ({ data: [encRow] }),
       "safe_gold_entries:select": () => ({ data: [encGoldRow] }),
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -527,7 +474,6 @@ describe("StoreProvider / useStore", () => {
     expect(result.current.transactions[0].note).toBe("k");
     expect(result.current.transactions[0].amountMask).toBeUndefined();
     expect(result.current.safeGoldGrams).toBe(9); // decrypted gold
-    expect(await result.current.loadRecapMonth(new Date(), new AbortController().signal)).toEqual([expect.objectContaining({ amount_usd_cents: 7777, note: "k" })]);
   });
 
   it("auto-unlocks on load from the device-stored passphrase", async () => {

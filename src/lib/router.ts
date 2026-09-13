@@ -16,8 +16,6 @@ import { useEffect, useState } from "react";
 // below.
 export type Route =
   | "/"
-  | "/recap"
-  | `/recap?month=${string}`
   | "/settings"
   | "/safe"
   | "/history"
@@ -35,8 +33,6 @@ function current(): Route {
   // second '#' so the route resolves cleanly.
   const h = window.location.hash.replace(/^#/, "").split("#")[0];
   if (
-    h === "/recap" ||
-    h.startsWith("/recap?month=") ||
     h === "/settings" ||
     h === "/safe" ||
     h === "/history" ||
@@ -47,7 +43,7 @@ function current(): Route {
     h === "/contact" ||
     h === "/reset"
   ) {
-    return h as Route;
+    return h;
   }
   return "/";
 }

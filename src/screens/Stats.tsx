@@ -9,7 +9,6 @@ import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
-import { monthKey } from "@/lib/recap";
 import { formatCents } from "@/lib/money";
 import type { Currency } from "@/lib/currency";
 import {
@@ -32,10 +31,7 @@ const OBSERVATORY_BG =
   "linear-gradient(180deg, #23234A 0px, #1B1B38 220px, #141428 460px)";
 const OBSERVATORY_FLOOR = "#141428";
 
-export function Stats({ signedIn, recapEnabled = false }: {
-  signedIn: boolean;
-  recapEnabled?: boolean;
-}) {
+export function Stats({ signedIn }: { signedIn: boolean }) {
   // Tint the status bar to match the top of the page.
   useThemeColor("#23234A");
 
@@ -69,7 +65,7 @@ export function Stats({ signedIn, recapEnabled = false }: {
         </h1>
       </header>
 
-      {signedIn ? <PersonalStats recapEnabled={recapEnabled} /> : <PublicTeaser />}
+      {signedIn ? <PersonalStats /> : <PublicTeaser />}
       <CommunityStats />
     </main>
   );
@@ -199,7 +195,7 @@ function MonthlyBars({
 
 // The signed-in half. Lives in its own component so the top-level Stats never
 // touches useStore() — signed-out renders have no StoreProvider above them.
-function PersonalStats({ recapEnabled }: { recapEnabled: boolean }) {
+function PersonalStats() {
   const { transactions, locked, safeTotalCents, homeCurrency } = useStore();
 
   // Which month is on screen: 0 = this month, -1 = last month, … You can page
@@ -238,26 +234,13 @@ function PersonalStats({ recapEnabled }: { recapEnabled: boolean }) {
   const lastMonthCents = monthly.find((m) => m.offset === -1)?.totalCents ?? 0;
 
   const monthNav = (
-    <div className="flex items-center gap-3">
-      <div className="min-w-0 flex-1">
-        <MonthSwitcher
-          label={monthLabel(anchor)}
-          onPrev={() => setMonthOffset((o) => o - 1)}
-          onNext={() => setMonthOffset((o) => Math.min(o + 1, 0))}
-          canPrev={hasOlder}
-          canNext={!isCurrentMonth}
-        />
-      </div>
-      {recapEnabled && (
-        <button
-          type="button"
-          className="press rounded-pill bg-white/10 px-4 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-carrot"
-          onClick={() => navigate(`/recap?month=${monthKey(anchor)}`)}
-        >
-          Recap
-        </button>
-      )}
-    </div>
+    <MonthSwitcher
+      label={monthLabel(anchor)}
+      onPrev={() => setMonthOffset((o) => o - 1)}
+      onNext={() => setMonthOffset((o) => Math.min(o + 1, 0))}
+      canPrev={hasOlder}
+      canNext={!isCurrentMonth}
+    />
   );
 
   const barItems = useMemo<StatBarItem[]>(() => {
