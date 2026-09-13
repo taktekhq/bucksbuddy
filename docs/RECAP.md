@@ -27,6 +27,8 @@ preview; the same Blob is downloaded/shared. Settings changes, month changes,
 store writes, focus/reconnect and transaction realtime events invalidate it.
 Lock/sign-out unmount the capture and revoke its object URL. Downloads already
 saved are snapshots. Recap never writes a card, image or transaction to a server.
+The production image Content Security Policy permits `blob:` so these local
+previews can display; script and connection policies are unchanged.
 
 The six analytics events use the existing PostHog client, with only style,
 current/past and stage properties. Recap also uses the client's existing
