@@ -7,8 +7,8 @@ const useRoute = vi.fn();
 vi.mock("@/lib/useSession", () => ({ useSession: () => useSession() }));
 vi.mock("@/lib/router", () => ({ useRoute: () => useRoute() }));
 vi.mock("@/lib/store", () => ({
-  StoreProvider: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="store">{children}</div>
+  StoreProvider: ({ children, loadHistory }: { children: React.ReactNode; loadHistory?: boolean }) => (
+    <div data-testid="store" data-load-history={loadHistory}>{children}</div>
   ),
 }));
 vi.mock("@/screens/Landing", () => ({ Landing: () => <div>LandingScreen</div> }));
@@ -17,8 +17,8 @@ vi.mock("@/screens/Contact", () => ({ Contact: () => <div>ContactScreen</div> })
 vi.mock("@/screens/Home", () => ({ Home: () => <div>HomeScreen</div> }));
 vi.mock("@/screens/History", () => ({ History: () => <div>HistoryScreen</div> }));
 vi.mock("@/screens/Stats", () => ({
-  Stats: ({ signedIn }: { signedIn: boolean }) => (
-    <div>StatsScreen {signedIn ? "personal" : "public"}</div>
+  Stats: ({ signedIn, recapEnabled }: { signedIn: boolean; recapEnabled?: boolean }) => (
+    <div data-testid="stats" data-recap-enabled={recapEnabled}>StatsScreen {signedIn ? "personal" : "public"}</div>
   ),
 }));
 vi.mock("@/screens/Receipts", () => ({
@@ -32,6 +32,7 @@ vi.mock("@/screens/Reset", () => ({ Reset: () => <div>ResetScreen</div> }));
 import App from "@/App";
 
 const session = { user: { id: "u1" } };
+const ownerSession = { user: { id: "e6f633f5-fc8e-4d13-ba4c-9f0b5b79a44c" } };
 
 describe("App", () => {
   beforeEach(() => {
@@ -39,11 +40,50 @@ describe("App", () => {
     useRoute.mockReturnValue("/");
   });
 
-  it.each(["/recap", "/recap?month=2025-12"])("routes authenticated Recap at %s", async route => {
-    useSession.mockReturnValue({ session, ready: true, recoveryMode: false });
+  it.each(["/recap", "/recap?month=2025-12"])("routes the rollout owner to Recap at %s", async route => {
+    useSession.mockReturnValue({ session: ownerSession, ready: true, recoveryMode: false });
     useRoute.mockReturnValue(route);
     render(<App />);
     expect(await screen.findByText("RecapScreen")).toBeInTheDocument();
+    expect(screen.getByTestId("store")).toHaveAttribute("data-load-history", "false");
+  });
+
+  it.each(["/recap", "/recap?month=2025-12"])("keeps other accounts on Home with history at %s", route => {
+    useSession.mockReturnValue({ session, ready: true, recoveryMode: false });
+    useRoute.mockReturnValue(route);
+    render(<App />);
+    expect(screen.getByText("HomeScreen")).toBeInTheDocument();
+    expect(screen.queryByText("RecapScreen")).not.toBeInTheDocument();
+    expect(screen.getByTestId("store")).toHaveAttribute("data-load-history", "true");
+  });
+
+  it("removes Recap when the session changes to another account or signs out", async () => {
+    useSession.mockReturnValue({ session: ownerSession, ready: true, recoveryMode: false });
+    useRoute.mockReturnValue("/recap");
+    const { rerender } = render(<App />);
+    expect(await screen.findByText("RecapScreen")).toBeInTheDocument();
+
+    useSession.mockReturnValue({ session, ready: true, recoveryMode: false });
+    rerender(<App />);
+    expect(screen.queryByText("RecapScreen")).not.toBeInTheDocument();
+    expect(screen.getByText("HomeScreen")).toBeInTheDocument();
+
+    useSession.mockReturnValue({ session: null, ready: true, recoveryMode: false });
+    rerender(<App />);
+    expect(screen.queryByText("RecapScreen")).not.toBeInTheDocument();
+    expect(screen.getByText("LandingScreen")).toBeInTheDocument();
+    expect(screen.queryByTestId("store")).not.toBeInTheDocument();
+  });
+
+  it("enables the Stats entry only for the rollout owner", () => {
+    useRoute.mockReturnValue("/stats");
+    useSession.mockReturnValue({ session: ownerSession, ready: true, recoveryMode: false });
+    const { rerender } = render(<App />);
+    expect(screen.getByTestId("stats")).toHaveAttribute("data-recap-enabled", "true");
+
+    useSession.mockReturnValue({ session, ready: true, recoveryMode: false });
+    rerender(<App />);
+    expect(screen.getByTestId("stats")).toHaveAttribute("data-recap-enabled", "false");
   });
 
   it("shows the splash carrot until the session is ready", () => {

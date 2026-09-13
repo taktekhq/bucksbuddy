@@ -47,7 +47,9 @@ function StatusBarScrim() {
 export default function App() {
   const { session, ready, recoveryMode } = useSession();
   const route = useRoute();
-  const isRecap = route === "/recap" || route.startsWith("/recap?");
+  // Owner-only rollout while native sharing and live data are validated.
+  const recapEnabled = session?.user.id === "e6f633f5-fc8e-4d13-ba4c-9f0b5b79a44c";
+  const isRecap = recapEnabled && (route === "/recap" || route.startsWith("/recap?"));
 
   let content;
   if (recoveryMode) {
@@ -71,7 +73,7 @@ export default function App() {
     // variant while the session loads.
     content = session ? (
       <StoreProvider key={session.user.id} userId={session.user.id}>
-        <Stats signedIn />
+        <Stats signedIn recapEnabled={recapEnabled} />
       </StoreProvider>
     ) : (
       <Stats signedIn={false} />

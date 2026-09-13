@@ -4,6 +4,13 @@ Stats → Recap carries the selected month into `#/recap?month=YYYY-MM`.
 Direct visits use the current local month. Both styles, all eligible titles,
 customization, PNG downloads and sharing are free.
 
+The initial production rollout is restricted to authenticated user
+`e6f633f5-fc8e-4d13-ba4c-9f0b5b79a44c`. App checks the session user ID for both
+the Stats entry and direct Recap routes. Other accounts visiting a Recap URL
+see Home with normal history loading; signed-out visitors see Landing. This
+client feature gate controls rollout; existing Supabase authorization and vault
+encryption continue to protect each user's data.
+
 ## Data and privacy
 
 Recap initializes the existing vault/profile without fetching the capped recent
@@ -62,7 +69,8 @@ and Fun 108. The specified ranking therefore yields Food 38%, Groceries 25%,
 Everything else 37%, and the generic monthly headline. It cannot simultaneously
 yield Food/Parking as the top two. Tests intentionally follow the data contract.
 
-Before leaving draft/releasing, complete these physical-device checks:
+The owner requested a production rollout to validate this live. Before expanding
+access beyond that account, complete these checks:
 
 - iOS Safari and installed PWA: native file share, cancel, destination rejection,
   PNG-only retry, Save Image/Save to Files; confirm returning to the app works.

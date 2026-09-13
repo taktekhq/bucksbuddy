@@ -111,9 +111,14 @@ describe("Stats", () => {
   });
 
   it("carries the selected month to Recap", async () => {
-    render(<Stats signedIn />);
+    render(<Stats signedIn recapEnabled />);
     await userEvent.click(screen.getByRole("button", { name: "Recap" }));
     expect(navigate).toHaveBeenCalledWith(expect.stringMatching(/^\/recap\?month=\d{4}-\d{2}$/));
+  });
+
+  it("hides Recap when the rollout is disabled", () => {
+    render(<Stats signedIn />);
+    expect(screen.queryByRole("button", { name: "Recap" })).not.toBeInTheDocument();
   });
 
   it("shows the month's money picture when signed in", () => {
