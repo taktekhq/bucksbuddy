@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-export type QueryResult = { data?: unknown; error?: { message: string } | null };
+export type QueryResult = { count?: number | null; data?: unknown; error?: { message: string } | null };
 export type Handler = () => QueryResult | Promise<QueryResult>;
 
 // A chainable Supabase query-builder mock. Every builder method returns the
@@ -33,6 +33,10 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
         return builder;
       },
       eq: () => builder,
+      gte: () => builder,
+      lt: () => builder,
+      range: () => builder,
+      abortSignal: () => builder,
       order: () => builder,
       limit: () => builder,
       single: () => builder,

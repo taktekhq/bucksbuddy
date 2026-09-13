@@ -24,6 +24,7 @@ export default defineConfig({
       ],
       // Never cache Supabase auth/data — always go to the network.
       workbox: {
+        globPatterns: ["**/*.{js,css,html,woff,woff2}"],
         navigateFallbackDenylist: [/^\/sw\.js$/],
         runtimeCaching: [
           {
