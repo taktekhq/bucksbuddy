@@ -33,4 +33,9 @@ jobs:
       - run: npm run build
       # Enforces the 100% coverage thresholds from vitest.config.ts.
       - run: npm run coverage
+      # The Edge Functions are Deno and sit outside the Vitest project, so their
+      # two load-bearing pieces — the Stripe webhook signature check and the
+      # guard that stops a generated review quoting an amount the device never
+      # computed — are checked by their own script.
+      - run: npm run verify:functions
 

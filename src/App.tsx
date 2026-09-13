@@ -10,6 +10,7 @@ import { History } from "@/screens/History";
 import { Recurring } from "@/screens/Recurring";
 import { Stats } from "@/screens/Stats";
 import { Receipts } from "@/screens/Receipts";
+import { Review } from "@/screens/Review";
 import { Settings } from "@/screens/Settings";
 import { Safe } from "@/screens/Safe";
 import { Reset } from "@/screens/Reset";
@@ -90,6 +91,8 @@ export default function App() {
           <Receipts kind="treats" />
         ) : route === "/stats/weekend" ? (
           <Receipts kind="weekend" />
+        ) : route === "/review" ? (
+          <Review />
         ) : (
           <Home />
         )}

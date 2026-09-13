@@ -23,6 +23,7 @@ import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import { FETCH_CAP } from "@/lib/stats";
+import { decryptString, encryptString } from "@/lib/crypto";
 import {
   cipherMask,
   clearStoredPassphrase,
@@ -52,6 +53,8 @@ type Result = { error: string | null };
 
 type Store = {
   loading: boolean;
+  /** The signed-in account, for tables the store doesn't own (lib/reportVault). */
+  userId: string;
   transactions: Transaction[];
   // Currency settings (see lib/currency): totals are kept and shown in
   // `homeCurrency`; `currencies` are the secondary ones, each with its rate
@@ -99,7 +102,25 @@ type Store = {
   addSafeGoldEntry: (entry: NewSafeGoldEntry) => Promise<Result>;
   deleteSafeGoldEntry: (id: string) => Promise<Result>;
   refresh: () => Promise<void>;
+  // Spending reviews (see lib/reviews). The store is the only holder of the
+  // master key, so it is also the only place that can read the rows a review is
+  // computed from, or seal and open a review body.
+  //
+  // `reviewRange` deliberately does its own paged query instead of filtering
+  // `transactions`: that list is capped at the newest FETCH_CAP rows, and a
+  // three-month review of a busy account has to total every row in the window or
+  // its figures are quietly wrong.
+  reviewRange: (from: Date, to: Date) => Promise<Transaction[]>;
+  sealReview: (review: unknown) => Promise<string | null>;
+  openReview: (bodyEnc: string) => Promise<unknown | null>;
 };
+
+// Rows per page when reading a review's window. Matches FETCH_CAP, which this
+// project already relies on being under the API's own row ceiling.
+const REVIEW_PAGE = 500;
+// A stop so a misbehaving page loop can't spin forever. 250k entries in one
+// window is far past anything real.
+const REVIEW_MAX_PAGES = 500;
 
 const StoreContext = createContext<Store | null>(null);
 
@@ -532,6 +553,44 @@ export function StoreProvider({
     [safeGoldEntries],
   );
 
+  // Every transaction in [from, to), decrypted — paged, so the review's totals
+  // cover the whole window rather than the newest FETCH_CAP rows.
+  const reviewRange = useCallback(async (from: Date, to: Date) => {
+    const key = masterKey.current;
+    if (!key) return [];
+    const rows: TransactionRow[] = [];
+    for (let page = 0; page < REVIEW_MAX_PAGES; page++) {
+      const { data } = await supabase
+        .from("transactions")
+        .select("*")
+        .gte("occurred_at", from.toISOString())
+        .lt("occurred_at", to.toISOString())
+        .order("occurred_at", { ascending: false })
+        .range(page * REVIEW_PAGE, page * REVIEW_PAGE + REVIEW_PAGE - 1);
+      const batch = (data ?? []) as TransactionRow[];
+      rows.push(...batch);
+      if (batch.length < REVIEW_PAGE) break;
+    }
+    return Promise.all(rows.map((r) => rowToTransaction(r, key)));
+  }, []);
+
+  const sealReview = useCallback(async (review: unknown) => {
+    const key = masterKey.current;
+    if (!key) return null;
+    return encryptString(key, JSON.stringify(review));
+  }, []);
+
+  const openReview = useCallback(async (bodyEnc: string) => {
+    const key = masterKey.current;
+    if (!key) return null;
+    try {
+      return JSON.parse(await decryptString(key, bodyEnc));
+    } catch {
+      // Written under a passphrase this device no longer has, or corrupt.
+      return null;
+    }
+  }, []);
+
   // The carried-forward balance: net of everything we hold, all-time. Bounded by
   // the same FETCH_CAP as the rest of the store — with more than FETCH_CAP rows
   // it reflects the most recent window, exactly like the Safe total.
@@ -571,6 +630,7 @@ export function StoreProvider({
 
   const value: Store = {
     loading,
+    userId,
     transactions,
     homeCurrency,
     currencies,
@@ -595,6 +655,9 @@ export function StoreProvider({
     addSafeGoldEntry,
     deleteSafeGoldEntry,
     refresh: loadData,
+    reviewRange,
+    sealReview,
+    openReview,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

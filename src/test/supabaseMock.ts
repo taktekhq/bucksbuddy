@@ -11,6 +11,9 @@ export type Handler = () => QueryResult | Promise<QueryResult>;
 // defaulting to "select" for plain reads.
 export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
   const calls: { table: string; op: string }[] = [];
+  // Paged reads (store.reviewRange) call .range() once per page, so a handler
+  // can answer differently per call by counting.
+  const ranges: { from: number; to: number }[] = [];
 
   function from(table: string) {
     let op = "select";
@@ -33,8 +36,15 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
         return builder;
       },
       eq: () => builder,
+      neq: () => builder,
+      gte: () => builder,
+      lt: () => builder,
       order: () => builder,
       limit: () => builder,
+      range: (from: number, to: number) => {
+        ranges.push({ from, to });
+        return builder;
+      },
       single: () => builder,
       maybeSingle: () => builder,
       then: (
@@ -65,5 +75,21 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
     signOut: vi.fn(async (..._args: unknown[]) => ({ error: null })),
   };
 
-  return { supabase: { from: vi.fn(from), auth }, calls };
+  // `rpc` and `functions.invoke` are keyed the same way as tables, by name:
+  // "rpc:report_eligibility" and "fn:review-checkout".
+  const rpc = vi.fn(async (name: string, ..._args: unknown[]) => {
+    calls.push({ table: name, op: "rpc" });
+    const handler = handlers[`rpc:${name}`];
+    return handler ? await handler() : { data: null, error: null };
+  });
+
+  const functions = {
+    invoke: vi.fn(async (name: string, ..._args: unknown[]) => {
+      calls.push({ table: name, op: "invoke" });
+      const handler = handlers[`fn:${name}`];
+      return handler ? await handler() : { data: null, error: null };
+    }),
+  };
+
+  return { supabase: { from: vi.fn(from), auth, rpc, functions }, calls, ranges };
 }
