@@ -16,6 +16,9 @@ vi.mock("@/screens/Legal", () => ({ Legal: () => <div>LegalScreen</div> }));
 vi.mock("@/screens/Contact", () => ({ Contact: () => <div>ContactScreen</div> }));
 vi.mock("@/screens/Home", () => ({ Home: () => <div>HomeScreen</div> }));
 vi.mock("@/screens/History", () => ({ History: () => <div>HistoryScreen</div> }));
+vi.mock("@/screens/Recurring", () => ({
+  Recurring: ({ userId }: { userId: string }) => <div>RecurringScreen {userId}</div>,
+}));
 vi.mock("@/screens/Stats", () => ({
   Stats: ({ signedIn }: { signedIn: boolean }) => (
     <div>StatsScreen {signedIn ? "personal" : "public"}</div>
@@ -109,6 +112,11 @@ describe("App", () => {
     useRoute.mockReturnValue("/history");
     rerender(<App />);
     expect(screen.getByText("HistoryScreen")).toBeInTheDocument();
+
+    useRoute.mockReturnValue("/recurring");
+    rerender(<App />);
+    // The page is handed the signed-in user's id, so it only ever shows theirs.
+    expect(screen.getByText("RecurringScreen u1")).toBeInTheDocument();
 
     useRoute.mockReturnValue("/stats/treats");
     rerender(<App />);
