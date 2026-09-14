@@ -9,8 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage",
-    "recap:preview": "vite --config scripts/recap-preview/vite.config.ts"
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
