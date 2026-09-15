@@ -22,24 +22,6 @@ function Splash() {
   );
 }
 
-// With the iOS status bar set to black-translucent, the page shows behind the
-// clock/battery but their icons are forced white. This subtle darkening in just
-// the notch area keeps them legible on light screens (and is invisible on the
-// dark Safe). Height collapses to 0 on devices without a top inset.
-function StatusBarScrim() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none fixed inset-x-0 top-0"
-      style={{
-        height: "var(--safe-top)",
-        zIndex: 60,
-        background: "linear-gradient(to bottom, rgba(0,0,0,0.28), rgba(0,0,0,0))",
-      }}
-    />
-  );
-}
-
 export default function App() {
   const { session, ready, recoveryMode } = useSession();
   const route = useRoute();
@@ -97,10 +79,7 @@ export default function App() {
     );
   }
 
-  return (
-    <>
-      <StatusBarScrim />
-      {content}
-    </>
-  );
+  // The status bar is opaque (see index.html) — iOS paints it over the top
+  // --safe-top of the page with its own icons, so there is nothing to scrim.
+  return content;
 }
