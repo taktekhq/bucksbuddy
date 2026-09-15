@@ -82,26 +82,40 @@ app that came with 0007 is deployed.
 >   reachable.
 >
 > **Subcategories:** categories with a small dot (Health → Pharmacy, Fees → Mobile,
-> Food/Groceries/Coffee, …) open a second step to pick a finer label. Stored inline as
+> Food/Groceries/Coffee, Work → Subscriptions/Domains/Hardware/Credits/Services, …) open a
+> second step to pick a finer label. Stored inline as
 > `parent/sub` in the existing `category` field — no schema change, existing rows
 > untouched.
 
 > **Recurring payments (proof of concept):** **Recurring**, next to *Show all* on
 > Home, opens `#/recurring` — the subscriptions, rent, salary and other entries that
-> keep coming back for the signed-in user, with what they add up to per month and
-> when each is next due. Nothing is set up by hand and there is no schema change:
+> keep coming back for the signed-in user, with what they add up to and when each is next
+> due. A Monthly / Yearly switch (remembered) separates what comes round within a month,
+> totalled per month, from the yearly renewals, totalled per year; within each side the
+> series sit under their category, like History's stacks, with a subtotal per category. Nothing is set up by hand and there is no schema change:
 > `src/lib/recurring.ts` finds the series in the entries already logged, on the
 > device (so it works on end-to-end encrypted data), scoped to the signed-in user id.
-> The rules are forgiving, because entries are typed by hand: two entries in the same
-> direction + category whose notes *mean* the same thing (a shared word, one containing
-> the other, or a typo apart — `src/lib/notes.ts`), spaced weekly / every two weeks /
-> monthly / yearly with a couple of days' slack and one skipped log allowed; entries a
-> day or two apart count as one. A note can also say so outright — "Domain (yearly)"
-> counts from its first entry. Amounts are compared to the price before them: within
-> 10% is the same price, a bigger jump (up to 50%) is a price change and keeps the
-> series once the old price had held for two entries; the page shows the new price with
-> the old one underneath. To keep notes from drifting, the composer offers the past
-> notes of the chosen category as chips under the note field. The page is read-only; it
+> The rules are forgiving, because entries are typed by hand: entries in the same
+> direction + category whose notes *mean* the same thing (at least half their words
+> shared, typos allowed — `src/lib/notes.ts`; one word out of many is not enough), spaced
+> weekly / every two weeks / monthly / yearly with a couple of days' slack and one skipped
+> log allowed — two entries for monthly and yearly, three for the short cadences; entries
+> a day or two apart count as one. A note can also say so outright: "(yearly)" counts from
+> its first entry, "subscription" or "membership" marks it recurring and lets the dates say
+> how often (monthly until they can), a domain name ("sillyguy.com", or the word "domain")
+> is yearly, and "(ended)" on the last entry stops it. Every one of those words is dropped
+> from the name before comparing. Who it was "with" is dropped too, so "dinner with Sara"
+> and "lunch with Sara" don't merge on her name. A series that stops, stops showing: a
+> whole period past its due date with nothing logged and it's gone; logged again within
+> that time it carries on, and after a longer break the new entries start over as a series
+> of their own. Amounts are compared to the price before them: within 10% is the same
+> price, a bigger jump (up to 50%) is a price change and keeps the series once the old
+> price had held for two entries; an entry that fits neither is left out as an odd one
+> out (a bottle of water logged next to the gym fee), as long as those stay a minority.
+> When the note vouched for the series the amounts are taken as they come. The page shows
+> the new price with the old one underneath. To keep notes from drifting, the composer offers the past
+> notes of the chosen category (the exact one) as chips under the note field, and a
+> tiny info button next to the note opens the list of these cheat codes. The page is read-only; it
 > sits behind the same unlock nudge as the rest of the app when the device is locked.
 
 ### 2. Create your user (password sign-in)
