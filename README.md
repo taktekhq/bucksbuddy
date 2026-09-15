@@ -82,14 +82,17 @@ app that came with 0007 is deployed.
 >   reachable.
 >
 > **Subcategories:** categories with a small dot (Health → Pharmacy, Fees → Mobile,
-> Food/Groceries/Coffee, …) open a second step to pick a finer label. Stored inline as
+> Food/Groceries/Coffee, Work → Subscriptions/Domains/Hardware/Credits/Services, …) open a
+> second step to pick a finer label. Stored inline as
 > `parent/sub` in the existing `category` field — no schema change, existing rows
 > untouched.
 
 > **Recurring payments (proof of concept):** **Recurring**, next to *Show all* on
 > Home, opens `#/recurring` — the subscriptions, rent, salary and other entries that
-> keep coming back for the signed-in user, with what they add up to per month and
-> when each is next due. Nothing is set up by hand and there is no schema change:
+> keep coming back for the signed-in user, with what they add up to and when each is next
+> due. A Monthly / Yearly switch (remembered) separates what comes round within a month,
+> totalled per month, from the yearly renewals, totalled per year; within each side the
+> series sit under their category, like History's stacks, with a subtotal per category. Nothing is set up by hand and there is no schema change:
 > `src/lib/recurring.ts` finds the series in the entries already logged, on the
 > device (so it works on end-to-end encrypted data), scoped to the signed-in user id.
 > The rules are forgiving, because entries are typed by hand: entries in the same

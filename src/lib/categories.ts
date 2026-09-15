@@ -215,7 +215,21 @@ export const EXPENSE_CATEGORIES: Category[] = [
   },
   { id: "tips", label: "Tips", icon: HandCoins, color: "#FFCC00" },
   // Row 6 — catch-alls.
-  { id: "work", label: "Work", icon: Briefcase, color: "#5856D6" },
+  {
+    id: "work",
+    label: "Work",
+    icon: Briefcase,
+    color: "#5856D6",
+    // What running things costs: the tools paid for monthly, the domains
+    // renewed yearly, the gear, and the pay-as-you-go credits.
+    subcategories: [
+      { id: "subscriptions", label: "Subscriptions" },
+      { id: "domains", label: "Domains" },
+      { id: "hardware", label: "Hardware" },
+      { id: "credits", label: "Credits" },
+      { id: "services", label: "Services" },
+    ],
+  },
   { id: "family", label: "Family", icon: Users, color: "#00C7BE" },
   { id: "other", label: "Other", icon: MoreHorizontal, color: "#8E8E93" },
 ];
