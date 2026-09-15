@@ -11,7 +11,11 @@
 import { supabase } from "@/lib/supabase";
 import type { Currency } from "@/lib/currency";
 import { formatCents } from "@/lib/money";
-import { reportPeriodBounds, type ReportPeriodId } from "@/lib/reportPeriod";
+import {
+  eligibilityFrom,
+  reportPeriodBounds,
+  type ReportPeriodId,
+} from "@/lib/reportPeriod";
 import type { SpendingDigest } from "@/lib/reportDigest";
 import { MIN_SPEND_ENTRIES, type ReportFacts } from "@/lib/reportEligibility";
 import type { SpendingReview, SpendingReviewRow } from "@/types/db";
@@ -73,10 +77,11 @@ export async function fetchEligibility(
   periodId: ReportPeriodId,
   now = new Date(),
 ): Promise<{ facts: ReportFacts | null; error: string | null }> {
-  const { from, to } = reportPeriodBounds(periodId, now);
+  // Null for "all time": only the database knows when this account's logging
+  // started, and it anchors the window there (migration 0011).
   const { data, error } = await supabase.rpc("report_eligibility", {
-    p_from: from.toISOString(),
-    p_to: to.toISOString(),
+    p_from: eligibilityFrom(periodId, now),
+    p_to: now.toISOString(),
   });
   if (error) return { facts: null, error: error.message };
   const facts = (data as ReportFacts | null) ?? null;
@@ -130,6 +135,7 @@ export async function fetchReview(id: string): Promise<SpendingReviewRow | null>
 export async function startReview(
   periodId: ReportPeriodId,
   homeCurrency: Currency,
+  firstEntryAt: string | null = null,
   now = new Date(),
 ): Promise<{
   reviewId: string | null;
@@ -137,7 +143,10 @@ export async function startReview(
   free: boolean;
   error: string | null;
 }> {
-  const { from, to } = reportPeriodBounds(periodId, now);
+  // `firstEntryAt` only matters for "all time", and by the time this can be
+  // called the eligibility answer that carries it has already landed — the
+  // button is disabled until it does.
+  const { from, to } = reportPeriodBounds(periodId, now, firstEntryAt);
   const { data, error } = await invoke<{
     url?: string;
     review_id: string;

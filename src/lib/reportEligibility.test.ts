@@ -54,18 +54,18 @@ describe("coverageRatio", () => {
 
 describe("describeEligibility — the spend-count gate", () => {
   it("passes a comfortable account with no blockers and no warnings", () => {
-    const copy = describeEligibility(facts(), "past_3_months");
+    const copy = describeEligibility(facts(), "last_3_months");
     expect(copy).toEqual({ ok: true, blockers: [], warnings: [] });
   });
 
   it("blocks just under the threshold and names the shortfall", () => {
     const copy = describeEligibility(
       facts({ spendCount: 39, minSpendEntries: 40, ok: false }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.ok).toBe(false);
     expect(copy.blockers).toEqual([
-      "40 logged expenses needed — you have 39 in this window, so 1 to go.",
+      "1 more expense to go.",
     ]);
   });
 
@@ -74,10 +74,10 @@ describe("describeEligibility — the spend-count gate", () => {
     // copy has to follow the server or it lies about what unlocks the review.
     const copy = describeEligibility(
       facts({ spendCount: 20, minSpendEntries: 25, ok: false }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.blockers[0]).toBe(
-      "25 logged expenses needed — you have 20 in this window, so 5 to go.",
+      "5 more expenses to go.",
     );
     expect(copy.blockers[0]).not.toContain(String(MIN_SPEND_ENTRIES));
     expect(MIN_SPEND_ENTRIES).toBe(40);
@@ -88,17 +88,17 @@ describe("describeEligibility — the spend-count gate", () => {
     // cannot assume it is plural.
     const copy = describeEligibility(
       facts({ spendCount: 0, minSpendEntries: 1, ok: false }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.blockers[0]).toBe(
-      "1 logged expense needed — you have 0 in this window, so 1 to go.",
+      "1 more expense to go.",
     );
   });
 
   it("does not block when the count exactly meets the threshold", () => {
     const copy = describeEligibility(
       facts({ spendCount: 40, minSpendEntries: 40 }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.blockers).toEqual([]);
     expect(copy.ok).toBe(true);
@@ -117,39 +117,38 @@ describe("describeEligibility — the history gate", () => {
         coversPeriod: false,
         ok: false,
       }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.ok).toBe(false);
     expect(copy.blockers).toContain(
-      "No expenses logged yet — a review needs a month of history behind it.",
+      "Nothing logged yet.",
     );
     // Both hard gates fail for an empty account, and each is spelled out.
     expect(copy.blockers).toHaveLength(2);
-    expect(copy.blockers[0]).toContain("40 logged expenses needed");
+    expect(copy.blockers[0]).toBe("40 more expenses to go.");
   });
 
-  it("tells a one-month buyer to wait for the next full month", () => {
+  it("tells the comparison it needs last month logged", () => {
     const copy = describeEligibility(
       facts({ coversPeriod: false, firstEntryAt: at(2026, 7, 9), ok: false }),
-      "last_month",
+      "this_vs_last",
     );
-    expect(copy.blockers).toEqual([
-      "Your history doesn't cover all of last month yet. Give it until the next full month.",
-    ]);
+    expect(copy.blockers).toEqual(["Last month isn't fully logged yet."]);
   });
 
-  it("points a three-month buyer at the one-month review instead", () => {
+  it("tells a longer window its history is too short", () => {
     const copy = describeEligibility(
       facts({ coversPeriod: false, firstEntryAt: at(2026, 6, 3), ok: false }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.blockers).toEqual([
-      "Your history doesn't reach back three whole months yet. A one-month review is the one to start with.",
+      "Your history doesn't reach back that far yet.",
     ]);
-    // The two periods must not share one sentence.
+    // The comparison must not share the sentence: it names last month, which is
+    // the only month it needs.
     const other = describeEligibility(
       facts({ coversPeriod: false, firstEntryAt: at(2026, 6, 3), ok: false }),
-      "last_month",
+      "this_vs_last",
     );
     expect(other.blockers[0]).not.toBe(copy.blockers[0]);
   });
@@ -159,23 +158,21 @@ describe("describeEligibility — warnings", () => {
   it("warns about a thin window without blocking the purchase", () => {
     const copy = describeEligibility(
       facts({ periodDays: 92, loggedDays: 20, spendCount: 45 }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.ok).toBe(true);
     expect(copy.blockers).toEqual([]);
-    expect(copy.warnings).toEqual([
-      "72 of the 92 days have nothing logged, so the review will be reading a partial picture.",
-    ]);
+    expect(copy.warnings).toEqual(["72 of 92 days have nothing logged."]);
   });
 
   it("stays quiet once coverage reaches the threshold", () => {
     // Exactly LOW_COVERAGE is not "low" — the check is strictly less-than.
     const onTheLine = facts({ periodDays: 92, loggedDays: 46 });
     expect(coverageRatio(onTheLine)).toBe(LOW_COVERAGE);
-    expect(describeEligibility(onTheLine, "past_3_months").warnings).toEqual([]);
+    expect(describeEligibility(onTheLine, "last_3_months").warnings).toEqual([]);
 
     const justUnder = facts({ periodDays: 92, loggedDays: 45 });
-    expect(describeEligibility(justUnder, "past_3_months").warnings).toHaveLength(1);
+    expect(describeEligibility(justUnder, "last_3_months").warnings).toHaveLength(1);
   });
 
   it("counts the unlogged days, not the logged ones", () => {
@@ -183,10 +180,10 @@ describe("describeEligibility — warnings", () => {
     // unlogged side, so the number in it is 29 rather than 1.
     const copy = describeEligibility(
       facts({ periodDays: 30, loggedDays: 1, spendCount: 40 }),
-      "last_month",
+      "this_vs_last",
     );
     expect(copy.warnings[0]).toBe(
-      "29 of the 30 days have nothing logged, so the review will be reading a partial picture.",
+      "29 of 30 days have nothing logged.",
     );
   });
 
@@ -204,36 +201,36 @@ describe("describeEligibility — warnings", () => {
         coversPeriod: false,
         ok: false,
       }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.warnings).toEqual([]);
   });
 
   it("does not flag a gap of exactly LONG_GAP_DAYS", () => {
     expect(LONG_GAP_DAYS).toBe(7);
-    const copy = describeEligibility(facts({ longestGapDays: LONG_GAP_DAYS }), "past_3_months");
+    const copy = describeEligibility(facts({ longestGapDays: LONG_GAP_DAYS }), "last_3_months");
     expect(copy.warnings).toEqual([]);
   });
 
   it("flags one day past the boundary", () => {
     const copy = describeEligibility(
       facts({ longestGapDays: LONG_GAP_DAYS + 1 }),
-      "past_3_months",
+      "last_3_months",
     );
-    expect(copy.warnings).toEqual(["8 days in a row have nothing logged."]);
+    expect(copy.warnings).toEqual(["8 days in a row are empty."]);
     expect(copy.ok).toBe(true);
   });
 
   it("can raise both warnings at once", () => {
     const copy = describeEligibility(
       facts({ periodDays: 92, loggedDays: 10, longestGapDays: 40, spendCount: 41 }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.warnings).toHaveLength(2);
     expect(copy.warnings[0]).toBe(
-      "82 of the 92 days have nothing logged, so the review will be reading a partial picture.",
+      "82 of 92 days have nothing logged.",
     );
-    expect(copy.warnings[1]).toBe("40 days in a row have nothing logged.");
+    expect(copy.warnings[1]).toBe("40 days in a row are empty.");
     expect(copy.ok).toBe(true);
   });
 });
@@ -242,7 +239,7 @@ describe("describeEligibility — the verdict", () => {
   it("refuses when the server says no even with nothing local to point at", () => {
     // The server counts every row the account has; the browser only sees a page
     // of them. Its "no" is final.
-    const copy = describeEligibility(facts({ ok: false }), "past_3_months");
+    const copy = describeEligibility(facts({ ok: false }), "last_3_months");
     expect(copy.ok).toBe(false);
     expect(copy.blockers).toEqual([]);
     expect(copy.warnings).toEqual([]);
@@ -251,13 +248,13 @@ describe("describeEligibility — the verdict", () => {
   it("refuses when the server says yes but a blocker is present", () => {
     const copy = describeEligibility(
       facts({ ok: true, spendCount: 3, minSpendEntries: 40 }),
-      "past_3_months",
+      "last_3_months",
     );
     expect(copy.ok).toBe(false);
     expect(copy.blockers).toHaveLength(1);
   });
 
   it("is ok only when the server agrees and nothing is blocking", () => {
-    expect(describeEligibility(facts(), "last_month").ok).toBe(true);
+    expect(describeEligibility(facts(), "this_vs_last").ok).toBe(true);
   });
 });

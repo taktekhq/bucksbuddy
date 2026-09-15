@@ -62,10 +62,14 @@ export function coverageRatio(facts: ReportFacts): number {
 }
 
 /**
- * The two hard gates the owner set — a month of logged expenses, and at least
- * 40 expenses — plus the soft one ("ideally not many unlogged days"), which is
- * deliberately a warning: a thin month is still the customer's call to buy, and
- * the review says so in its own text rather than being refused at the door.
+ * The two hard gates the owner set — logging that reaches back to the start of
+ * the window, and at least 40 expenses — plus the soft one ("ideally not many
+ * unlogged days"), which is deliberately a warning: a thin month is still the
+ * customer's call, and the review says so in its own text rather than being
+ * refused at the door.
+ *
+ * Every sentence here is at most 70 characters. The counters above them already
+ * show the numbers, so the words only have to name what is missing.
  */
 export function describeEligibility(
   facts: ReportFacts,
@@ -76,35 +80,40 @@ export function describeEligibility(
   const threshold = facts.minSpendEntries;
 
   if (facts.spendCount < threshold) {
-    // The threshold is the server's, not ours, so don't assume it is plural.
-    const noun = threshold === 1 ? "logged expense" : "logged expenses";
-    blockers.push(
-      `${threshold} ${noun} needed — you have ${facts.spendCount} in this window, so ${threshold - facts.spendCount} to go.`,
-    );
+    // The count in the sentence is what is LEFT, so that is what the noun has to
+    // agree with: one more expense, not one more expenses.
+    const left = threshold - facts.spendCount;
+    blockers.push(`${left} more ${left === 1 ? "expense" : "expenses"} to go.`);
   }
-  if (!facts.coversPeriod) {
+  if (facts.firstEntryAt === null) {
+    blockers.push("Nothing logged yet.");
+  } else if (periodId !== "all_time" && !facts.coversPeriod) {
+    // "All time" starts AT the first entry, so it covers itself by construction
+    // and this gate can only ever be a false refusal for it — including against a
+    // database still running the pre-0011 function, which reads a null start as
+    // the epoch and would call every all-time window uncovered.
     blockers.push(
-      facts.firstEntryAt === null
-        ? "No expenses logged yet — a review needs a month of history behind it."
-        : periodId === "last_month"
-          ? "Your history doesn't cover all of last month yet. Give it until the next full month."
-          : "Your history doesn't reach back three whole months yet. A one-month review is the one to start with.",
+      periodId === "this_vs_last"
+        ? "Last month isn't fully logged yet."
+        : "Your history doesn't reach back that far yet.",
     );
   }
 
   const coverage = coverageRatio(facts);
-  if (facts.loggedDays > 0 && coverage < LOW_COVERAGE) {
+  // Not for all time, where the denominator is the account's whole life: someone
+  // who logged diligently for four months but opened two years ago sits near
+  // 17%, and warning them about it on the one window whose point is the long
+  // view would be noise. The counters still show the real ratio.
+  if (periodId !== "all_time" && facts.loggedDays > 0 && coverage < LOW_COVERAGE) {
     // Phrased from the unlogged side: this only fires under half coverage, so the
     // count is always plural and the sentence needs no singular form.
     warnings.push(
-      `${facts.periodDays - facts.loggedDays} of the ${facts.periodDays} days have nothing logged, so the review will be reading a partial picture.`,
+      `${facts.periodDays - facts.loggedDays} of ${facts.periodDays} days have nothing logged.`,
     );
   }
   if (facts.longestGapDays > LONG_GAP_DAYS) {
     // Likewise: only fires above LONG_GAP_DAYS, so never "1 days".
-    warnings.push(
-      `${facts.longestGapDays} days in a row have nothing logged.`,
-    );
+    warnings.push(`${facts.longestGapDays} days in a row are empty.`);
   }
 
   return { ok: facts.ok && blockers.length === 0, blockers, warnings };

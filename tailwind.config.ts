@@ -34,6 +34,21 @@ const config: Config = {
         income: "#34C759", // Apple system green — positive / money in
         expense: "#FF3B30", // Apple system red — negative / money out
         danger: "#FF3B30", // real errors (shares red)
+
+        // --- The review's own dark room ---
+        // A second dark world, deliberately violet so it is never mistaken for
+        // the Safe's green vault or for the savings greens and gold. Carrot
+        // stays the accent, so it still reads as this app after dark. Every
+        // text pair clears WCAG AA on its ground (ratios noted).
+        review: {
+          top: "#2A1A3E", // gradient top, and the status-bar tint
+          mid: "#1E1330", // gradient middle
+          ink: "#150D24", // the floor behind everything
+          card: "#271A3B", // cards and rows
+          tile: "#31214A", // figure tiles — `grouped`, after dark
+          text: "#F7F4FB", // primary text — 14.9:1 on card
+          muted: "#B7A8CC", // captions — 7.3:1 on card
+        },
       },
       fontFamily: {
         // Body / UI chrome = plain Apple.

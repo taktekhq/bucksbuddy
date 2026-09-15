@@ -10,7 +10,6 @@ import {
 import userEvent from "@testing-library/user-event";
 import { makeStoreValue } from "@/test/storeValue";
 import { formatCents } from "@/lib/money";
-import { reportPeriodLabel } from "@/lib/reportPeriod";
 import type { ReportFacts } from "@/lib/reportEligibility";
 import type {
   SpendingReview,
@@ -100,7 +99,7 @@ function row(overrides: Partial<SpendingReviewRow> = {}): SpendingReviewRow {
   return {
     id: "rev-1",
     status: "paid",
-    period_id: "past_3_months",
+    period_id: "last_3_months",
     period_from: JUN_1.toISOString(),
     period_to: SEP_1.toISOString(),
     home_currency: "USD",
@@ -245,7 +244,7 @@ describe("Review — the offer", () => {
     setStore({ locked: true });
     render(<Review />);
     expect(
-      screen.getByText(/Your amounts are locked on this device/),
+      screen.getByText(/Unlock your amounts in Settings/),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("A review of your spending"),
@@ -277,9 +276,9 @@ describe("Review — the offer", () => {
     // Billing is off in this build, so the button must not advertise a price.
     expect(buyButton()).toHaveTextContent("Write my review");
     expect(
-      screen.getByText(/Free while this is being tried out/),
+      screen.getByText(/Free while it's being tried out/),
     ).toBeInTheDocument();
-    expect(reviewsMock.fetchEligibility).toHaveBeenCalledWith("past_3_months");
+    expect(reviewsMock.fetchEligibility).toHaveBeenCalledWith("this_vs_last");
   });
 
   it("advertises the price once billing is on", async () => {
@@ -288,10 +287,10 @@ describe("Review — the offer", () => {
     await screen.findByText("120 / 40");
     expect(buyButton()).toHaveTextContent("Unlock a review · $5.00");
     expect(
-      screen.getByText("One-time, per review. No subscription."),
+      screen.getByText(/One-time, per review/),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(/Free while this is being tried out/),
+      screen.queryByText(/Free while it's being tried out/),
     ).not.toBeInTheDocument();
   });
 
@@ -309,20 +308,22 @@ describe("Review — the offer", () => {
     render(<Review />);
     expect(
       await screen.findByText(
-        "40 logged expenses needed — you have 12 in this window, so 28 to go.",
+        "28 more expenses to go.",
       ),
     ).toBeInTheDocument();
+    // The default window is the comparison, so the sentence is the one about
+    // last month — the longer windows get their own (see reportEligibility).
     expect(
-      screen.getByText(/doesn't reach back three whole months/),
+      screen.getByText("Last month isn't fully logged yet."),
     ).toBeInTheDocument();
     // The coverage warning counts from the unlogged side: 92 − 4 = 88.
     expect(
       screen.getByText(
-        "88 of the 92 days have nothing logged, so the review will be reading a partial picture.",
+        "88 of 92 days have nothing logged.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("9 days in a row have nothing logged."),
+      screen.getByText("9 days in a row are empty."),
     ).toBeInTheDocument();
     const button = screen.getByRole("button", { name: "Not enough logged yet" });
     expect(button).toBeDisabled();
@@ -338,9 +339,9 @@ describe("Review — the offer", () => {
       await screen.findByText(/function "report_eligibility" does not exist/),
     ).toBeInTheDocument();
     // …and it says what that means, rather than handing over a raw error.
-    expect(screen.getByText(/Reviews aren't set up on this database yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Reviews aren't set up yet/)).toBeInTheDocument();
     // The button must not advertise a purchase it cannot make.
-    expect(buyButton()).toHaveTextContent("Can't check your history right now");
+    expect(buyButton()).toHaveTextContent("Can't check your history");
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(buyButton()).toBeDisabled();
   });
@@ -348,19 +349,33 @@ describe("Review — the offer", () => {
   it("re-counts when the period changes", async () => {
     render(<Review />);
     await screen.findByText("120 / 40");
-    const lastMonth = reportPeriodLabel("last_month");
-    expect(screen.getByRole("radio", { name: reportPeriodLabel("past_3_months") })).toBeChecked();
+    // Each row's accessible name is its label plus the window underneath it, so
+    // the label alone is the stable half to query on.
+    const quarter = screen.getByRole("radio", { name: /Past 3 months/ });
+    expect(
+      screen.getByRole("radio", { name: /This month vs last/ }),
+    ).toBeChecked();
 
     reviewsMock.fetchEligibility.mockResolvedValue({
-      facts: facts({ periodDays: 31, loggedDays: 28, spendCount: 55 }),
+      facts: facts({ periodDays: 74, loggedDays: 60, spendCount: 55 }),
       error: null,
     });
-    await userEvent.click(screen.getByRole("radio", { name: lastMonth }));
+    await userEvent.click(quarter);
 
     expect(await screen.findByText("55 / 40")).toBeInTheDocument();
-    expect(screen.getByText("28 / 31")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: lastMonth })).toBeChecked();
-    expect(reviewsMock.fetchEligibility).toHaveBeenLastCalledWith("last_month");
+    expect(screen.getByText("60 / 74")).toBeInTheDocument();
+    expect(quarter).toBeChecked();
+    expect(reviewsMock.fetchEligibility).toHaveBeenLastCalledWith("last_3_months");
+  });
+
+  it("names all time by when logging started, once that is known", async () => {
+    render(<Review />);
+    await screen.findByText("120 / 40");
+    // The picker cannot know the account's first entry until the eligibility
+    // answer carries it — and then it says so rather than guessing a date.
+    expect(
+      screen.getByRole("radio", { name: /All time.*Since January 2026/ }),
+    ).toBeInTheDocument();
   });
 
   it("drops an eligibility answer that arrives after the screen closes", async () => {
@@ -395,12 +410,13 @@ describe("Review — buying", () => {
       screen.queryByLabelText(/passphrase/i),
     ).not.toBeInTheDocument();
     expect(reviewsMock.startReview).toHaveBeenCalledWith(
-      "past_3_months",
+      "this_vs_last",
       "USD",
+      facts().firstEntryAt,
     );
     expect(reviewsMock.fetchReview).toHaveBeenCalledWith("rev-1");
     expect(posthogMock.capture).toHaveBeenCalledWith("review_started", {
-      period: "past_3_months",
+      period: "this_vs_last",
       free: true,
     });
     // A free grant is written where the customer is standing: no redirect.
@@ -444,11 +460,12 @@ describe("Review — buying", () => {
 
     await waitFor(() => expect(window.location.href).toBe(STRIPE_URL));
     expect(reviewsMock.startReview).toHaveBeenCalledWith(
-      "past_3_months",
+      "this_vs_last",
       "USD",
+      facts().firstEntryAt,
     );
     expect(posthogMock.capture).toHaveBeenCalledWith("review_started", {
-      period: "past_3_months",
+      period: "this_vs_last",
       free: false,
     });
     // Nothing is generated on this device before the money lands.
@@ -517,8 +534,8 @@ describe("Review — back from Stripe", () => {
     const [id, digest] = reviewsMock.generateReview.mock.calls[0];
     expect(id).toBe("rev-1");
     expect(digest.period).toMatchObject({
-      id: "past_3_months",
-      label: "June 2026 – August 2026",
+      id: "last_3_months",
+      label: "Past 3 months · June 2026 – August 2026",
       from: "2026-06-01",
       to: "2026-08-31",
       days: 92,
@@ -534,11 +551,11 @@ describe("Review — back from Stripe", () => {
       "sealed-body",
     );
     expect(posthogMock.capture).toHaveBeenCalledWith("review_generated", {
-      period: "past_3_months",
+      period: "last_3_months",
     });
     // The subtitle names the window that was bought.
     expect(
-      within(screen.getByRole("article")).getByText("June 2026 – August 2026"),
+      within(screen.getByRole("article")).getByText("Past 3 months · June 2026 – August 2026"),
     ).toBeInTheDocument();
   });
 
@@ -692,7 +709,7 @@ describe("Review — back from Stripe", () => {
     render(<Review />);
     expect(
       await screen.findByText(
-        "That review is for a period this app version doesn't know.",
+        "That review is from a newer version of the app.",
       ),
     ).toBeInTheDocument();
     expect(reviewsMock.generateReview).not.toHaveBeenCalled();
@@ -725,7 +742,7 @@ describe("Review — back from Stripe", () => {
     render(<Review />);
     expect(
       await screen.findByText(
-        "Couldn't read your entries just yet. Nothing has been used up — tap the review below to try again.",
+        "Couldn't read your entries. Nothing used up — tap to retry.",
       ),
     ).toBeInTheDocument();
     // The whole point: the paid attempt was not spent on rows we couldn't read.
@@ -810,7 +827,7 @@ describe("Review — the archive", () => {
     expect(screen.getByText("The model gave up.")).toBeInTheDocument();
     expect(screen.getByText("Didn't complete")).toBeInTheDocument();
     expect(
-      screen.getByText("Not completed — nothing was charged"),
+      screen.getByText("Not paid — nothing was charged"),
     ).toBeInTheDocument();
     expect(screen.getByText("Paid $5.00 · tap to write it")).toBeInTheDocument();
     expect(screen.getByText("$5.00 · tap to read")).toBeInTheDocument();
@@ -818,7 +835,7 @@ describe("Review — the archive", () => {
     expect(screen.getByText("Free · tap to write it")).toBeInTheDocument();
     // Seven rows, all readable without a passphrase on the list itself.
     expect(
-      screen.getAllByText("June 2026 – August 2026").length,
+      screen.getAllByText("Past 3 months · June 2026 – August 2026").length,
     ).toBe(7);
   });
 
@@ -899,7 +916,7 @@ describe("Review — the archive", () => {
     await userEvent.click(rowButton);
     expect(
       await screen.findByText(
-        "Couldn't read your entries just yet. Nothing has been used up — tap the review below to try again.",
+        "Couldn't read your entries. Nothing used up — tap to retry.",
       ),
     ).toBeInTheDocument();
     expect(reviewsMock.generateReview).not.toHaveBeenCalled();
@@ -959,7 +976,7 @@ describe("Review — the archive", () => {
     ).toBeInTheDocument();
     // The archive still lists the row, but it can't be tapped mid-flight.
     expect(
-      screen.getByRole("button", { name: /Not completed — nothing was charged/ }),
+      screen.getByRole("button", { name: /Not paid — nothing was charged/ }),
     ).toBeDisabled();
 
     await act(async () => {

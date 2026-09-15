@@ -24,8 +24,12 @@
 // deploying this function does not by itself sell anything.
 //
 // The browser sends the window it wants as timestamps because it is the only
-// party that knows the user's local calendar months; we check the window is
-// really one or three whole months and really in the past before authorising it.
+// party that knows the user's local calendar months. What this function checks
+// about it: that its span is plausible for the period asked for (a sanity bound,
+// no longer an identification — two of the windows end at the moment they are
+// asked for, so their length depends on the date), that it does not reach into
+// the future, and — for an all-time window — that it really starts where this
+// account's logging started.
 //
 // Deploy (Supabase Dashboard → Edge Functions → Deploy a new function → Via
 // Editor): name it exactly `review-start`, paste this file, Deploy. Keep
@@ -58,10 +62,26 @@ function json(body: unknown, status: number): Response {
   });
 }
 
-// Whole calendar months vary in length, and a three-month window crosses
-// February. Rather than recompute the user's calendar here, accept a window
-// whose length is only possible for the period they asked for.
+// The client computes the window from the user's own local calendar, which this
+// function cannot see, so the window is checked by LENGTH: a span only possible
+// for the period that was asked for. That stops a request buying "this month vs
+// last" and being handed a review of five years.
+//
+// Two of the windows end at the moment they are asked for, so their length
+// depends on how far into the month it is: "this vs last" is all of last month
+// plus 0-31 elapsed days (February through a 31-day month, hence 28-62), and
+// "past 3 months" is the two previous months plus those elapsed days (the
+// shortest pair being Jan+Feb at 59, the longest Jul+Aug at 62). A day of slack
+// either side absorbs a timezone offset and the rounding below.
+//
+// "All time" is anchored on the account's first entry, so its length is whatever
+// the account's history is. There is nothing to whitelist: the cap is a sanity
+// bound, not a rule.
 const WINDOW_DAYS: Record<string, { min: number; max: number }> = {
+  this_vs_last: { min: 27, max: 63 },
+  last_3_months: { min: 58, max: 94 },
+  all_time: { min: 0, max: 20_000 },
+  // Superseded windows, kept so a client that has not reloaded yet still works.
   last_month: { min: 28, max: 31 },
   past_3_months: { min: 89, max: 92 },
 };
@@ -144,10 +164,14 @@ Deno.serve(async (req) => {
     if (days < window.min || days > window.max) {
       return json({ error: "Bad review period." }, 400);
     }
-    // A review only ever covers finished months, so the window must already be
-    // over — with a day of slack for a clock that disagrees with ours.
+    // Two of the windows end now, so "finished" is not the rule — but a window
+    // reaching into the future is still nonsense. A day of slack absorbs a clock
+    // that disagrees with ours.
     if (to.getTime() > Date.now() + DAY_MS) {
-      return json({ error: "That period hasn't finished yet." }, 400);
+      return json({ error: "That period hasn't happened yet." }, 400);
+    }
+    if (from.getTime() >= to.getTime()) {
+      return json({ error: "Bad review period." }, 400);
     }
     const homeCurrency = String(body.home_currency ?? "");
     if (!/^[A-Z]{3}$/.test(homeCurrency)) {
@@ -165,6 +189,21 @@ Deno.serve(async (req) => {
         { error: "This account isn't eligible for a review yet.", facts },
         403,
       );
+    }
+
+    // An all-time window is whatever the client says it is, unless we check it:
+    // the length band cannot bound it, and eligibility was counted from the
+    // account's own first entry. `facts.firstEntryAt` is that instant, so the
+    // claimed start has to match it — a day of slack for the timezone the client
+    // computed in.
+    if (periodId === "all_time") {
+      const firstEntry = Date.parse(String(facts.firstEntryAt ?? ""));
+      if (Number.isNaN(firstEntry)) {
+        return json({ error: "Nothing logged yet." }, 403);
+      }
+      if (Math.abs(from.getTime() - firstEntry) > DAY_MS) {
+        return json({ error: "Bad review period." }, 400);
+      }
     }
 
     const admin = createClient(url, serviceKey);
@@ -231,7 +270,18 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (waiting) return json({ review_id: waiting.id, free: true }, 200);
+      if (waiting) {
+        // Two of the windows end when they were asked for, so a row left
+        // unwritten yesterday covers yesterday. Resuming it moves its end to now
+        // — the device rebuilds the digest from the row's own bounds, so the two
+        // stay in step, and the review covers up to when it was actually asked
+        // for rather than to when the first attempt was.
+        await admin
+          .from("spending_reviews")
+          .update({ period_to: to.toISOString() })
+          .eq("id", waiting.id);
+        return json({ review_id: waiting.id, free: true }, 200);
+      }
     }
 
     // --- the row owns the facts, and is created before any payment exists ---
