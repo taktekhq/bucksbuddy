@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { InOutToggle } from "@/components/ui/InOutToggle";
@@ -62,7 +62,7 @@ export function CategorySheet({
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-black/30"
+            className="fixed inset-0 z-40 touch-none bg-black/30"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -123,17 +123,51 @@ export function CategorySheet({
   );
 }
 
-// The scrolling middle of the sheet. Two things have to be undone locally for a
-// scroll gesture to survive: the sheet sets `touch-action: none` for the drag,
-// and framer-motion opens a drag from a *bubbling* pointerdown on the sheet.
-// Stopping that event in the capture phase — before it reaches framer's
-// listener — keeps drag-to-dismiss working everywhere else on the sheet (the
-// grabber, the In/Out toggle, the padding around them) while the list scrolls.
+// The middle of the sheet, which scrolls only when it has to.
+//
+// Handing the gesture to the browser costs the sheet its drag: the sheet sets
+// `touch-action: none` so framer-motion can drag it, and framer opens that drag
+// from a *bubbling* pointerdown, so a scrollable middle has to both re-allow
+// panning and stop that event in the capture phase. Do it unconditionally and a
+// grid with nothing to scroll swallows the gesture and passes it to the page
+// behind instead — no drag, no scroll, just the background moving under a
+// sheet that will not budge.
+//
+// So it is measured: with something to scroll the middle takes the gesture and
+// keeps it (`overscroll-contain` stops the page inheriting the overscroll), and
+// with nothing to scroll it stays out of the way entirely, leaving the whole
+// sheet draggable the way the grabber and the In/Out toggle always are.
 function SheetScroller({ children }: { children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = useState(false);
+
+  // No dependency list on purpose: every render is a chance for this to have
+  // changed — switching to In shows fewer categories, stepping into
+  // subcategories swaps the contents outright — and a resize moves the
+  // `100dvh` cap under it.
+  useLayoutEffect(() => {
+    const el = box.current;
+    // Defensive: React fills refs in before layout effects run, so this never
+    // returns in practice — it is here to narrow `el` for the closure below.
+    /* v8 ignore start */
+    if (!el) return;
+    /* v8 ignore stop */
+    const measure = () =>
+      setScrollable(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
+
   return (
     <div
-      onPointerDownCapture={(e) => e.stopPropagation()}
-      className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain"
+      ref={box}
+      onPointerDownCapture={scrollable ? (e) => e.stopPropagation() : undefined}
+      className={`min-h-0 flex-1 ${
+        scrollable
+          ? "touch-pan-y overflow-y-auto overscroll-contain"
+          : "overflow-hidden"
+      }`}
     >
       {children}
     </div>
