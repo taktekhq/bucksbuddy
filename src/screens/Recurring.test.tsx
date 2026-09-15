@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { makeStoreValue } from "@/test/storeValue";
 import type { Transaction } from "@/types/db";
@@ -61,9 +61,48 @@ function summary(overrides: Partial<RecurringSummary> = {}): RecurringSummary {
   };
 }
 
+// A mixed bag: two monthly outgoings in two categories, a yearly domain, a
+// weekly income.
+const MIXED: RecurringPayment[] = [
+  payment(),
+  payment({
+    key: "false:work/subscriptions:claude",
+    category: "work/subscriptions",
+    note: "Claude",
+    amountCents: 20000,
+    monthlyCents: 20000,
+    count: 4,
+    nextDueAt: "2026-06-05T12:00:00.000Z",
+    overdue: true,
+  }),
+  payment({
+    key: "false:work/domains:sillyguy.com",
+    category: "work/domains",
+    note: "sillyguy.com",
+    cadence: "yearly",
+    fromNote: true,
+    amountCents: 1868,
+    monthlyCents: 156,
+    count: 1,
+    nextDueAt: "2027-06-08T12:00:00.000Z",
+  }),
+  payment({
+    key: "true:freelance:retainer",
+    category: "freelance",
+    isIncome: true,
+    note: "retainer",
+    cadence: "weekly",
+    amountCents: 10000,
+    monthlyCents: 43333,
+    count: 6,
+    nextDueAt: "2026-06-15T12:00:00.000Z",
+  }),
+];
+
 describe("Recurring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     storeValue = makeStoreValue();
     detectRecurring.mockReturnValue(summary());
   });
@@ -77,73 +116,117 @@ describe("Recurring", () => {
     expect(screen.getByText("Recurring")).toBeInTheDocument();
   });
 
-  it("shows the empty state with the monthly totals at zero", () => {
+  it("opens on the monthly side with the totals at zero", () => {
     render(<Recurring userId={USER} />);
-    expect(screen.getByText(/Nothin' on repeat yet, Doc/)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Monthly" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(/Nothin' monthly on repeat yet, Doc/)).toBeInTheDocument();
+    expect(screen.getByText("Out per month")).toBeInTheDocument();
+    expect(screen.getByText("In per month")).toBeInTheDocument();
     expect(screen.getAllByText("$0.00")).toHaveLength(2);
     expect(screen.getAllByText("0 recurring")).toHaveLength(2);
   });
 
-  it("lists outgoings and income with cadence, next due and typical amount", () => {
+  it("shows the monthly side grouped by category, totalled per month", () => {
+    detectRecurring.mockReturnValue(summary({ payments: MIXED }));
+    render(<Recurring userId={USER} />);
+
+    // Totals cover the monthly side only: Netflix + Claude out, the weekly
+    // retainer in (normalised per month). The domain is on the other side.
+    expect(screen.getByText("$215.99")).toBeInTheDocument();
+    expect(screen.getByText("2 recurring")).toBeInTheDocument();
+    expect(screen.getByText("$433.33")).toBeInTheDocument();
+    expect(screen.getByText("1 recurring")).toBeInTheDocument();
+    expect(screen.queryByText("sillyguy.com")).not.toBeInTheDocument();
+
+    // Categories as blocks, biggest first, each with its own subtotal.
+    const out = screen.getByText("Going out").parentElement!;
+    const blocks = within(out).getAllByRole("region");
+    expect(blocks.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Work · Subscriptions",
+      "Fees · Subscriptions",
+    ]);
+    // The block subtotal and its only card read the same.
+    expect(within(blocks[0]).getAllByText("-$200.00")).toHaveLength(2);
+    expect(within(blocks[0]).getAllByText("per month")).toHaveLength(1);
+    expect(within(blocks[0]).getByText("Claude")).toBeInTheDocument();
+    expect(within(blocks[0]).getByText("Monthly · was due Jun 5")).toBeInTheDocument();
+    expect(within(blocks[0]).getByText("4 times")).toBeInTheDocument();
+    expect(within(blocks[1]).getByText("Netflix")).toBeInTheDocument();
+    expect(within(blocks[1]).getByText("Monthly · next Jul 1")).toBeInTheDocument();
+    expect(within(blocks[1]).getByText("3 times")).toBeInTheDocument();
+
+    const income = screen.getByText("Coming in").parentElement!;
+    expect(within(income).getByRole("region", { name: "Freelance" })).toBeInTheDocument();
+    expect(within(income).getByText("+$433.33")).toBeInTheDocument(); // block subtotal
+    expect(within(income).getByText("+$100.00")).toBeInTheDocument(); // per occurrence
+    expect(within(income).getByText("Weekly · next Jun 15")).toBeInTheDocument();
+
+    // Read-only: no edit/delete affordances anywhere.
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("switches to the yearly side, totalled per year, and remembers it", async () => {
+    detectRecurring.mockReturnValue(summary({ payments: MIXED }));
+    render(<Recurring userId={USER} />);
+    await userEvent.click(screen.getByRole("tab", { name: "Yearly" }));
+
+    expect(screen.getByRole("tab", { name: "Yearly" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Out per year")).toBeInTheDocument();
+    expect(screen.getByText("In per year")).toBeInTheDocument();
+    expect(screen.getByText("$18.68")).toBeInTheDocument(); // the domain, per year
+    expect(screen.getByText("1 recurring")).toBeInTheDocument();
+    expect(screen.getByText("$0.00")).toBeInTheDocument(); // nothing yearly coming in
+    expect(screen.getByRole("region", { name: "Work · Domains" })).toBeInTheDocument();
+    expect(screen.getByText("sillyguy.com")).toBeInTheDocument();
+    expect(screen.getByText("Yearly · next Jun 8")).toBeInTheDocument();
+    expect(screen.getByText("1 time")).toBeInTheDocument();
+    expect(screen.getByText("per year")).toBeInTheDocument();
+    expect(screen.queryByText("Netflix")).not.toBeInTheDocument();
+    expect(screen.queryByText("Coming in")).not.toBeInTheDocument();
+    expect(localStorage.getItem("bb-recurring-view")).toBe("yearly");
+  });
+
+  it("has its own empty line for the yearly side", async () => {
+    detectRecurring.mockReturnValue(summary({ payments: [payment()] }));
+    render(<Recurring userId={USER} />);
+    await userEvent.click(screen.getByRole("tab", { name: "Yearly" }));
+    expect(screen.getByText(/Nothin' yearly on repeat yet, Doc/)).toBeInTheDocument();
+    expect(screen.getByText(/or a domain name in the note/)).toBeInTheDocument();
+  });
+
+  it("puts two series of one category in one block, subtotalled", () => {
     detectRecurring.mockReturnValue(
       summary({
         payments: [
           payment(),
-          payment({
-            key: "false:rent:",
-            category: "rent",
-            note: null,
-            amountCents: 80000,
-            monthlyCents: 80000,
-            count: 4,
-            nextDueAt: "2026-06-05T12:00:00.000Z",
-            overdue: true,
-          }),
-          payment({
-            key: "true:salary:",
-            category: "salary",
-            isIncome: true,
-            note: null,
-            cadence: "biweekly",
-            amountCents: 150000,
-            monthlyCents: 325000,
-            count: 6,
-            nextDueAt: "2026-06-15T12:00:00.000Z",
-          }),
+          payment({ key: "false:fees/subscriptions:spotify", note: "Spotify", amountCents: 999, monthlyCents: 999 }),
         ],
-        monthlyOutCents: 81599,
-        monthlyInCents: 325000,
       }),
     );
     render(<Recurring userId={USER} />);
+    const block = screen.getByRole("region", { name: "Fees · Subscriptions" });
+    expect(screen.getAllByRole("region")).toHaveLength(1);
+    expect(within(block).getByText("-$25.98")).toBeInTheDocument();
+    expect(within(block).getByText("Netflix")).toBeInTheDocument();
+    expect(within(block).getByText("Spotify")).toBeInTheDocument();
+  });
 
-    expect(screen.getByText("$815.99")).toBeInTheDocument();
-    expect(screen.getByText("2 recurring")).toBeInTheDocument();
-    expect(screen.getByText("$3,250.00")).toBeInTheDocument();
-    expect(screen.getByText("1 recurring")).toBeInTheDocument();
-    expect(screen.getByText("Going out")).toBeInTheDocument();
-    expect(screen.getByText("Coming in")).toBeInTheDocument();
+  it("names a note-less series by its category", () => {
+    detectRecurring.mockReturnValue(
+      summary({ payments: [payment({ key: "false:rent:", category: "rent", note: null })] }),
+    );
+    render(<Recurring userId={USER} />);
+    expect(screen.getByRole("button", { name: "Rent, monthly, 3 times" })).toBeInTheDocument();
+  });
 
-    // A noted series is named by its note, with the category underneath.
-    expect(screen.getByText("Netflix")).toBeInTheDocument();
-    expect(screen.getByText("Fees · Subscriptions")).toBeInTheDocument();
-    expect(screen.getByText("Monthly · next Jul 1")).toBeInTheDocument();
-    expect(screen.getByText("-$15.99")).toBeInTheDocument();
-    expect(screen.getByText("3 times")).toBeInTheDocument();
-
-    // A note-less one is named by its category, and an overdue one says so.
-    expect(screen.getByText("Rent")).toBeInTheDocument();
-    expect(screen.getByText("Monthly · was due Jun 5")).toBeInTheDocument();
-    expect(screen.getByText("-$800.00")).toBeInTheDocument();
-    expect(screen.getByText("4 times")).toBeInTheDocument();
-
-    expect(screen.getByText("Salary")).toBeInTheDocument();
-    expect(screen.getByText("Every 2 weeks · next Jun 15")).toBeInTheDocument();
-    expect(screen.getByText("+$1,500.00")).toBeInTheDocument();
-    expect(screen.getByText("6 times")).toBeInTheDocument();
-
-    // Read-only: no edit/delete affordances anywhere.
-    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  it("shows the old price instead of the count after a price change", () => {
+    detectRecurring.mockReturnValue(
+      summary({ payments: [payment({ amountCents: 1799, previousAmountCents: 1599 })] }),
+    );
+    render(<Recurring userId={USER} />);
+    expect(screen.getByText("-$17.99")).toBeInTheDocument(); // block subtotal and card share it
+    expect(screen.getByText("was $15.99")).toBeInTheDocument();
+    expect(screen.queryByText("3 times")).not.toBeInTheDocument();
   });
 
   it("opens a series to show its occurrences, and closes it again", async () => {
@@ -158,36 +241,17 @@ describe("Recurring", () => {
     expect(screen.getByText("Jun 1")).toBeInTheDocument();
     expect(screen.getByText("May 1")).toBeInTheDocument();
     expect(screen.getByText("Apr 1")).toBeInTheDocument();
-    expect(screen.getAllByText("$15.99")).toHaveLength(3);
+    const occurrences = card.parentElement!.querySelector("ul")!;
+    expect(within(occurrences).getAllByText("$15.99")).toHaveLength(3);
 
     await userEvent.click(card);
     expect(screen.queryByText("Apr 1")).not.toBeInTheDocument();
   });
 
-  it("shows the old price instead of the count after a price change", () => {
-    detectRecurring.mockReturnValue(
-      summary({ payments: [payment({ amountCents: 1799, previousAmountCents: 1599 })] }),
-    );
-    render(<Recurring userId={USER} />);
-    expect(screen.getByText("-$17.99")).toBeInTheDocument();
-    expect(screen.getByText("was $15.99")).toBeInTheDocument();
-    expect(screen.queryByText("3 times")).not.toBeInTheDocument();
-  });
-
-  it("says '1 time' for a series known only from its note", () => {
-    detectRecurring.mockReturnValue(
-      summary({ payments: [payment({ count: 1, cadence: "yearly", fromNote: true })] }),
-    );
-    render(<Recurring userId={USER} />);
-    expect(screen.getByText("1 time")).toBeInTheDocument();
-    expect(screen.getByText("Yearly · next Jul 1")).toBeInTheDocument();
-  });
-
-  it("shows only the side that has anything", () => {
+  it("shows only the direction that has anything", () => {
     detectRecurring.mockReturnValue(
       summary({
         payments: [payment({ key: "true:salary:", category: "salary", isIncome: true, note: null })],
-        monthlyInCents: 1599,
       }),
     );
     render(<Recurring userId={USER} />);
@@ -205,7 +269,7 @@ describe("Recurring", () => {
     storeValue = makeStoreValue({ locked: true });
     render(<Recurring userId={USER} />);
     expect(screen.getByText(/These entries are encrypted/)).toBeInTheDocument();
-    expect(screen.queryByText(/Nothin' on repeat/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Monthly" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByText(/Enter your passphrase in Settings/));
     expect(navigate).toHaveBeenCalledWith("/settings");
   });
