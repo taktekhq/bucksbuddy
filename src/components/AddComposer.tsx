@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, StickyNote, Tag } from "lucide-react";
+import { ChevronRight, Info, StickyNote, Tag } from "lucide-react";
 import { CategorySheet } from "@/components/ui/CategorySheet";
+import { NoteTipsSheet } from "@/components/ui/NoteTipsSheet";
 import { useStore } from "@/lib/store";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import {
@@ -49,6 +50,7 @@ export function AddComposer({
   const [display, setDisplay] = useState("");
   const [note, setNote] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -153,9 +155,9 @@ export function AddComposer({
     }
   }
 
-  // Past notes in this category, narrowed by what's typed, to tap instead of
-  // retyping — the same note every time is what lets the recurring page find
-  // the series later.
+  // Past notes in this exact category, narrowed by what's typed, to tap
+  // instead of retyping — the same note every time is what lets the recurring
+  // page find the series later.
   const suggestions = category
     ? noteSuggestions(transactions, { isIncome, category, query: note })
     : [];
@@ -259,7 +261,8 @@ export function AddComposer({
       )}
 
       {/* NOTE — optional, available once a category is chosen. Past notes
-          for this category sit underneath as chips; tapping one fills it in. */}
+          for this category sit underneath as chips; tapping one fills it in.
+          The tiny info button opens the cheat-code tips. */}
       {category && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3">
@@ -272,6 +275,14 @@ export function AddComposer({
               maxLength={140}
               className="min-w-0 flex-1 bg-transparent text-base text-label outline-none placeholder:text-label-secondary"
             />
+            <button
+              type="button"
+              onClick={() => setTipsOpen(true)}
+              aria-label="Note tips"
+              className="press -m-2 shrink-0 p-2 text-label-secondary/70"
+            >
+              <Info className="h-4 w-4" strokeWidth={2} />
+            </button>
           </div>
           {suggestions.length > 0 && (
             <ul
@@ -321,6 +332,7 @@ export function AddComposer({
         </div>
       )}
 
+      <NoteTipsSheet open={tipsOpen} onClose={() => setTipsOpen(false)} />
       <CategorySheet
         open={sheetOpen}
         isIncome={isIncome}

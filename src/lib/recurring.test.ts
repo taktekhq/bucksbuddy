@@ -4,9 +4,13 @@ import {
   MIN_OCCURRENCES,
   PRICE_CHANGE_TOLERANCE,
   SAME_PRICE_TOLERANCE,
+  aliveForDays,
+  breakAfterDays,
   cadenceOf,
   detectRecurring,
+  fitsCadence,
   monthlyEquivalent,
+  pickCadence,
   priceTrack,
 } from "@/lib/recurring";
 import type { Transaction } from "@/types/db";
@@ -75,6 +79,31 @@ describe("cadenceOf", () => {
     expect(cadenceOf([30, 7])).toBeNull(); // mixed
     expect(cadenceOf([3, 3])).toBeNull(); // between weekly and nothing
     expect(cadenceOf([])).toBeNull();
+  });
+});
+
+describe("pickCadence / fitsCadence", () => {
+  it("reads the cadence off the typical gap, even when some gaps stray", () => {
+    expect(pickCadence([30, 30, 95, 30])).toBe("monthly"); // a long break in the middle
+    expect(pickCadence([61, 30, 60])).toBe("monthly"); // typical gap only fits twice over
+    expect(pickCadence([300])).toBeNull();
+  });
+
+  it("checks the gaps keep to a cadence", () => {
+    expect(fitsCadence("monthly", [30, 61, 31])).toBe(true);
+    expect(fitsCadence("monthly", [30, 95])).toBe(false);
+    expect(fitsCadence("weekly", [14, 14])).toBe(false); // all skips
+    expect(fitsCadence("weekly", [])).toBe(true);
+  });
+});
+
+describe("breakAfterDays / aliveForDays", () => {
+  it("scale with the cadence", () => {
+    expect(breakAfterDays("weekly")).toBe(18);
+    expect(breakAfterDays("monthly")).toBe(74);
+    expect(aliveForDays("weekly")).toBe(16);
+    expect(aliveForDays("monthly")).toBe(67);
+    expect(aliveForDays("yearly")).toBe(745);
   });
 });
 
@@ -279,10 +308,100 @@ describe("detectRecurring", () => {
   });
 
   it("flags a series whose next occurrence is already behind us", () => {
-    const rows = monthly(3, {}, 3); // Feb, Mar, Apr 1 — due May 1, now is Jun 10
+    const rows = monthly(3, {}, 3, 20); // Feb, Mar, Apr 20 — due May 20, now is Jun 10
     const p = detectRecurring(rows, "u1", NOW).payments[0];
     expect(p.overdue).toBe(true);
-    expect(p.nextDueAt).toBe(at(2026, 4, 1));
+    expect(p.nextDueAt).toBe(at(2026, 4, 20));
+  });
+
+  it("stops showing a series once a whole period has passed beyond its due date", () => {
+    // Monthly, last on Apr 1: due May 1, gone after Jun 1 (67 days) — by Jun 10 it's gone.
+    expect(detectRecurring(monthly(3, {}, 3), "u1", NOW).payments).toHaveLength(0);
+    // Weekly, last on May 22: due May 29, alive 16 days — gone on Jun 10 (19 days).
+    const weekly = [0, 7, 14].map((d) =>
+      tx({ category: "gym", note: null, amount_usd_cents: 2500, occurred_at: at(2026, 4, 8 + d) }),
+    );
+    expect(detectRecurring(weekly, "u1", NOW).payments).toHaveLength(0);
+    // A hinted single entry lapses the same way.
+    const old = [tx({ note: "Claude subscription", occurred_at: at(2026, 2, 1) })];
+    expect(detectRecurring(old, "u1", NOW).payments).toHaveLength(0);
+  });
+
+  it("carries on after a skipped month, but starts over after a longer break", () => {
+    // Jan, Feb, (nothing in Mar), Apr 1 — one skipped log, still one series.
+    const skipped = [0, 1, 3, 4].map((m) => tx({ occurred_at: at(2026, m, 1) }));
+    const p = detectRecurring(skipped, "u1", NOW).payments[0];
+    expect(p.count).toBe(4);
+    expect(p.firstAt).toBe(at(2026, 0, 1));
+
+    // Ran Sep–Dec 2025, stopped, restarted May 1 2026: only the restart counts,
+    // and one entry isn't enough on its own.
+    const before = [8, 9, 10, 11].map((m) => tx({ occurred_at: at(2025, m, 1) }));
+    expect(detectRecurring([...before, tx({ occurred_at: at(2026, 4, 1) })], "u1", NOW).payments)
+      .toHaveLength(0);
+    // With a second entry the restart is a series of its own, priced fresh.
+    const restarted = [
+      ...before,
+      tx({ occurred_at: at(2026, 4, 1), amount_usd_cents: 2499 }),
+      tx({ occurred_at: at(2026, 5, 1), amount_usd_cents: 2499 }),
+    ];
+    const r = detectRecurring(restarted, "u1", NOW).payments[0];
+    expect(r.count).toBe(2);
+    expect(r.firstAt).toBe(at(2026, 4, 1));
+    expect(r.amountCents).toBe(2499);
+    expect(r.previousAmountCents).toBeNull();
+    expect(r.rows).toHaveLength(2);
+  });
+
+  it("compares notes without who they were 'with'", () => {
+    // Three meals with the same person are three different things.
+    const meals = [
+      tx({ category: "food", note: "Dinner with Sara", amount_usd_cents: 4000, occurred_at: at(2026, 3, 1) }),
+      tx({ category: "food", note: "Lunch with Sara", amount_usd_cents: 4000, occurred_at: at(2026, 4, 1) }),
+      tx({ category: "food", note: "Brunch with Sara", amount_usd_cents: 4000, occurred_at: at(2026, 5, 1) }),
+    ];
+    expect(detectRecurring(meals, "u1", NOW).payments).toHaveLength(0);
+    // The same thing with different people is still the same thing.
+    const shared = [
+      tx({ note: "Netflix with Ali", occurred_at: at(2026, 4, 1) }),
+      tx({ note: "Netflix with Sara", occurred_at: at(2026, 5, 1) }),
+    ];
+    const p = detectRecurring(shared, "u1", NOW).payments[0];
+    expect(p.count).toBe(2);
+    expect(p.note).toBe("Netflix");
+  });
+
+  it("takes 'subscription' or 'membership' as recurring, monthly until the dates say otherwise", () => {
+    const one = [tx({ note: "Claude subscription", amount_usd_cents: 20000, occurred_at: at(2026, 5, 6) })];
+    const p = detectRecurring(one, "u1", NOW).payments[0];
+    expect(p.cadence).toBe("monthly");
+    expect(p.fromNote).toBe(false);
+    expect(p.note).toBe("Claude"); // the word is a cue, not part of the name
+    expect(p.count).toBe(1);
+
+    // Written once, it keeps working for later entries that forget the word.
+    const forgot = [
+      tx({ note: "Claude subscription", amount_usd_cents: 20000, occurred_at: at(2026, 4, 6) }),
+      tx({ note: "Claude", amount_usd_cents: 20000, occurred_at: at(2026, 5, 6) }),
+    ];
+    const f = detectRecurring(forgot, "u1", NOW).payments;
+    expect(f).toHaveLength(1);
+    expect(f[0].count).toBe(2);
+
+    // Two logged a week apart: the dates decide.
+    const weekly = [0, 7].map((d) =>
+      tx({ category: "gym", note: "Gym membership", amount_usd_cents: 2500, occurred_at: at(2026, 4, 28 + d) }),
+    );
+    expect(detectRecurring(weekly, "u1", NOW).payments[0].cadence).toBe("weekly");
+
+    // Irregular dates don't disqualify it — the note said so — and with no
+    // cadence to read off them, monthly is assumed.
+    const irregular = [1, 4, 9].map((d) =>
+      tx({ note: "News subscription", amount_usd_cents: 500, occurred_at: at(2026, 5, d) }),
+    );
+    const n = detectRecurring(irregular, "u1", NOW).payments;
+    expect(n).toHaveLength(1);
+    expect(n[0].cadence).toBe("monthly");
   });
 
   it("sorts outgoings before income and nearest due first, and totals each side", () => {
@@ -297,7 +416,7 @@ describe("detectRecurring", () => {
           category: "freelance",
           note: "retainer",
           amount_usd_cents: 10000,
-          occurred_at: at(2026, 4, 1 + d),
+          occurred_at: at(2026, 4, 22 + d),
         }),
       ),
     ];
@@ -329,7 +448,7 @@ describe("detectRecurring", () => {
   });
 
   it("defaults `now` to the current time", () => {
-    const rows = monthly(3, {}, 3); // last on Apr 1 2026 — long overdue by any real clock
-    expect(detectRecurring(rows, "u1").payments[0].overdue).toBe(true);
+    const rows = monthly(3, {}, 3); // last on Apr 1 2026 — long gone by any real clock
+    expect(detectRecurring(rows, "u1").payments).toHaveLength(0);
   });
 });

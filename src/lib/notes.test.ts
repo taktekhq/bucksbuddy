@@ -1,33 +1,47 @@
 import { describe, it, expect } from "vitest";
 import {
-  SIMILARITY_THRESHOLD,
+  TYPO_DISTANCE,
+  editDistance,
   normalizeNote,
   noteSuggestions,
   noteTokens,
   notesMatch,
   parseNote,
-  similarity,
 } from "@/lib/notes";
 import type { Transaction } from "@/types/db";
 
 describe("parseNote", () => {
+  const plain = { recurring: false };
+
   it("peels a cadence hint off the note, brackets and all", () => {
-    expect(parseNote("Domain (yearly)")).toEqual({ text: "Domain", cadence: "yearly" });
-    expect(parseNote("[monthly] Gym")).toEqual({ text: "Gym", cadence: "monthly" });
-    expect(parseNote("cleaner every 2 weeks")).toEqual({ text: "cleaner", cadence: "biweekly" });
-    expect(parseNote("bi-weekly cleaner")).toEqual({ text: "cleaner", cadence: "biweekly" });
-    expect(parseNote("Weekly groceries")).toEqual({ text: "groceries", cadence: "weekly" });
-    expect(parseNote("insurance - annual")).toEqual({ text: "insurance", cadence: "yearly" });
+    expect(parseNote("Domain (yearly)")).toEqual({ ...plain, text: "Domain", cadence: "yearly" });
+    expect(parseNote("[monthly] Gym")).toEqual({ ...plain, text: "Gym", cadence: "monthly" });
+    expect(parseNote("cleaner every 2 weeks")).toEqual({ ...plain, text: "cleaner", cadence: "biweekly" });
+    expect(parseNote("bi-weekly cleaner")).toEqual({ ...plain, text: "cleaner", cadence: "biweekly" });
+    expect(parseNote("Weekly groceries")).toEqual({ ...plain, text: "groceries", cadence: "weekly" });
+    expect(parseNote("insurance - annual")).toEqual({ ...plain, text: "insurance", cadence: "yearly" });
   });
 
   it("leaves a note without a hint alone, and copes with null", () => {
-    expect(parseNote("Netflix")).toEqual({ text: "Netflix", cadence: null });
-    expect(parseNote(null)).toEqual({ text: "", cadence: null });
-    expect(parseNote("  spaced   out  ")).toEqual({ text: "spaced out", cadence: null });
+    expect(parseNote("Netflix")).toEqual({ ...plain, text: "Netflix", cadence: null });
+    expect(parseNote(null)).toEqual({ ...plain, text: "", cadence: null });
+    expect(parseNote("  spaced   out  ")).toEqual({ ...plain, text: "spaced out", cadence: null });
   });
 
   it("can leave nothing but the hint", () => {
-    expect(parseNote("(yearly)")).toEqual({ text: "", cadence: "yearly" });
+    expect(parseNote("(yearly)")).toEqual({ ...plain, text: "", cadence: "yearly" });
+  });
+
+  it("spots 'subscription' / 'membership' as recurring, and drops them from the name", () => {
+    expect(parseNote("Claude subscription")).toEqual({ text: "Claude", cadence: null, recurring: true });
+    expect(parseNote("Gym Membership (yearly)")).toEqual({ text: "Gym", cadence: "yearly", recurring: true });
+    expect(parseNote("subscription")).toEqual({ text: "", cadence: null, recurring: true });
+  });
+
+  it("drops who it was 'with' — the name isn't what it was", () => {
+    expect(parseNote("Dinner with Sara")).toEqual({ ...plain, text: "Dinner", cadence: null });
+    expect(parseNote("Netflix with Ali (monthly)")).toEqual({ ...plain, text: "Netflix", cadence: "monthly" });
+    expect(parseNote("Withdrawal").text).toBe("Withdrawal"); // whole word only
   });
 });
 
@@ -41,29 +55,36 @@ describe("normalizeNote / noteTokens", () => {
   });
 });
 
-describe("similarity", () => {
-  it("is 1 for equal strings and 0 for strings too short to compare", () => {
-    expect(similarity("abc", "abc")).toBe(1);
-    expect(similarity("a", "ab")).toBe(0);
-  });
-
-  it("is high for a typo and low for unrelated words", () => {
-    expect(similarity("netflix", "netflx")).toBeGreaterThanOrEqual(SIMILARITY_THRESHOLD);
-    expect(similarity("netflix", "spotify")).toBeLessThan(SIMILARITY_THRESHOLD);
+describe("editDistance", () => {
+  it("counts inserts, deletes, replacements and swaps as one edit each", () => {
+    expect(TYPO_DISTANCE).toBe(1);
+    expect(editDistance("abc", "abc")).toBe(0);
+    expect(editDistance("netflix", "netflx")).toBe(1); // missed letter
+    expect(editDistance("netflix", "netfllix")).toBe(1); // extra letter
+    expect(editDistance("netflix", "netfrix")).toBe(1); // wrong letter
+    expect(editDistance("netflix", "netlfix")).toBe(1); // swapped pair
+    expect(editDistance("lunch", "brunch")).toBe(2);
+    expect(editDistance("", "abc")).toBe(3);
   });
 });
 
 describe("notesMatch", () => {
-  it("matches equal, contained, word-sharing and typo'd notes", () => {
+  it("matches equal, word-sharing and typo'd notes", () => {
     expect(notesMatch("netflix", "netflix")).toBe(true);
     expect(notesMatch("netflix", "netflix sub")).toBe(true);
     expect(notesMatch("netflix family plan", "family plan on netflix")).toBe(true);
     expect(notesMatch("netlfix", "netflix")).toBe(true);
+    expect(notesMatch("netlfix sub", "netflix")).toBe(true); // typo in one word
+    expect(notesMatch("gym pass", "gym  pas")).toBe(true); // typo across the whole note
   });
 
-  it("does not match on a stopword alone, or on a short fragment", () => {
+  it("does not match on a stopword alone, a different word, or a short fragment", () => {
     expect(notesMatch("netflix bill", "gym bill")).toBe(false);
+    expect(notesMatch("claude subscription", "gym membership")).toBe(false);
+    expect(notesMatch("lunch", "brunch")).toBe(false);
+    expect(notesMatch("spotify", "shopify")).toBe(false);
     expect(notesMatch("ab", "abc")).toBe(false);
+    expect(notesMatch("abc", "abd")).toBe(false); // too short to call a typo
   });
 
   it("treats empty notes as their own thing", () => {
@@ -100,14 +121,19 @@ describe("noteSuggestions", () => {
     row("h", "Groceries", "2026-06-26T12:00:00.000Z", { category: "groceries" }),
   ];
 
-  it("offers the distinct past notes of the base category, newest first", () => {
+  it("offers the distinct past notes of the exact category, newest first", () => {
     expect(
       noteSuggestions(rows, { isIncome: false, category: "fees/subscriptions", query: "" }),
-    ).toEqual(["Mobile top-up", "Spotify", "Netflix"]);
+    ).toEqual(["Spotify", "Netflix"]);
+    // A sibling subcategory keeps its own notes; the bare parent has none here.
+    expect(
+      noteSuggestions(rows, { isIncome: false, category: "fees/mobile", query: "" }),
+    ).toEqual(["Mobile top-up"]);
+    expect(noteSuggestions(rows, { isIncome: false, category: "fees", query: "" })).toEqual([]);
   });
 
   it("narrows to what's typed and drops an exact match", () => {
-    const opts = { isIncome: false, category: "fees" };
+    const opts = { isIncome: false, category: "fees/subscriptions" };
     expect(noteSuggestions(rows, { ...opts, query: "net" })).toEqual(["Netflix"]);
     expect(noteSuggestions(rows, { ...opts, query: "NETFLIX" })).toEqual([]);
     expect(noteSuggestions(rows, { ...opts, query: "zzz" })).toEqual([]);
@@ -115,7 +141,7 @@ describe("noteSuggestions", () => {
 
   it("respects the limit", () => {
     expect(
-      noteSuggestions(rows, { isIncome: false, category: "fees", query: "", limit: 1 }),
-    ).toEqual(["Mobile top-up"]);
+      noteSuggestions(rows, { isIncome: false, category: "fees/subscriptions", query: "", limit: 1 }),
+    ).toEqual(["Spotify"]);
   });
 });

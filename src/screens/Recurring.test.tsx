@@ -142,7 +142,6 @@ describe("Recurring", () => {
     expect(screen.getByText("+$1,500.00")).toBeInTheDocument();
     expect(screen.getByText("6 times")).toBeInTheDocument();
 
-    expect(screen.getByText(/Found from the entries logged so far/)).toBeInTheDocument();
     // Read-only: no edit/delete affordances anywhere.
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
   });

@@ -157,6 +157,16 @@ describe("AddComposer (add mode)", () => {
     expect(screen.queryByRole("list", { name: "Past notes" })).not.toBeInTheDocument();
   });
 
+  it("opens the note tips from the tiny info button", async () => {
+    render(<AddComposer editing={null} onClearEdit={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Note tips" })).not.toBeInTheDocument();
+    await chooseCategory(/Gas/);
+    await userEvent.click(screen.getByRole("button", { name: "Note tips" }));
+    expect(screen.getByRole("dialog", { name: "Note tips" })).toHaveTextContent(/subscription/);
+    await userEvent.click(screen.getByRole("button", { name: "Got it" }));
+    expect(screen.queryByRole("dialog", { name: "Note tips" })).not.toBeInTheDocument();
+  });
+
   it("stores a null note when left blank", async () => {
     render(<AddComposer editing={null} onClearEdit={() => {}} />);
     await userEvent.type(screen.getByLabelText("Amount"), "5");
