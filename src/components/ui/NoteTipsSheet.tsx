@@ -32,15 +32,15 @@ const TIPS: Tip[] = [
     items: [
       {
         title: "Start a recurring item",
-        body: "Add `subscription` or `membership` to the first note.",
+        body: "First note: add `subscription` or `membership`.",
       },
       {
         title: "Set how often it repeats",
-        body: "Add `(yearly)`, `(monthly)` or `(weekly)` to the note.",
+        body: "Any note: add `(yearly)`, `(monthly)` or `(weekly)`.",
       },
       {
         title: "Stop a recurring item",
-        body: "Add `(ended)` to the last note.",
+        body: "Last note: add `(ended)`.",
       },
     ],
   },

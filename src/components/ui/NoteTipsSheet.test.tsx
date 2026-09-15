@@ -25,9 +25,9 @@ describe("NoteTipsSheet", () => {
     const keywords = screen.getByText("Recurring keywords").parentElement!;
     const points = [...keywords.querySelectorAll("li")].map((li) => li.textContent);
     expect(points).toEqual([
-      "Start a recurring itemAdd subscription or membership to the first note.",
-      "Set how often it repeatsAdd (yearly), (monthly) or (weekly) to the note.",
-      "Stop a recurring itemAdd (ended) to the last note.",
+      "Start a recurring itemFirst note: add subscription or membership.",
+      "Set how often it repeatsAny note: add (yearly), (monthly) or (weekly).",
+      "Stop a recurring itemLast note: add (ended).",
     ]);
     // The keywords themselves read as code (plain, with nowhere to put them).
     expect([...keywords.querySelectorAll("code")].map((c) => c.textContent)).toEqual([
