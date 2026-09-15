@@ -55,13 +55,6 @@ vi.mock("@/lib/reviews", () => ({
       : null,
 }));
 
-const vault = vi.hoisted(() => ({
-  hasReviewPassphrase: vi.fn(),
-  setReviewPassphrase: vi.fn(),
-  checkReviewPassphrase: vi.fn(),
-}));
-vi.mock("@/lib/reportVault", () => vault);
-
 const posthogMock = vi.hoisted(() => ({ capture: vi.fn() }));
 vi.mock("@/lib/posthog", () => ({ default: posthogMock }));
 
@@ -210,9 +203,6 @@ beforeEach(() => {
   reviewsMock.generateReview.mockResolvedValue({ review: review(), error: null });
   reviewsMock.storeReviewBody.mockResolvedValue({ error: null });
   reviewsMock.waitForPaidReview.mockResolvedValue(null);
-  vault.hasReviewPassphrase.mockResolvedValue({ set: false, error: null });
-  vault.setReviewPassphrase.mockResolvedValue({ error: null });
-  vault.checkReviewPassphrase.mockResolvedValue(true);
   replaceState = vi
     .spyOn(window.history, "replaceState")
     .mockImplementation(() => {});
@@ -229,6 +219,15 @@ const buyButton = () =>
   screen.getByRole("button", {
     name: /Write my review|Unlock a review|Not enough logged yet|Can't check your history/,
   });
+
+/**
+ * Put the account on the end-to-end tier, where the archive asks for the
+ * encryption passphrase it is already unlocked with. The default tier has no
+ * passphrase but the public constant, so it asks for nothing.
+ */
+function withPassphrase(pass = "vault-pass") {
+  setStore({ e2eMode: "passphrase", passphrase: pass });
+}
 
 /** Put the screen in the paying configuration: priced copy, Stripe redirect. */
 function sellForMoney() {
@@ -383,23 +382,18 @@ describe("Review — the offer", () => {
 });
 
 describe("Review — buying", () => {
-  it("asks for an archive passphrase first, then writes the review", async () => {
+  it("writes the review on the first tap, asking for no new passphrase", async () => {
     reviewsMock.fetchReview.mockResolvedValue(row());
     render(<Review />);
     await screen.findByText("120 / 40");
     await userEvent.click(buyButton());
 
-    expect(reviewsMock.startReview).not.toHaveBeenCalled();
-    const field = screen.getByLabelText(
-      "Set a passphrase for your review archive",
-    );
-    await userEvent.type(field, "vault-pass");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Save and continue" }),
-    );
-
     expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
-    expect(vault.setReviewPassphrase).toHaveBeenCalledWith("u1", "vault-pass");
+    // Nothing is set up first: the account's own encryption passphrase already
+    // gates this screen, and there is no second one to invent.
+    expect(
+      screen.queryByLabelText(/passphrase/i),
+    ).not.toBeInTheDocument();
     expect(reviewsMock.startReview).toHaveBeenCalledWith(
       "past_3_months",
       "USD",
@@ -414,7 +408,6 @@ describe("Review — buying", () => {
   });
 
   it("says so when a free review can't be read back", async () => {
-    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
     reviewsMock.fetchReview.mockResolvedValue(null);
     render(<Review />);
     await screen.findByText("120 / 40");
@@ -427,7 +420,6 @@ describe("Review — buying", () => {
   });
 
   it("says so when a free grant comes back without an id", async () => {
-    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
     reviewsMock.startReview.mockResolvedValue({
       reviewId: null,
       url: null,
@@ -444,23 +436,13 @@ describe("Review — buying", () => {
     expect(reviewsMock.fetchReview).not.toHaveBeenCalled();
   });
 
-  it("asks for an archive passphrase first, then starts checkout", async () => {
+  it("goes straight to checkout when the review is sold", async () => {
     sellForMoney();
     render(<Review />);
     await screen.findByText("120 / 40");
     await userEvent.click(buyButton());
 
-    expect(reviewsMock.startReview).not.toHaveBeenCalled();
-    const field = screen.getByLabelText(
-      "Set a passphrase for your review archive",
-    );
-    await userEvent.type(field, "vault-pass");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Save and continue" }),
-    );
-
     await waitFor(() => expect(window.location.href).toBe(STRIPE_URL));
-    expect(vault.setReviewPassphrase).toHaveBeenCalledWith("u1", "vault-pass");
     expect(reviewsMock.startReview).toHaveBeenCalledWith(
       "past_3_months",
       "USD",
@@ -473,39 +455,7 @@ describe("Review — buying", () => {
     expect(reviewsMock.generateReview).not.toHaveBeenCalled();
   });
 
-  it("does not start anything when the passphrase can't be saved", async () => {
-    vault.setReviewPassphrase.mockResolvedValue({ error: "vault write failed" });
-    render(<Review />);
-    await screen.findByText("120 / 40");
-    await userEvent.click(buyButton());
-    await userEvent.type(
-      screen.getByLabelText("Set a passphrase for your review archive"),
-      "vault-pass",
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Save and continue" }),
-    );
-
-    expect(await screen.findByText("vault write failed")).toBeInTheDocument();
-    expect(reviewsMock.startReview).not.toHaveBeenCalled();
-    expect(window.location.href).toBe("http://localhost:3000/");
-  });
-
-  it("goes straight to checkout when a passphrase is already set", async () => {
-    sellForMoney();
-    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
-    render(<Review />);
-    await screen.findByText("120 / 40");
-    await userEvent.click(buyButton());
-
-    await waitFor(() => expect(window.location.href).toBe(STRIPE_URL));
-    expect(
-      screen.queryByLabelText("Set a passphrase for your review archive"),
-    ).not.toBeInTheDocument();
-  });
-
   it("surfaces the server's refusal", async () => {
-    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
     reviewsMock.startReview.mockResolvedValue({
       reviewId: null,
       url: null,
@@ -526,7 +476,6 @@ describe("Review — buying", () => {
   });
 
   it("falls back to its own wording when checkout fails silently", async () => {
-    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
     reviewsMock.startReview.mockResolvedValue({
       reviewId: "rev-1",
       url: null,
@@ -852,6 +801,7 @@ describe("Review — the archive", () => {
         row({ id: "d", status: "pending" }),
         row({ id: "e", status: "paid" }),
         row({ id: "f", status: "ready", body_enc: "cipher" }),
+        row({ id: "g", status: "paid", price_cents: 0 }),
       ],
       error: null,
     });
@@ -864,10 +814,12 @@ describe("Review — the archive", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Paid $5.00 · tap to write it")).toBeInTheDocument();
     expect(screen.getByText("$5.00 · tap to read")).toBeInTheDocument();
-    // Six rows, all readable without a passphrase on the list itself.
+    // A free grant was never paid for, so it isn't told that it was.
+    expect(screen.getByText("Free · tap to write it")).toBeInTheDocument();
+    // Seven rows, all readable without a passphrase on the list itself.
     expect(
       screen.getAllByText("June 2026 – August 2026").length,
-    ).toBe(6);
+    ).toBe(7);
   });
 
   it("opens a stored review through the account's own key", async () => {
@@ -1037,41 +989,28 @@ describe("Review — the archive", () => {
 });
 
 describe("Review — the archive lock", () => {
-  it("locks the archive when the gate itself can't be read", async () => {
-    sellForMoney();
-    // An unreadable `review_access` row must not read as "no passphrase set":
-    // that is the one answer that would leave the archive open.
-    vault.hasReviewPassphrase.mockResolvedValue({
-      set: false,
-      error: "review_access is unreadable",
-    });
+  it("leaves the archive open on the default tier", async () => {
+    // The only passphrase a default-tier account has is the constant compiled
+    // into the bundle, so there is nothing to ask for and nothing to protect the
+    // review more strongly than the amounts it was written from.
     reviewsMock.listReviews.mockResolvedValue({
       reviews: [row({ id: "f", status: "ready", body_enc: "cipher" })],
       error: null,
     });
+    openReview.mockResolvedValue(review());
     render(<Review />);
 
     expect(
       await screen.findByRole("button", { name: /tap to read/ }),
-    ).toBeDisabled();
-    expect(
-      screen.getByLabelText("Enter your archive passphrase"),
-    ).toBeInTheDocument();
-    // And a purchase doesn't offer to replace a passphrase that may well exist:
-    // the buy button goes straight to checkout.
-    await screen.findByText("120 / 40");
-    await userEvent.click(buyButton());
-    expect(
-      screen.queryByLabelText("Set a passphrase for your review archive"),
-    ).not.toBeInTheDocument();
-    await waitFor(() => expect(window.location.href).toBe(STRIPE_URL));
+    ).toBeEnabled();
+    expect(screen.queryByLabelText(/passphrase/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /tap to read/ }));
+    expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
   });
 
-  it("holds the rows shut until the right passphrase arrives", async () => {
-    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
-    vault.checkReviewPassphrase
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+  it("holds the rows shut until the encryption passphrase arrives", async () => {
+    withPassphrase("hunter2");
     reviewsMock.listReviews.mockResolvedValue({
       reviews: [row({ id: "f", status: "ready", body_enc: "cipher" })],
       error: null,
@@ -1084,61 +1023,57 @@ describe("Review — the archive lock", () => {
     });
     expect(rowButton).toBeDisabled();
 
-    const field = screen.getByLabelText("Enter your archive passphrase");
+    const field = screen.getByLabelText("Enter your encryption passphrase");
     await userEvent.type(field, "wrong");
     await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
     expect(await screen.findByText("That didn't match.")).toBeInTheDocument();
     expect(rowButton).toBeDisabled();
 
     await userEvent.clear(field);
-    await userEvent.type(field, "vault-pass");
+    await userEvent.type(field, "hunter2");
     await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
     await waitFor(() =>
       expect(
-        screen.queryByLabelText("Enter your archive passphrase"),
+        screen.queryByLabelText("Enter your encryption passphrase"),
       ).not.toBeInTheDocument(),
-    );
-    expect(vault.checkReviewPassphrase).toHaveBeenLastCalledWith(
-      "u1",
-      "vault-pass",
     );
 
     await userEvent.click(screen.getByRole("button", { name: /tap to read/ }));
     expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
   });
 
-  it("ignores an empty submit and a second submit while the first is in flight", async () => {
-    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
+  it("does not stand between the account and a new review", async () => {
+    // The gate is on reading the archive, not on writing one: a review is
+    // rendered by the screen that just wrote it, having been sealed with the
+    // same key, so asking again there would protect nothing.
+    withPassphrase("hunter2");
+    reviewsMock.fetchReview.mockResolvedValue(row());
+    render(<Review />);
+    await screen.findByText("120 / 40");
+    await userEvent.click(buyButton());
+
+    expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
+    expect(reviewsMock.generateReview).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores an empty submit", async () => {
+    withPassphrase("hunter2");
     reviewsMock.listReviews.mockResolvedValue({
       reviews: [row({ id: "a", status: "refunded" })],
       error: null,
     });
-    const check = deferred<boolean>();
-    vault.checkReviewPassphrase.mockReturnValue(check.promise);
     render(<Review />);
 
-    const field = await screen.findByLabelText("Enter your archive passphrase");
+    const field = await screen.findByLabelText("Enter your encryption passphrase");
     const form = field.closest("form")!;
-    // Empty: the submit button is out, and a submitted form is a no-op too.
     expect(screen.getByRole("button", { name: "Unlock" })).toBeDisabled();
     await act(async () => {
       fireEvent.submit(form);
     });
-    expect(vault.checkReviewPassphrase).not.toHaveBeenCalled();
-
-    // A second submit while the first is still in flight is dropped rather than
-    // checking the same passphrase twice.
-    await userEvent.type(field, "vault-pass");
-    await act(async () => {
-      fireEvent.submit(form);
-    });
-    await act(async () => {
-      fireEvent.submit(form);
-    });
-    expect(vault.checkReviewPassphrase).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      check.resolve(true);
-      await flush();
-    });
+    // Neither unlocked nor told it did not match: nothing was submitted.
+    expect(screen.queryByText("That didn't match.")).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Enter your encryption passphrase"),
+    ).toBeInTheDocument();
   });
 });

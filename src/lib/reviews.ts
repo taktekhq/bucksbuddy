@@ -91,7 +91,7 @@ export async function fetchEligibility(
   };
 }
 
-/** Every review this account has bought, newest first. */
+/** Every review this account has, newest first. */
 export async function listReviews(): Promise<{
   reviews: SpendingReviewRow[];
   error: string | null;
@@ -104,7 +104,7 @@ export async function listReviews(): Promise<{
   return { reviews: (data ?? []) as SpendingReviewRow[], error: null };
 }
 
-/** One review, for polling a checkout back from Stripe. */
+/** One review by id: the row a free grant just created, or a Stripe return. */
 export async function fetchReview(id: string): Promise<SpendingReviewRow | null> {
   const { data } = await supabase
     .from("spending_reviews")

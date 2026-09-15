@@ -1,9 +1,9 @@
-// Who may buy a spending review, and how we explain a "no".
+// Who may have a spending review, and how we explain a "no".
 //
 // The *rule* is enforced in the database (see the `report_eligibility` function
-// in supabase/migrations/0009_spending_reports.sql) for two reasons: it counts
+// in supabase/migrations/0009_spending_reviews.sql) for two reasons: it counts
 // every row the account has, not the newest FETCH_CAP the store happens to hold,
-// and the checkout endpoint has to be able to refuse a purchase without
+// and the review-start function has to be able to refuse a review without
 // trusting the browser. This module is the other half: the types of what the
 // database returns, and the copy that turns those counts into something a
 // person can act on.

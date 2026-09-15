@@ -53,7 +53,7 @@ type Result = { error: string | null };
 
 type Store = {
   loading: boolean;
-  /** The signed-in account, for tables the store doesn't own (lib/reportVault). */
+  /** The signed-in account, for tables and screens the store doesn't own. */
   userId: string;
   transactions: Transaction[];
   // Currency settings (see lib/currency): totals are kept and shown in

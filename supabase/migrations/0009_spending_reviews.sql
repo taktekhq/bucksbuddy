@@ -1,26 +1,32 @@
--- BucksBuddy paid spending reviews.
+-- BucksBuddy spending reviews.
 -- Run this in Supabase Dashboard → SQL Editor (or `supabase db push`) after
 -- 0001 … 0008. Safe to re-run: every step is guarded.
 --
--- Three tables and one function:
---   * spending_reviews — one row per purchase. Written only by the edge
---     functions (service role); the browser may read its own rows and may write
---     back exactly one column, the encrypted body, because it is the only party
---     that holds the key.
---   * review_access    — the archive passphrase, as an unreadable token.
+-- Two tables and one function:
+--   * spending_reviews — one row per review. Written only by the edge functions
+--     (service role); the browser may read its own rows and may write back
+--     exactly one column, the encrypted body, because it is the only party that
+--     holds the key.
 --   * stripe_events    — every webhook event id we have already applied, so a
 --     Stripe retry cannot pay for a review twice.
 --   * report_eligibility() — counts and dates only, which is all the gate needs
 --     and all the server can see: the amounts are encrypted per-column (0003).
+--
+-- There is deliberately no table for an archive passphrase: the archive is
+-- gated by the account's own encryption passphrase (0003), which this database
+-- never sees, so there is nothing here to hold.
 
 -- ===== spending_reviews =====
 create table if not exists public.spending_reviews (
   id                  uuid primary key default gen_random_uuid(),
   user_id             uuid not null references auth.users(id) on delete cascade,
   -- pending  : checkout created, money not confirmed
-  -- paid     : Stripe says it is paid; the review may now be generated
+  -- paid     : nothing is owed and the review may be generated — written by the
+  --            Stripe webhook for a purchase, or straight away by review-start
+  --            for an allowlisted free grant (price_cents 0)
   -- ready    : the model has written it (the body may still be in flight to us)
-  -- failed   : generation gave up; `error` says why and a refund is owed
+  -- failed   : generation gave up; `error` says why, and a refund is owed if the
+  --            review was actually charged for
   -- refunded : money returned (refund or dispute)
   status              text not null default 'pending'
                         check (status in ('pending','paid','ready','failed','refunded')),
@@ -81,36 +87,6 @@ create trigger spending_reviews_touch
   before update on public.spending_reviews
   for each row execute function public.touch_updated_at();
 
--- ===== review_access =====
--- The archive passphrase, held the way the key vault holds a wrapped key: a
--- random token encrypted under a PBKDF2 key derived from the passphrase. A
--- correct passphrase unwraps it; a wrong one fails AES-GCM authentication. The
--- passphrase itself is never stored or sent, and reviews are NOT encrypted
--- under it — replacing it loses nothing.
-create table if not exists public.review_access (
-  user_id    uuid primary key references auth.users(id) on delete cascade,
-  verifier   text not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-alter table public.review_access enable row level security;
-
-drop policy if exists "own review access - select" on public.review_access;
-drop policy if exists "own review access - insert" on public.review_access;
-drop policy if exists "own review access - update" on public.review_access;
-create policy "own review access - select" on public.review_access
-  for select using (auth.uid() = user_id);
-create policy "own review access - insert" on public.review_access
-  for insert with check (auth.uid() = user_id);
-create policy "own review access - update" on public.review_access
-  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
-drop trigger if exists review_access_touch on public.review_access;
-create trigger review_access_touch
-  before update on public.review_access
-  for each row execute function public.touch_updated_at();
-
 -- ===== stripe_events =====
 -- Idempotency ledger for the webhook. RLS on with no policies at all: the
 -- browser has no business here, and the service role bypasses RLS.
@@ -126,7 +102,7 @@ revoke all on public.stripe_events from anon, authenticated;
 
 -- ===== report_eligibility =====
 -- The gate, in one place. The browser calls it to show someone where they
--- stand; the checkout function calls it to refuse a purchase — so the rule
+-- stand; the review-start function calls it to refuse a review — so the rule
 -- cannot be edited in devtools, and it counts EVERY row the account has rather
 -- than the newest few hundred the app keeps in memory.
 --

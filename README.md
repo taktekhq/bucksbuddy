@@ -30,7 +30,8 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
 - **Spending review (in testing — free, and only for allowlisted accounts):** an AI-written
   read-back of a logged month — or three — for accounts with enough history. The figures are
   totalled on the device and the model only writes prose over them, so a review can be dull
-  but cannot invent a number. Kept in an archive behind its own passphrase. The $5 Stripe
+  but cannot invent a number. Kept in an archive, behind the same passphrase as everything
+  else. The $5 Stripe
   purchase it is meant to become is written and tested but **not deployed**. See **Spending
   reviews** below.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
@@ -74,10 +75,15 @@ into the currency list) and the leftover `safe_entries` table. Run it after 0007
 app that came with 0007 is deployed.
 
 Finally [`0009_spending_reviews.sql`](supabase/migrations/0009_spending_reviews.sql) adds
-the spending review: the `spending_reviews` rows, the `review_access` archive passphrase,
-the `stripe_events` idempotency ledger, and the `report_eligibility()` function that
-decides who may have one. Until it is applied the review screen shows the database's own
-error instead of a button, and nothing else in the app notices.
+the spending review: the `spending_reviews` rows, the `stripe_events` idempotency ledger,
+and the `report_eligibility()` function that decides who may have one. Until it is applied
+the review screen shows the database's own error instead of a button, and nothing else in
+the app notices.
+
+Then [`0010_drop_review_access.sql`](supabase/migrations/0010_drop_review_access.sql), which
+drops a table an earlier copy of 0009 created: `review_access`, holding a second passphrase
+for the archive. There is only one passphrase now (see **The archive lock** below), so the
+table is gone. On a database that never had it, this is a no-op.
 
 > **If you ran an earlier copy of 0009** — one whose `price_cents` check read `> 0` — a
 > free review cannot be written, because a free grant is priced at zero. Either re-run
@@ -268,16 +274,23 @@ app's own components, so there is no markup to sanitise.
 loans, tax positions or budgets, forbids guessing at the reader's income or circumstances,
 and requires it to name its own blind spots. The screen says so too.
 
-**The archive passphrase.** Set before the first review and held as an unreadable token in
-`review_access`, so past reviews stay reachable and not just the newest one. Be clear about
-what it is: it **locks the archive screen** — it is never stored or sent, and unlike the
-encryption passphrase it is deliberately *not* cached on the device, so a borrowed unlocked
-phone doesn't come with your reviews open. It is **not** a second layer of encryption: a
-review's body is encrypted with the same master key as every amount in the account, so its
-confidentiality is exactly that of your tier (operator-readable by default, end-to-end once
-you turn on a personal passphrase — see **Encryption** above). Protecting the summary more
-strongly than the numbers it is drawn from would be a boundary worth nothing. Forgetting it
-loses nothing: set a new one from any unlocked device.
+**The archive lock.** Reviews are kept, so a second and a tenth one can be read later and
+not just the newest. Opening a past one is gated by **the passphrase the account already
+has** — there is no second passphrase to set, and no row in the database holding one:
+
+- **End-to-end tier:** the archive asks for your encryption passphrase once each time you
+  open the app, checked on the device against the one it unlocked with. That is the borrowed-
+  phone case: an unlocked phone in someone else's hand does not come with your reviews open.
+- **Default tier:** nothing is asked. The only passphrase a default-tier account has is the
+  constant compiled into the bundle, and a lock whose key is published is not a lock — it
+  would have been a dialog, not a boundary.
+
+Either way this is **not** a second layer of encryption. A review's body is encrypted with
+the same master key as every amount in the account, so its confidentiality is exactly that of
+your tier (operator-readable by default, end-to-end once you turn on a personal passphrase —
+see **Encryption** above). Protecting the summary more strongly than the numbers it is drawn
+from would be a boundary worth nothing, and asking for a passphrase nobody chose would have
+been theatre.
 
 **If a generation fails.** It may be retried three times while no body has been stored, so a
 dropped response costs nothing. After that the row goes `failed` with the reason — which,
@@ -309,7 +322,7 @@ note that anything named `VITE_*` or `NEXT_PUBLIC_*` **would**, so they do not g
 |---|---|
 | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/apikey) → **Get API key** |
 | `REVIEW_ALLOWLIST` | You write it: the emails and/or auth user ids that may have a review, comma-separated (`me@example.com,you@example.com`). Unset or empty allows **nobody**, which is what makes deploying the function safe. |
-| `GEMINI_MODEL` | *Optional*, defaults to `gemini-2.5-pro`. Google renames and retires model ids on its own schedule, so it is a secret rather than a constant: if generation starts failing with a model error, set this to a current id from [ai.google.dev/gemini-api/docs/models](https://ai.google.dev/gemini-api/docs/models) instead of editing and redeploying the function. |
+| `GEMINI_MODEL` | *Optional.* An id to **try first**. Leave it unset and the function walks its own list — `gemini-flash-latest`, then `gemini-3.5-flash`, then `gemini-2.5-flash` — and stops at the first one your key can call, recording it in the review's `model` column so you can see which won. Set this only to override that order, e.g. to a Pro id (note: Pro ids generally need billing on the Cloud project, while Flash and Flash-Lite are the free-tier ones). Google retires ids and closes older ones to keys created after a cutoff, which is why none of them is hardcoded as the answer. |
 
 That is the whole of it. `REVIEW_PRICE_CENTS`, `APP_URL` and the Stripe secrets are unset,
 so `review-start` has no way to charge anybody and refuses every account that is not on the
@@ -412,12 +425,12 @@ src/components/          AddComposer + ui/* building blocks, history rows/stacks
 src/lib/                supabase client, store (in-memory cache), router, useSession,
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories,
                         stats + recurring + notes (pure aggregations over the decrypted rows),
-                        reportPeriod/reportEligibility/reportDigest/reportVault/reviews
+                        reportPeriod/reportEligibility/reportDigest/reviews
                         (the spending review)
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0007_currencies.sql, 0008_drop_legacy.sql,
-                        0009_spending_reviews.sql
+                        0009_spending_reviews.sql, 0010_drop_review_access.sql
 supabase/functions/     delete-account, review-start, stripe-webhook, generate-review
 docs/DESIGN_SYSTEM.md   reusable design system
 ```

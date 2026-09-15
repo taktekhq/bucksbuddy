@@ -19,7 +19,6 @@ import {
   describeEligibility,
   type ReportFacts,
 } from "@/lib/reportEligibility";
-import { checkReviewPassphrase, hasReviewPassphrase, setReviewPassphrase } from "@/lib/reportVault";
 import {
   fetchEligibility,
   fetchReview,
@@ -48,8 +47,14 @@ import type { SpendingReview, SpendingReviewRow } from "@/types/db";
 // row comes back already paid at a price of zero, so there is no redirect and
 // nothing to wait for. The Stripe return path below stays live for when it isn't.
 //
-// The archive sits behind its own passphrase, set before the first review, so no
-// review is ever written to an unprotected archive.
+// The archive is behind the passphrase the account already has, never a second
+// one to remember. On the passphrase tier a past review asks for that same
+// passphrase once per app open — checked against the one this device unlocked
+// with, so it is the secret that already gates every amount. On the default tier
+// there is nothing to ask: the only passphrase is the constant compiled into the
+// bundle, and a lock whose key is published is not a lock. Either way the body is
+// encrypted with the account's master key, so a review is exactly as
+// confidential as the numbers it was written from.
 
 /** What Stripe sent us back with, scrubbed from the URL on read. */
 function takeStripeReturn(): { id: string; cancelled: boolean } | null {
@@ -73,14 +78,20 @@ function takeStripeReturn(): { id: string; cancelled: boolean } | null {
 }
 
 export function Review() {
-  const { userId, locked, homeCurrency, reviewRange, sealReview, openReview } =
+  const { locked, e2eMode, passphrase, homeCurrency, reviewRange, sealReview, openReview } =
     useStore();
+
+  // The archive's gate, or null when there is nothing worth asking for. On the
+  // passphrase tier it is the account's own encryption passphrase, as this
+  // device unlocked with it; on the default tier the only passphrase in play is
+  // the public constant, so the archive is open to whoever can already read the
+  // amounts it was written from.
+  const gate = e2eMode === "passphrase" ? passphrase : null;
 
   const [periodId, setPeriodId] = useState<ReportPeriodId>(DEFAULT_REPORT_PERIOD);
   const [facts, setFacts] = useState<ReportFacts | null>(null);
   const [factsError, setFactsError] = useState<string | null>(null);
   const [rows, setRows] = useState<SpendingReviewRow[]>([]);
-  const [hasPassphrase, setHasPassphrase] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [open, setOpen] = useState<{ row: SpendingReviewRow; review: SpendingReview } | null>(
     null,
@@ -145,23 +156,17 @@ export function Review() {
     [reviewRange, sealReview, refreshRows],
   );
 
-  // First paint: the archive, the archive gate, and anything Stripe just sent us
-  // back with. Runs once — the id is scrubbed from the URL on read, so a service
-  // worker reload cannot make it happen twice.
+  // First paint: the archive, and anything Stripe just sent us back with. Runs
+  // once — the id is scrubbed from the URL on read, so a service worker reload
+  // cannot make it happen twice.
   useEffect(() => {
     let live = true;
     void (async () => {
       const returned = takeStripeReturn();
       // Eligibility is the period effect's job — it runs on mount too, so
       // fetching it here as well would just be a second identical round trip.
-      const [{ reviews, error: listError }, passphrase] = await Promise.all([
-        refreshRows(),
-        hasReviewPassphrase(userId),
-      ]);
+      const { reviews, error: listError } = await refreshRows();
       if (!live) return;
-      // An unreadable answer must not read as "no passphrase set" — that would
-      // leave the archive open.
-      setHasPassphrase(passphrase.set || passphrase.error !== null);
       if (listError !== null) setError(listError);
       if (!returned) return;
       if (returned.cancelled) {
@@ -339,17 +344,6 @@ export function Review() {
           onPeriod={setPeriodId}
           facts={facts}
           factsError={factsError}
-          hasPassphrase={hasPassphrase}
-          onPassphrase={async (passphrase) => {
-            const { error: passError } = await setReviewPassphrase(userId, passphrase);
-            if (passError) {
-              setError(passError);
-              return false;
-            }
-            setHasPassphrase(true);
-            setUnlocked(true);
-            return true;
-          }}
           onBuy={buy}
         />
       )}
@@ -357,11 +351,10 @@ export function Review() {
       <Archive
         rows={rows}
         busy={busy !== null}
-        hasPassphrase={hasPassphrase}
-        unlocked={unlocked}
+        locked={gate !== null && !unlocked}
         openId={open?.row.id ?? null}
-        onUnlock={async (passphrase) => {
-          const good = await checkReviewPassphrase(userId, passphrase);
+        onUnlock={(typed) => {
+          const good = typed === gate;
           if (good) setUnlocked(true);
           return good;
         }}
@@ -412,19 +405,14 @@ function Offer({
   onPeriod,
   facts,
   factsError,
-  hasPassphrase,
-  onPassphrase,
   onBuy,
 }: {
   periodId: ReportPeriodId;
   onPeriod: (id: ReportPeriodId) => void;
   facts: ReportFacts | null;
   factsError: string | null;
-  hasPassphrase: boolean;
-  onPassphrase: (passphrase: string) => Promise<boolean>;
   onBuy: () => void;
 }) {
-  const [asking, setAsking] = useState(false);
   const copy = facts ? describeEligibility(facts, periodId) : null;
 
   return (
@@ -477,34 +465,20 @@ function Offer({
             finished review is encrypted with your own key before it&apos;s saved.
           </p>
 
-          {asking ? (
-            <PassphraseForm
-              id="review-passphrase-new"
-              label="Set a passphrase for your review archive"
-              hint="You'll need it to open past reviews, and it's asked for again each time — so a borrowed phone doesn't come with them open. It locks the screen, not the data: it won't stop anyone who can already read your entries. Forgetting it loses nothing; set a new one any time."
-              submitLabel="Save and continue"
-              onSubmit={async (passphrase) => {
-                const saved = await onPassphrase(passphrase);
-                if (saved) onBuy();
-                return saved;
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              disabled={copy === null || !copy.ok}
-              onClick={() => (hasPassphrase ? onBuy() : setAsking(true))}
-              className="press rounded-pill bg-carrot py-3.5 text-lg font-semibold text-surface shadow-carrot transition disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
-            >
-              {copy === null
-                ? "Can't check your history right now"
-                : !copy.ok
-                  ? "Not enough logged yet"
-                  : REVIEW_BILLING === "off"
-                    ? "Write my review"
-                    : `Unlock a review · ${reviewPriceLabel()}`}
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={copy === null || !copy.ok}
+            onClick={onBuy}
+            className="press rounded-pill bg-carrot py-3.5 text-lg font-semibold text-surface shadow-carrot transition disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
+          >
+            {copy === null
+              ? "Can't check your history right now"
+              : !copy.ok
+                ? "Not enough logged yet"
+                : REVIEW_BILLING === "off"
+                  ? "Write my review"
+                  : `Unlock a review · ${reviewPriceLabel()}`}
+          </button>
           <p className="text-center text-xs text-label-secondary">
             {REVIEW_BILLING === "off"
               ? "Free while this is being tried out, and limited to a few accounts."
@@ -566,36 +540,33 @@ function Standing({
 }
 
 // Past reviews. The list itself is never secret — the writing is — so dates and
-// prices show, and opening one needs the passphrase.
+// prices show, and on the passphrase tier opening one asks for that passphrase.
 function Archive({
   rows,
   busy,
-  hasPassphrase,
-  unlocked,
+  locked,
   openId,
   onUnlock,
   onShow,
 }: {
   rows: SpendingReviewRow[];
   busy: boolean;
-  hasPassphrase: boolean;
-  unlocked: boolean;
+  locked: boolean;
   openId: string | null;
-  onUnlock: (passphrase: string) => Promise<boolean>;
+  onUnlock: (passphrase: string) => boolean;
   onShow: (row: SpendingReviewRow) => void;
 }) {
   if (rows.length === 0) return null;
-  const needsUnlock = hasPassphrase && !unlocked;
 
   return (
     <section className="flex flex-col gap-2">
       <SectionHeader>Your reviews</SectionHeader>
-      {needsUnlock ? (
+      {locked ? (
         <Card>
           <PassphraseForm
             id="review-passphrase-unlock"
-            label="Enter your archive passphrase"
-            hint="Asked once each time you open the app, so a borrowed phone doesn't come with your reviews open."
+            label="Enter your encryption passphrase"
+            hint="The same passphrase that unlocks your amounts — there isn't a second one. It's asked once each time you open the app, so a borrowed phone doesn't come with your reviews open, and it locks this screen rather than the review itself."
             submitLabel="Unlock"
             onSubmit={onUnlock}
           />
@@ -606,7 +577,7 @@ function Archive({
           <button
             key={row.id}
             type="button"
-            disabled={needsUnlock || busy}
+            disabled={locked || busy}
             onClick={() => onShow(row)}
             className="press flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left disabled:opacity-60"
           >
@@ -639,12 +610,19 @@ function statusLine(row: SpendingReviewRow): string {
   if (row.status === "refunded") return `Refunded · ${price}`;
   if (row.status === "failed") return row.error ?? "Didn't complete";
   if (row.status === "pending") return "Not completed — nothing was charged";
-  if (!row.body_enc) return `Paid ${price} · tap to write it`;
+  // A free grant is priced at zero and was never paid for, so it does not get
+  // told it was: reviewPrice() renders that row as "Free".
+  if (!row.body_enc) {
+    return row.price_cents === 0
+      ? `${price} · tap to write it`
+      : `Paid ${price} · tap to write it`;
+  }
   return `${price} · tap to read`;
 }
 
-// One passphrase field, used for both setting and entering. Kept dumb: the
-// caller decides what a submit means and whether it worked.
+// One passphrase field. Kept dumb: the caller decides what a submit means and
+// whether it worked. The check is local — a string compare against the
+// passphrase this device already unlocked with — so there is nothing to await.
 function PassphraseForm({
   id,
   label,
@@ -656,23 +634,19 @@ function PassphraseForm({
   label: string;
   hint: string;
   submitLabel: string;
-  onSubmit: (passphrase: string) => Promise<boolean>;
+  onSubmit: (passphrase: string) => boolean;
 }) {
   const [value, setValue] = useState("");
   const [failed, setFailed] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   return (
     <form
       className="flex flex-col gap-2"
-      onSubmit={async (e) => {
+      onSubmit={(e) => {
         e.preventDefault();
-        if (value === "" || busy) return;
-        setBusy(true);
+        if (value === "") return;
         setFailed(false);
-        const ok = await onSubmit(value);
-        setBusy(false);
-        if (ok) setValue("");
+        if (onSubmit(value)) setValue("");
         else setFailed(true);
       }}
     >
@@ -691,7 +665,7 @@ function PassphraseForm({
       {failed && <p className="text-sm text-expense">That didn&apos;t match.</p>}
       <button
         type="submit"
-        disabled={value === "" || busy}
+        disabled={value === ""}
         className="press rounded-pill bg-carrot py-3 text-base font-semibold text-surface transition disabled:bg-separator disabled:text-label-secondary"
       >
         {submitLabel}

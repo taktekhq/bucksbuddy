@@ -25,9 +25,12 @@
 //
 // Secrets to set:
 //   GEMINI_API_KEY — aistudio.google.com → Get API key
-//   GEMINI_MODEL   — optional; the model id to use. Google renames these often,
-//                    so it is a secret rather than a constant: set it to whatever
-//                    is current rather than editing and redeploying this file.
+//   GEMINI_MODEL   — optional; a model id to try first. Google retires ids and
+//                    closes old ones to new API keys, so the id is neither a
+//                    constant nor a guess: this function tries the configured id
+//                    (if any) and then a short list of fallbacks, and records
+//                    whichever one answered in the review's `model` column. Set
+//                    this only to override that order.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GoogleGenAI } from "https://esm.sh/@google/genai@2.22.0";
 
@@ -48,9 +51,35 @@ function json(body: unknown, status: number): Response {
 /** Generations one purchase may spend. Covers a dropped response, not a habit. */
 const MAX_ATTEMPTS = 3;
 
-// Overridable because Google's model ids move. The default is only a starting
-// point — if it 404s, set the GEMINI_MODEL secret to a current id.
-const DEFAULT_MODEL = "gemini-2.5-pro";
+// Model ids are not stable ground: Google retires them on its own schedule and
+// closes older ones to keys created after a cutoff, so an id that works for one
+// project 404s for another. Rather than pin one and hope, try a short list and
+// record the winner in the row's `model` column — the working id becomes a fact
+// in the data instead of a thing to rediscover. Newest first, and a "-latest"
+// alias first of all, since that one survives a rename.
+const MODEL_CANDIDATES = [
+  "gemini-flash-latest",
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
+];
+
+/** The ids to try, configured one first. */
+function modelCandidates(): string[] {
+  const configured = Deno.env.get("GEMINI_MODEL");
+  const ids = configured ? [configured, ...MODEL_CANDIDATES] : MODEL_CANDIDATES;
+  return [...new Set(ids)];
+}
+
+/**
+ * Is this "that model isn't callable with this key", rather than a real failure?
+ * Only a name problem is worth trying the next id for — a rate limit, a bad key
+ * or a safety block would fail identically on every one of them.
+ */
+function isModelUnavailable(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /not\s*found|no longer available|not available|unsupported model|does not exist|unexpected model name/i
+    .test(message);
+}
 
 /** Finish reasons that mean no usable review came back. */
 const BAD_FINISH: Record<string, string> = {
@@ -60,6 +89,12 @@ const BAD_FINISH: Record<string, string> = {
   RECITATION: "The model declined to write this review.",
   SPII: "The model declined to write this review.",
   MAX_TOKENS: "The review ran past its length limit and came back unfinished.",
+  // Structured output that could not be coerced to the schema, and a follow-up
+  // turn a thinking model would not accept. Both are reachable here, so both get
+  // a sentence rather than falling through to "came back empty".
+  MALFORMED_RESPONSE: "The review came back in a shape the app could not read.",
+  MISSING_THOUGHT_SIGNATURE:
+    "The review's follow-up lost the model's own context. Tap to try again.",
 };
 
 const SYSTEM = `You write BucksBuddy spending reviews: a short retrospective on money a person has already spent, addressed to that same person.
@@ -91,6 +126,11 @@ const SCHEMA = {
     summary: { type: "string", description: "Two sentences." },
     sections: {
       type: "array",
+      // In the schema, not only in the description: the parser rejects an empty
+      // sections array, so a response with none would be valid output that costs
+      // a generation. minItems/maxItems are enforced by the API.
+      minItems: 3,
+      maxItems: 5,
       description: "Three to five sections.",
       items: {
         type: "object",
@@ -411,7 +451,6 @@ Deno.serve(async (req) => {
 
     // --- write it ---
     const ai = new GoogleGenAI({ apiKey });
-    const model = Deno.env.get("GEMINI_MODEL") ?? DEFAULT_MODEL;
     const amounts = new Set<string>();
     collectAmounts(digest, amounts);
     const numbers = new Set<string>();
@@ -430,7 +469,10 @@ Deno.serve(async (req) => {
       },
     ];
 
-    async function ask(): Promise<{ review: Review; raw: string }> {
+    // Whichever id answers, for the correction turn and for the record.
+    let chosen: string | null = null;
+
+    async function askModel(model: string): Promise<{ review: Review; raw: string }> {
       const response = await ai.models.generateContent({
         model,
         contents,
@@ -440,13 +482,18 @@ Deno.serve(async (req) => {
           // renders fields rather than parsing prose, and there is no markup.
           responseMimeType: "application/json",
           responseJsonSchema: SCHEMA,
-          maxOutputTokens: 8000,
+          // A ceiling, not a reservation — nothing is billed unless it is spent.
+          // It has to be generous because thinking tokens are charged against
+          // this same budget: a cap sized to the document alone gets consumed by
+          // reasoning and comes back MAX_TOKENS with nothing in it.
+          maxOutputTokens: 32000,
           // Low, not zero: the review should read like prose, not vary in what
           // it claims — and it cannot vary in its figures, which are given.
           temperature: 0.4,
-          // -1 is "decide for yourself". The hard part is choosing what is worth
-          // saying; the arithmetic arrived finished.
-          thinkingConfig: { thinkingBudget: -1 },
+          // Thinking is deliberately left at the model's default. The field that
+          // configures it changed across model generations (a token budget, then
+          // a level) while the id here is a secret, so setting it would couple
+          // this file to a family it cannot know it is talking to.
         },
       });
 
@@ -466,6 +513,27 @@ Deno.serve(async (req) => {
       return { review: parseReview(parsed), raw };
     }
 
+    /** Ask, walking down the candidate ids until one is callable. */
+    async function ask(): Promise<{ review: Review; raw: string }> {
+      const tries = chosen === null ? modelCandidates() : [chosen];
+      let last: unknown = null;
+      for (const candidate of tries) {
+        try {
+          const out = await askModel(candidate);
+          chosen = candidate;
+          return out;
+        } catch (err) {
+          if (!isModelUnavailable(err)) throw err;
+          last = err;
+        }
+      }
+      throw new Error(
+        `No Gemini model this key can call — tried ${tries.join(", ")}. Set the GEMINI_MODEL secret to a current id. (${
+          last instanceof Error ? last.message : String(last)
+        })`,
+      );
+    }
+
     let { review: written, raw } = await ask();
     let unsupported = unsupportedAmounts(reviewText(written), amounts, numbers);
 
@@ -474,14 +542,20 @@ Deno.serve(async (req) => {
     // name the offending tokens once and let it try again inside the same
     // attempt; a second failure is a real one.
     if (unsupported.length > 0) {
-      contents.push({ role: "model", parts: [{ text: raw }] });
+      // The correction goes back as one user turn that quotes the draft, rather
+      // than replaying the draft as a model turn. A thinking model expects its
+      // own turn to return with the thought signature it issued, and rejects one
+      // that arrives without it — quoting says the same thing and cannot trip on
+      // that. It also keeps the whole exchange inside one attempt.
       contents.push({
         role: "user",
         parts: [
           {
-            text: `These amounts do not appear in the digest: ${unsupported
+            text: `That draft cannot be shown, because these amounts do not appear in the digest: ${unsupported
               .slice(0, 8)
-              .join(", ")}. Every amount must be copied character-for-character from a "display" field. Write the review again, using only figures that are in the digest, and leaving out any claim you cannot support with one.`,
+              .join(
+                ", ",
+              )}. Every amount must be copied character-for-character from a "display" field. Write the review again, using only figures that are in the digest, and leaving out any claim you cannot support with one.\n\nThe rejected draft, for reference:\n${raw}`,
           },
         ],
       });
@@ -517,7 +591,7 @@ Deno.serve(async (req) => {
 
     await admin
       .from("spending_reviews")
-      .update({ status: "ready", model, error: null })
+      .update({ status: "ready", model: chosen, error: null })
       .eq("id", reviewId);
 
     return json({ review: written }, 200);
