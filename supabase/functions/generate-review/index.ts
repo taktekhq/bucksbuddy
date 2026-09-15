@@ -162,8 +162,30 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
-// --- the numbers guarantee ---
+// --- the window check, and the numbers guarantee ---
 // #region verifiable — lifted out and exercised by scripts/verify-edge-functions.mjs
+
+/**
+ * Does `claimed` — a `YYYY-MM-DD` the device wrote from its OWN calendar — name
+ * the day of `instant`, an ISO timestamp stored on the review row?
+ *
+ * The two are the same moment described twice. The row holds the instant that
+ * the device's local midnight was; the digest labels the window with the local
+ * date that midnight belongs to. Those agree only at UTC: east of it the local
+ * date runs a day ahead of the instant's UTC date (Beirut's 2026-08-01 midnight
+ * is 2026-07-31T21:00Z), west of it a day behind. So a day either side counts as
+ * naming it — which still refuses a digest for a different window, because the
+ * periods on offer are whole months apart.
+ */
+function namesDay(claimed: unknown, instant: string): boolean {
+  if (typeof claimed !== "string") return false;
+  const t = new Date(instant).getTime();
+  if (Number.isNaN(t)) return false;
+  const day = 86_400_000;
+  return [-day, 0, day].some(
+    (shift) => claimed === new Date(t + shift).toISOString().slice(0, 10),
+  );
+}
 
 /**
  * The amounts a review may quote: the digest's `display` strings — the ones the
@@ -395,7 +417,9 @@ Deno.serve(async (req) => {
     // --- the paywall ---
     const { data: review } = await admin
       .from("spending_reviews")
-      .select("id, status, attempts, period_id, period_from, period_to, body_enc")
+      .select(
+        "id, status, attempts, period_id, period_from, period_to, body_enc, price_cents",
+      )
       .eq("id", reviewId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -407,26 +431,28 @@ Deno.serve(async (req) => {
       return json({ error: "This review has already been written." }, 409);
     }
     if (review.attempts >= MAX_ATTEMPTS) {
+      // Only offer a refund for a review that was actually charged for. A free
+      // grant is priced at zero and there is nothing to give back.
       return json(
         {
           error:
-            "This review used up its attempts. Get in touch and we'll refund it.",
+            review.price_cents > 0
+              ? "This review used up its attempts. Get in touch and we'll refund it."
+              : "This review used up its attempts.",
         },
         409,
       );
     }
-    // The digest has to describe the window that was actually bought — not just
-    // a window of the same shape. Otherwise a crafted pair of requests could pay
+    // The digest has to describe the window this review is for — not just a
+    // window of the same shape. Otherwise a crafted pair of requests could pay
     // for one period and be handed a review of another.
     const period = digest.period as { id?: unknown; from?: unknown; to?: unknown } | undefined;
-    const sameDay = (a: unknown, b: string) =>
-      typeof a === "string" && a === new Date(b).toISOString().slice(0, 10);
     if (
       !period ||
       period.id !== review.period_id ||
-      !sameDay(period.from, review.period_from) ||
+      !namesDay(period.from, review.period_from) ||
       // `to` is stored exclusive and the digest carries the last day inside it.
-      !sameDay(
+      !namesDay(
         period.to,
         new Date(new Date(review.period_to).getTime() - 86_400_000).toISOString(),
       )

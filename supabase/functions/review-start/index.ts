@@ -112,10 +112,11 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     const appUrl = Deno.env.get("APP_URL");
+    // Validated in the paid branch below, not here: a price is meaningless to a
+    // free grant, and rejecting one up front would let a misconfigured secret
+    // (REVIEW_PRICE_CENTS set to 0, or saved empty) 500 the route that charges
+    // nobody anything.
     const priceCents = Number(Deno.env.get("REVIEW_PRICE_CENTS") ?? "500");
-    if (!Number.isInteger(priceCents) || priceCents <= 0) {
-      return json({ error: "Payments are misconfigured." }, 500);
-    }
 
     // The caller's own client: identifies them, and runs the eligibility
     // function under their row-level security rather than ours.
@@ -208,6 +209,29 @@ Deno.serve(async (req) => {
         },
         403,
       );
+    }
+    if (!free && (!Number.isInteger(priceCents) || priceCents <= 0)) {
+      return json({ error: "Payments are misconfigured." }, 500);
+    }
+
+    // A free grant is idempotent per window. Tapping twice — or tapping again
+    // after a generation dropped — resumes the row already waiting to be written
+    // instead of minting another, because every row is worth MAX_ATTEMPTS model
+    // calls and nothing else caps a route that charges nothing. A row that has
+    // its body is left alone, so asking for a fresh take still makes a new one.
+    if (free) {
+      const { data: waiting } = await admin
+        .from("spending_reviews")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("period_id", periodId)
+        .eq("period_from", from.toISOString())
+        .in("status", ["paid", "ready"])
+        .is("body_enc", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (waiting) return json({ review_id: waiting.id, free: true }, 200);
     }
 
     // --- the row owns the facts, and is created before any payment exists ---
