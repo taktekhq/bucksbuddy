@@ -69,7 +69,7 @@ export function CategorySheet({
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[calc(100dvh-var(--safe-top))] max-w-md touch-none flex-col rounded-t-[28px] bg-surface px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-2 shadow-card"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[calc(100dvh-var(--safe-top))] max-w-md touch-none flex-col rounded-t-[28px] bg-surface px-4 pb-[max(0.75rem,var(--safe-bottom))] pt-2 shadow-card"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -105,7 +105,12 @@ export function CategorySheet({
                   />
                 </SheetScroller>
 
-                {/* In/Out pinned at the bottom. */}
+                {/* In/Out pinned at the bottom, sitting right on the home
+                    indicator — the sheet's bottom padding is the inset itself,
+                    not the inset plus a margin, so nothing floats above the
+                    screen edge. The 0.75rem floor is for devices with no inset
+                    at all (a home-button phone, the desktop layout), where the
+                    toggle would otherwise touch the very edge. */}
                 <div className="mt-4 shrink-0">
                   <InOutToggle isIncome={isIncome} onChange={onChangeDirection} />
                 </div>
