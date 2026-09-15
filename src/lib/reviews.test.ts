@@ -26,7 +26,7 @@ import {
   fetchEligibility,
   listReviews,
   fetchReview,
-  startCheckout,
+  startReview,
   generateReview,
   storeReviewBody,
   asSpendingReview,
@@ -139,14 +139,14 @@ describe("the advertised price", () => {
 describe("invoke() error surfacing", () => {
   it("surfaces the function's own message over the SDK's generic one", async () => {
     set({
-      "fn:review-checkout": () =>
+      "fn:review-start": () =>
         fnFails(
           withJson(async () => ({
             error: "You need 40 expenses in the period to buy a review.",
           })),
         ),
     });
-    const { url, error } = await startCheckout("last_month", "USD", NOW);
+    const { url, error } = await startReview("last_month", "USD", NOW);
     expect(url).toBeNull();
     expect(error).toBe(
       "You need 40 expenses in the period to buy a review.",
@@ -155,49 +155,49 @@ describe("invoke() error surfacing", () => {
 
   it("falls back to the SDK message when the body is not JSON", async () => {
     set({
-      "fn:review-checkout": () =>
+      "fn:review-start": () =>
         fnFails(
           withJson(async () => {
             throw new Error("Unexpected token < in JSON");
           }),
         ),
     });
-    const { error } = await startCheckout("last_month", "USD", NOW);
+    const { error } = await startReview("last_month", "USD", NOW);
     expect(error).toBe(SDK_MESSAGE);
   });
 
   it("falls back when the JSON body has no string error", async () => {
     set({
-      "fn:review-checkout": () => fnFails(withJson(async () => ({ error: 42 }))),
+      "fn:review-start": () => fnFails(withJson(async () => ({ error: 42 }))),
     });
-    expect((await startCheckout("last_month", "USD", NOW)).error).toBe(
+    expect((await startReview("last_month", "USD", NOW)).error).toBe(
       SDK_MESSAGE,
     );
   });
 
   it("falls back when the JSON body is null", async () => {
     set({
-      "fn:review-checkout": () => fnFails(withJson(async () => null)),
+      "fn:review-start": () => fnFails(withJson(async () => null)),
     });
-    expect((await startCheckout("last_month", "USD", NOW)).error).toBe(
+    expect((await startReview("last_month", "USD", NOW)).error).toBe(
       SDK_MESSAGE,
     );
   });
 
   it("falls back when the error's context cannot be read", async () => {
     set({
-      "fn:review-checkout": () => fnFails({ message: SDK_MESSAGE, context: {} }),
+      "fn:review-start": () => fnFails({ message: SDK_MESSAGE, context: {} }),
     });
-    expect((await startCheckout("last_month", "USD", NOW)).error).toBe(
+    expect((await startReview("last_month", "USD", NOW)).error).toBe(
       SDK_MESSAGE,
     );
   });
 
   it("falls back when the error carries no context at all", async () => {
     set({
-      "fn:review-checkout": () => fnFails({ message: "Failed to send a request" }),
+      "fn:review-start": () => fnFails({ message: "Failed to send a request" }),
     });
-    expect((await startCheckout("last_month", "USD", NOW)).error).toBe(
+    expect((await startReview("last_month", "USD", NOW)).error).toBe(
       "Failed to send a request",
     );
   });
@@ -325,19 +325,25 @@ describe("fetchReview", () => {
   });
 });
 
-describe("startCheckout", () => {
+describe("startReview", () => {
   it("returns Stripe's hosted url and sends the window it priced", async () => {
     set({
-      "fn:review-checkout": () => ({
+      "fn:review-start": () => ({
         data: { url: "https://checkout.stripe.com/c/pay/cs_test_123", review_id: "rev-1" },
         error: null,
       }),
     });
-    const { url, error } = await startCheckout("past_3_months", "LBP", NOW);
+    const { reviewId, url, free, error } = await startReview(
+      "past_3_months",
+      "LBP",
+      NOW,
+    );
     expect(error).toBeNull();
     expect(url).toBe("https://checkout.stripe.com/c/pay/cs_test_123");
+    expect(reviewId).toBe("rev-1");
+    expect(free).toBe(false);
     expect(mock.supabase.functions.invoke).toHaveBeenCalledWith(
-      "review-checkout",
+      "review-start",
       {
         body: {
           period_id: "past_3_months",
@@ -351,31 +357,54 @@ describe("startCheckout", () => {
 
   it("returns the error and no url when the purchase is refused", async () => {
     set({
-      "fn:review-checkout": () =>
+      "fn:review-start": () =>
         fnFails(
           withJson(async () => ({ error: "That period is not finished yet." })),
         ),
     });
-    expect(await startCheckout("last_month", "USD", NOW)).toEqual({
+    expect(await startReview("last_month", "USD", NOW)).toEqual({
+      reviewId: null,
       url: null,
+      free: false,
       error: "That period is not finished yet.",
     });
   });
 
   it("returns no url when the function answers without one", async () => {
     set({
-      "fn:review-checkout": () => ({ data: { review_id: "rev-1" }, error: null }),
+      "fn:review-start": () => ({ data: { review_id: "rev-1" }, error: null }),
     });
-    expect(await startCheckout("last_month", "USD", NOW)).toEqual({
+    expect(await startReview("last_month", "USD", NOW)).toEqual({
+      reviewId: "rev-1",
       url: null,
+      free: false,
       error: null,
     });
   });
 
-  it("returns no url when the function answers with no data", async () => {
-    set({ "fn:review-checkout": () => ({ data: null, error: null }) });
-    expect(await startCheckout("last_month", "USD", NOW)).toEqual({
+  it("reports a free grant, with the id to generate straight away", async () => {
+    set({
+      "fn:review-start": () => ({
+        data: { review_id: "rev-free", free: true },
+        error: null,
+      }),
+    });
+    // An allowlisted account: the row is already paid at a price of zero, so
+    // there is no url to go to and nothing to wait for.
+    expect(await startReview("last_month", "USD", NOW)).toEqual({
+      reviewId: "rev-free",
       url: null,
+      free: true,
+      error: null,
+    });
+  });
+
+  it("returns nothing usable when the function answers with no data", async () => {
+    set({ "fn:review-start": () => ({ data: null, error: null }) });
+    expect(await startReview("last_month", "USD", NOW)).toEqual({
+      reviewId: null,
+      url: null,
+      free: false,
       error: null,
     });
   });
@@ -463,6 +492,14 @@ describe("storeReviewBody", () => {
 });
 
 describe("reviewPrice", () => {
+  it("says Free when nobody paid, rather than formatting a zero", () => {
+    // An allowlisted review is granted at a price of 0, and "$0.00 · tap to
+    // read" would read as a bug rather than as a gift.
+    expect(reviewPrice(row({ price_cents: 0, price_currency: "usd" }))).toBe(
+      "Free",
+    );
+  });
+
   it("formats what the row was actually charged", () => {
     expect(reviewPrice(row({ price_cents: 500, price_currency: "USD" }))).toBe(
       "$5.00",

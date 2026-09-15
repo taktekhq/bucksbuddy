@@ -23,9 +23,13 @@
 // Editor): name it exactly `generate-review`, paste this file, Deploy. Keep
 // "Verify JWT" ENABLED. Via CLI: `supabase functions deploy generate-review`.
 //
-// Secret to set: ANTHROPIC_API_KEY (console.anthropic.com → API keys).
+// Secrets to set:
+//   GEMINI_API_KEY — aistudio.google.com → Get API key
+//   GEMINI_MODEL   — optional; the model id to use. Google renames these often,
+//                    so it is a secret rather than a constant: set it to whatever
+//                    is current rather than editing and redeploying this file.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.125.0";
+import { GoogleGenAI } from "https://esm.sh/@google/genai@2.22.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,7 +48,19 @@ function json(body: unknown, status: number): Response {
 /** Generations one purchase may spend. Covers a dropped response, not a habit. */
 const MAX_ATTEMPTS = 3;
 
-const MODEL = "claude-opus-5";
+// Overridable because Google's model ids move. The default is only a starting
+// point — if it 404s, set the GEMINI_MODEL secret to a current id.
+const DEFAULT_MODEL = "gemini-2.5-pro";
+
+/** Finish reasons that mean no usable review came back. */
+const BAD_FINISH: Record<string, string> = {
+  SAFETY: "The model declined to write this review.",
+  PROHIBITED_CONTENT: "The model declined to write this review.",
+  BLOCKLIST: "The model declined to write this review.",
+  RECITATION: "The model declined to write this review.",
+  SPII: "The model declined to write this review.",
+  MAX_TOKENS: "The review ran past its length limit and came back unfinished.",
+};
 
 const SYSTEM = `You write BucksBuddy spending reviews: a short retrospective on money a person has already spent, addressed to that same person.
 
@@ -309,7 +325,7 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
-    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) return json({ error: "Reviews are not configured yet." }, 500);
 
     const caller = createClient(
@@ -394,45 +410,53 @@ Deno.serve(async (req) => {
     }
 
     // --- write it ---
-    const anthropic = new Anthropic({ apiKey });
+    const ai = new GoogleGenAI({ apiKey });
+    const model = Deno.env.get("GEMINI_MODEL") ?? DEFAULT_MODEL;
     const amounts = new Set<string>();
     collectAmounts(digest, amounts);
     const numbers = new Set<string>();
     collectNumbers(digest, numbers);
 
-    const messages: { role: "user" | "assistant"; content: string }[] = [
+    // Gemini takes the conversation as `contents`; the model's own turn has the
+    // role "model". The corrective re-ask below appends to this.
+    const contents: { role: "user" | "model"; parts: { text: string }[] }[] = [
       {
         role: "user",
-        content: `Write my spending review from this digest.\n\n${JSON.stringify(digest, null, 1)}`,
+        parts: [
+          {
+            text: `Write my spending review from this digest.\n\n${JSON.stringify(digest, null, 1)}`,
+          },
+        ],
       },
     ];
 
     async function ask(): Promise<{ review: Review; raw: string }> {
-      // Streamed because a long reply over a mobile connection is exactly the
-      // shape of request that otherwise dies on an HTTP timeout.
-      const message = await anthropic.messages.stream({
-        model: MODEL,
-        max_tokens: 8000,
-        // Adaptive thinking at middling effort: the hard part is choosing what is
-        // worth saying, not grinding — the arithmetic arrived finished.
-        thinking: { type: "adaptive" },
-        output_config: {
-          effort: "medium",
-          format: { type: "json_schema", schema: SCHEMA },
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction: SYSTEM,
+          // Structured output: the schema is enforced by the API, so the app
+          // renders fields rather than parsing prose, and there is no markup.
+          responseMimeType: "application/json",
+          responseJsonSchema: SCHEMA,
+          maxOutputTokens: 8000,
+          // Low, not zero: the review should read like prose, not vary in what
+          // it claims — and it cannot vary in its figures, which are given.
+          temperature: 0.4,
+          // -1 is "decide for yourself". The hard part is choosing what is worth
+          // saying; the arithmetic arrived finished.
+          thinkingConfig: { thinkingBudget: -1 },
         },
-        system: SYSTEM,
-        messages,
-      }).finalMessage();
+      });
 
-      if (message.stop_reason === "refusal") {
-        throw new Error("The model declined to write this review.");
-      }
-      // Narrow by the discriminant rather than with a type predicate: the SDK's
-      // ContentBlock union carries more fields than a hand-written predicate
-      // type would, and the predicate form stops compiling against it.
-      const raw = message.content
-        .map((block) => (block.type === "text" ? block.text : ""))
-        .join("");
+      // A blocked or truncated response carries no usable JSON, and `.text` is
+      // legitimately undefined — so check why before trying to parse nothing.
+      const finish = response.candidates?.[0]?.finishReason;
+      if (finish && BAD_FINISH[finish]) throw new Error(BAD_FINISH[finish]);
+      const raw = response.text;
+      if (!raw) throw new Error("The review came back empty.");
+
       let parsed: unknown;
       try {
         parsed = JSON.parse(raw);
@@ -450,12 +474,16 @@ Deno.serve(async (req) => {
     // name the offending tokens once and let it try again inside the same
     // attempt; a second failure is a real one.
     if (unsupported.length > 0) {
-      messages.push({ role: "assistant", content: raw });
-      messages.push({
+      contents.push({ role: "model", parts: [{ text: raw }] });
+      contents.push({
         role: "user",
-        content: `These amounts do not appear in the digest: ${unsupported
-          .slice(0, 8)
-          .join(", ")}. Every amount must be copied character-for-character from a "display" field. Write the review again, using only figures that are in the digest, and leaving out any claim you cannot support with one.`,
+        parts: [
+          {
+            text: `These amounts do not appear in the digest: ${unsupported
+              .slice(0, 8)
+              .join(", ")}. Every amount must be copied character-for-character from a "display" field. Write the review again, using only figures that are in the digest, and leaving out any claim you cannot support with one.`,
+          },
+        ],
       });
       ({ review: written } = await ask());
       unsupported = unsupportedAmounts(reviewText(written), amounts, numbers);
@@ -489,7 +517,7 @@ Deno.serve(async (req) => {
 
     await admin
       .from("spending_reviews")
-      .update({ status: "ready", model: MODEL, error: null })
+      .update({ status: "ready", model, error: null })
       .eq("id", reviewId);
 
     return json({ review: written }, 200);

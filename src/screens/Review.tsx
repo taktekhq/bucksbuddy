@@ -25,25 +25,31 @@ import {
   fetchReview,
   generateReview,
   listReviews,
+  REVIEW_BILLING,
   reviewPrice,
   reviewPriceLabel,
-  startCheckout,
+  startReview,
   storeReviewBody,
   waitForPaidReview,
   asSpendingReview,
 } from "@/lib/reviews";
 import type { SpendingReview, SpendingReviewRow } from "@/types/db";
 
-// The paid spending review.
+// The spending review.
 //
 // Everything money-shaped happens on this device: the rows are read and
 // decrypted here, the arithmetic is done here (lib/reportDigest), and the
 // finished review is encrypted here before it is stored. The server's jobs are
-// the three the browser cannot be trusted with — deciding eligibility, taking
-// the payment, and calling the model.
+// the three the browser cannot be trusted with — deciding eligibility, deciding
+// whether this account may have a review at all (free, paid, or not at
+// all — see the review-start function), and calling the model.
 //
-// The archive sits behind its own passphrase, which is set before the first
-// purchase so no review is ever written to an unprotected archive.
+// While billing is off, an allowlisted account gets its review immediately: the
+// row comes back already paid at a price of zero, so there is no redirect and
+// nothing to wait for. The Stripe return path below stays live for when it isn't.
+//
+// The archive sits behind its own passphrase, set before the first review, so no
+// review is ever written to an unprotected archive.
 
 /** What Stripe sent us back with, scrubbed from the URL on read. */
 function takeStripeReturn(): { id: string; cancelled: boolean } | null {
@@ -222,18 +228,42 @@ export function Review() {
 
   const buy = useCallback(async () => {
     setError(null);
-    setBusy("Opening checkout…");
-    const { url, error: checkoutError } = await startCheckout(periodId, homeCurrency);
-    if (!url) {
+    setBusy("Starting your review…");
+    const { reviewId, url, free, error: startError } = await startReview(
+      periodId,
+      homeCurrency,
+    );
+    if (startError !== null) {
       setBusy(null);
-      setError(checkoutError ?? "Couldn't open checkout.");
+      setError(startError);
       return;
     }
-    posthog.capture("review_checkout_started", { period: periodId });
+    posthog.capture("review_started", { period: periodId, free });
+    if (free) {
+      // Nothing to pay, so nothing to wait for: the row came back already paid
+      // at a price of zero, and it can be written straight away. A free grant
+      // with no id is a malformed reply rather than a payment to wait on, so it
+      // gets the same answer as a row that cannot be read back.
+      let row: SpendingReviewRow | null = null;
+      if (reviewId !== null) row = await fetchReview(reviewId);
+      if (!row) {
+        setBusy(null);
+        setError("Couldn't find the review that was just started.");
+        return;
+      }
+      await refreshRows();
+      await write(row);
+      return;
+    }
+    if (url === null) {
+      setBusy(null);
+      setError("Couldn't open checkout.");
+      return;
+    }
     // A plain navigation to Stripe's hosted page: no third-party script runs in
     // the app, and no Content-Security-Policy entry is needed for it.
     window.location.href = url;
-  }, [periodId, homeCurrency]);
+  }, [periodId, homeCurrency, refreshRows, write]);
 
   const show = useCallback(
     async (row: SpendingReviewRow) => {
@@ -442,10 +472,9 @@ function Offer({
 
           <p className="text-xs leading-relaxed text-label-secondary">
             Writing a review sends this period&apos;s totals — categories, dates,
-            counts and amounts — to Anthropic&apos;s Claude, which writes the
-            text. Your notes are never sent, nothing outside the period is sent,
-            and the finished review is encrypted with your own key before
-            it&apos;s saved.
+            counts and amounts — to Google&apos;s Gemini, which writes the text.
+            Your notes are never sent, nothing outside the period is sent, and the
+            finished review is encrypted with your own key before it&apos;s saved.
           </p>
 
           {asking ? (
@@ -471,11 +500,15 @@ function Offer({
                 ? "Can't check your history right now"
                 : !copy.ok
                   ? "Not enough logged yet"
-                  : `Unlock a review · ${reviewPriceLabel()}`}
+                  : REVIEW_BILLING === "off"
+                    ? "Write my review"
+                    : `Unlock a review · ${reviewPriceLabel()}`}
             </button>
           )}
           <p className="text-center text-xs text-label-secondary">
-            One-time, per review. No subscription.
+            {REVIEW_BILLING === "off"
+              ? "Free while this is being tried out, and limited to a few accounts."
+              : "One-time, per review. No subscription."}
           </p>
         </div>
       </div>

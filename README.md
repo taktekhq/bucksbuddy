@@ -22,16 +22,17 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   By default the key is wrapped with a public constant — so it's operator-readable, the same
   as plain storage — but any user can turn on **end-to-end encryption** in Settings with a
   passphrase, after which *no one but them* (not even whoever runs the server) can read their
-  amounts or notes — with one exception they opt into per purchase, a **spending review**, which
+  amounts or notes — with one exception they opt into per review, a **spending review**, which
   sends that period's finished totals (never notes, never rows) through the review function to the
   model. See **Encryption** and **Spending reviews** below.
 - **Export:** CSV or PDF, for this month, last month, the past 3 months, or all time.
   Generated client-side from the decrypted rows, so it works on encrypted data.
-- **Spending review (paid, $5 once per review):** an AI-written read-back of a logged
-  month — or three — for accounts with enough history. The figures are totalled on the
-  device and the model only writes prose over them, so a review can be dull but cannot
-  invent a number. Kept in an archive behind its own passphrase. See **Spending reviews**
-  below.
+- **Spending review (in testing — free, and only for allowlisted accounts):** an AI-written
+  read-back of a logged month — or three — for accounts with enough history. The figures are
+  totalled on the device and the model only writes prose over them, so a review can be dull
+  but cannot invent a number. Kept in an archive behind its own passphrase. The $5 Stripe
+  purchase it is meant to become is written and tested but **not deployed**. See **Spending
+  reviews** below.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -73,10 +74,20 @@ into the currency list) and the leftover `safe_entries` table. Run it after 0007
 app that came with 0007 is deployed.
 
 Finally [`0009_spending_reviews.sql`](supabase/migrations/0009_spending_reviews.sql) adds
-the paid spending review: the `spending_reviews` rows, the `review_access` archive
-passphrase, the `stripe_events` idempotency ledger, and the `report_eligibility()`
-function that decides who may buy one. Until it is applied the review screen shows the
-database's own error instead of a purchase button, and nothing else in the app notices.
+the spending review: the `spending_reviews` rows, the `review_access` archive passphrase,
+the `stripe_events` idempotency ledger, and the `report_eligibility()` function that
+decides who may have one. Until it is applied the review screen shows the database's own
+error instead of a button, and nothing else in the app notices.
+
+> **If you ran an earlier copy of 0009** — one whose `price_cents` check read `> 0` — a
+> free review cannot be written, because a free grant is priced at zero. Either re-run
+> 0009 on a database with no reviews yet, or widen the constraint in place:
+>
+> ```sql
+> alter table spending_reviews drop constraint spending_reviews_price_cents_check;
+> alter table spending_reviews add constraint spending_reviews_price_cents_check
+>   check (price_cents >= 0);
+> ```
 
 > **Changing the main currency** doesn't convert what's already saved: the stored
 > numbers stay as they are and are simply read in the new currency (a fresh account
@@ -168,14 +179,14 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
   re-wrapped under a PBKDF2 key derived from it; from then on the server only ever sees
   ciphertext for that user. Any passphrase is allowed (no strength gate).
 
-  > **The one exception, and it is opt-in per use:** buying a **spending review** sends that
+  > **The one exception, and it is opt-in per use:** asking for a **spending review** sends that
   > period's *finished figures* — per-category and per-month totals, counts, day coverage, the
-  > biggest few expenses, repeated charges — through the review function to Anthropic's Claude,
+  > biggest few expenses, repeated charges — through the review function to Google's Gemini,
   > which writes the prose. Notes are never sent, individual rows are never sent, and nothing
-  > outside the chosen period is sent. The purchase screen states this before the button, and
-  > nobody who does not buy a review is affected. The review that comes back is encrypted with
-  > the same master key before it is stored, so it is at rest under your passphrase like
-  > everything else. See **Spending reviews (paid)** below.
+  > outside the chosen period is sent. The review screen states this before the button, and
+  > nobody who does not ask for a review is affected. The review that comes back is encrypted
+  > with the same master key before it is stored, so it is at rest under your passphrase like
+  > everything else. See **Spending reviews** below.
 - **Stored on the device, shown in Settings.** The passphrase is cached in this browser, so
   the app stays unlocked across restarts and you can see/change it in the Encryption card. It
   **never leaves the device** — the server still can't read it. A brand-new device (or one
@@ -192,12 +203,21 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
   not the secret. So the operator can see *"an Out in groceries on June 1"* but not the
   amount.
 
-## Spending reviews (paid)
+## Spending reviews
 
-One optional purchase: **$5 for one review** of a finished month, or of the three months
-ending with it. No subscription, and nothing that already worked is behind it.
+One optional extra: a written review of a finished month, or of the three months ending
+with it. Nothing that already worked is behind it.
 
-**Who can buy one.** Enforced in the database by `report_eligibility()`, not in the
+**Free, and allowlisted, while it is being tried out.** The `REVIEW_ALLOWLIST` secret on
+the `review-start` function names the accounts that may have one, by email or by auth user
+id, and an account not on that list is refused with *"Spending reviews aren't open yet."*
+An empty or unset allowlist allows nobody. A grant made this way is written into
+`spending_reviews` already `paid`, at `price_cents = 0`, and the app never touches Stripe:
+the review is written where the customer is standing. The intended **$5 per review**
+purchase is implemented and tested in the same function — see **Turning the $5 purchase on**
+below — but deploying the function without Stripe keys sells nothing, by design.
+
+**Who can have one.** Enforced in the database by `report_eligibility()`, not in the
 browser, so the rule holds even with devtools open — and so it can count every row the
 account has rather than the 500 the app keeps in memory:
 
@@ -212,16 +232,19 @@ server genuinely cannot read them.
 **What happens, in order.**
 
 1. The browser asks `report_eligibility()` where the account stands and shows it.
-2. Buying calls the **`review-checkout`** function, which re-checks eligibility itself,
-   writes a `pending` row owning the price and the window, and returns a Stripe Checkout
-   URL. The app navigates to it — a plain redirect, so no third-party script ever runs in
-   the app and the Content-Security-Policy needs no new entry.
-3. Stripe calls **`stripe-webhook`**, which verifies the signature, records the event id so
-   a retry can't pay twice, and flips the row to `paid`. **This is the only way a review
-   becomes paid** — the browser is never believed about money.
-4. Back in the app, the device reads the window's rows, decrypts them, and totals
-   everything itself (`src/lib/reportDigest.ts`).
-5. **`generate-review`** checks the row is paid, then has Claude write prose over those
+2. Asking for one calls the **`review-start`** function, which re-checks eligibility itself
+   and then decides the route. **Allowlisted:** it writes a `paid` row at a price of zero and
+   returns its id. **Not allowlisted, Stripe configured:** it writes a `pending` row owning
+   the price and the window and returns a Stripe Checkout URL, which the app navigates to — a
+   plain redirect, so no third-party script ever runs in the app and the
+   Content-Security-Policy needs no new entry. **Neither:** a plain refusal.
+3. *(Purchases only.)* Stripe calls **`stripe-webhook`**, which verifies the signature,
+   records the event id so a retry can't pay twice, and flips the row to `paid`. **That is
+   the only way a review a customer paid for becomes paid** — the browser is never believed
+   about money. A free grant never goes near it.
+4. The device reads the window's rows, decrypts them, and totals everything itself
+   (`src/lib/reportDigest.ts`).
+5. **`generate-review`** checks the row is paid, then has Gemini write prose over those
    finished figures, and returns it. Nothing is stored server-side.
 6. The device encrypts the review with the account's own master key and writes it to
    `body_enc` — the one column the browser is allowed to write.
@@ -232,20 +255,20 @@ month-over-month changes — each amount accompanied by the string the app would
 **Notes are never sent** (they name people and merchants, and add nothing to a spending
 pattern), nothing outside the chosen window is sent, and no time-of-day is sent (entries are
 stamped when they are *logged*, so an hour histogram would describe phone habits while
-sounding like it described spending). The purchase screen says all of this before the button.
+sounding like it described spending). The review screen says all of this before the button.
 
 **Why the numbers can be trusted.** The model is given finished figures and told to copy
 them verbatim, and then — because instructions are not a guarantee — every money-shaped
 token in what it writes is checked against the digest before the review is accepted. A
 review quoting an amount the digest doesn't contain is thrown away rather than shown, and
-the purchase keeps its remaining attempts. Reviews are also structured JSON rendered by the
+the row keeps its remaining attempts. Reviews are also structured JSON rendered by the
 app's own components, so there is no markup to sanitise.
 
 **It is a review, not advice.** The prompt forbids recommending investments, products,
 loans, tax positions or budgets, forbids guessing at the reader's income or circumstances,
 and requires it to name its own blind spots. The screen says so too.
 
-**The archive passphrase.** Set before the first purchase and held as an unreadable token in
+**The archive passphrase.** Set before the first review and held as an unreadable token in
 `review_access`, so past reviews stay reachable and not just the newest one. Be clear about
 what it is: it **locks the archive screen** — it is never stored or sent, and unlike the
 encryption passphrase it is deliberately *not* cached on the device, so a borrowed unlocked
@@ -256,9 +279,9 @@ you turn on a personal passphrase — see **Encryption** above). Protecting the 
 strongly than the numbers it is drawn from would be a boundary worth nothing. Forgetting it
 loses nothing: set a new one from any unlocked device.
 
-**If something goes wrong after paying.** A generation may be retried three times while no
-body has been stored, so a dropped response costs nothing. After that the row goes `failed`
-with the reason, which is the owner's cue to refund — the standing policy is refunds
+**If a generation fails.** It may be retried three times while no body has been stored, so a
+dropped response costs nothing. After that the row goes `failed` with the reason — which,
+once reviews are sold, is the owner's cue to refund; the standing policy is refunds
 instantly, no questions, within 30 days.
 
 A **full** refund (or an opened dispute) marks the row `refunded` and clears the review body, so
@@ -268,37 +291,60 @@ risk; if it is later resolved in your favour, move it back by hand in the Supaba
 set `status` to `ready` — remembering that the body is gone, so the customer will need a fresh
 generation (`attempts` may need lowering too).
 
-### Setting it up
+### Setting it up (free, allowlisted — what is deployed today)
 
-Three Edge Functions (Supabase Dashboard → **Edge Functions → Deploy a new function → Via
+Two Edge Functions (Supabase Dashboard → **Edge Functions → Deploy a new function → Via
 Editor**; name each one exactly as below and paste the file). `SUPABASE_URL`,
 `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the platform.
 
 | Function | Verify JWT | Purpose |
 |---|---|---|
-| [`review-checkout`](supabase/functions/review-checkout/index.ts) | **on** | Gate + create the Stripe Checkout Session |
-| [`stripe-webhook`](supabase/functions/stripe-webhook/index.ts) | **OFF** | The only writer of `paid` |
-| [`generate-review`](supabase/functions/generate-review/index.ts) | **on** | Have Claude write it |
-
-> `stripe-webhook` **must** have "Verify JWT" turned off — Stripe sends its own signature,
-> not a Supabase token, so every delivery would 401 with it on. Via CLI that is
-> `supabase functions deploy stripe-webhook --no-verify-jwt`.
+| [`review-start`](supabase/functions/review-start/index.ts) | **on** | Gate, then grant it free or sell it |
+| [`generate-review`](supabase/functions/generate-review/index.ts) | **on** | Have Gemini write it |
 
 Secrets (Dashboard → **Edge Functions → Secrets**). None of these ever reach the browser —
 note that anything named `VITE_*` or `NEXT_PUBLIC_*` **would**, so they do not go in Vercel:
 
 | Secret | Where to find it |
 |---|---|
-| `STRIPE_SECRET_KEY` | Stripe → Developers → **API keys → Secret key** |
-| `STRIPE_WEBHOOK_SECRET` | Stripe → Developers → Webhooks → your endpoint → **Signing secret** |
-| `ANTHROPIC_API_KEY` | console.anthropic.com → **API keys** |
-| `APP_URL` | Where the app is served, e.g. `https://bucksbuddy.com` (no trailing slash) |
-| `REVIEW_PRICE_CENTS` | *Optional*, defaults to `500`. Change it and change `REVIEW_PRICE_CENTS` in [`src/lib/reviews.ts`](src/lib/reviews.ts) too, or the advertised price and the charge disagree. A review already bought always shows the price it was actually charged. |
+| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/apikey) → **Get API key** |
+| `REVIEW_ALLOWLIST` | You write it: the emails and/or auth user ids that may have a review, comma-separated (`me@example.com,you@example.com`). Unset or empty allows **nobody**, which is what makes deploying the function safe. |
+| `GEMINI_MODEL` | *Optional*, defaults to `gemini-2.5-pro`. Google renames and retires model ids on its own schedule, so it is a secret rather than a constant: if generation starts failing with a model error, set this to a current id from [ai.google.dev/gemini-api/docs/models](https://ai.google.dev/gemini-api/docs/models) instead of editing and redeploying the function. |
 
-In Stripe → Developers → **Webhooks → Add endpoint**, point it at
-`https://<project-ref>.supabase.co/functions/v1/stripe-webhook` and subscribe to
-`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
-`checkout.session.async_payment_failed`, `charge.refunded` and `charge.dispute.created`.
+That is the whole of it. `REVIEW_PRICE_CENTS`, `APP_URL` and the Stripe secrets are unset,
+so `review-start` has no way to charge anybody and refuses every account that is not on the
+allowlist. Nothing in the app advertises a price: `REVIEW_BILLING` in
+[`src/lib/reviews.ts`](src/lib/reviews.ts) is `"off"`, which is what puts *"Write my review"*
+on the button instead of *"Unlock a review · $5.00"*. It governs **copy only** — the server
+is the only authority on who gets one.
+
+### Turning the $5 purchase on (later)
+
+The paid route lives in the same `review-start` function and is exercised by the test
+suite; switching it on is configuration, not code:
+
+1. Deploy the third function, **[`stripe-webhook`](supabase/functions/stripe-webhook/index.ts)**,
+   with **Verify JWT OFF**. Stripe sends its own signature, not a Supabase token, so every
+   delivery would 401 with it on. Via CLI that is
+   `supabase functions deploy stripe-webhook --no-verify-jwt`. It is the only writer of
+   `paid` for a purchase.
+2. Add the secrets that make charging possible:
+
+   | Secret | Where to find it |
+   |---|---|
+   | `STRIPE_SECRET_KEY` | Stripe → Developers → **API keys → Secret key** |
+   | `STRIPE_WEBHOOK_SECRET` | Stripe → Developers → Webhooks → your endpoint → **Signing secret** |
+   | `APP_URL` | Where the app is served, e.g. `https://bucksbuddy.com` (no trailing slash) |
+   | `REVIEW_PRICE_CENTS` | *Optional*, defaults to `500`. Change it and change `REVIEW_PRICE_CENTS` in [`src/lib/reviews.ts`](src/lib/reviews.ts) too, or the advertised price and the charge disagree. A review already bought always shows the price it was actually charged. |
+
+3. In Stripe → Developers → **Webhooks → Add endpoint**, point it at
+   `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` and subscribe to
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, `charge.refunded` and `charge.dispute.created`.
+4. Set `REVIEW_BILLING` to `"stripe"` in [`src/lib/reviews.ts`](src/lib/reviews.ts) and
+   deploy the app, so the button advertises the price.
+5. Widen or clear `REVIEW_ALLOWLIST`. Whoever stays on it keeps getting reviews for free —
+   that is the intended way to keep the owner's own account off the card rail.
 
 > **Test mode first.** With Stripe's test keys and test webhook secret the whole flow runs
 > end to end on card `4242 4242 4242 4242`. Swapping to live keys means swapping the webhook
@@ -306,8 +352,8 @@ In Stripe → Developers → **Webhooks → Add endpoint**, point it at
 > land and reviews would stay `pending`.
 
 > **Stripe does not reach everyone.** Most of the app's current users are in Lebanon, where
-> Stripe cannot charge them. For them this button is decoration until another rail is wired
-> up; the review screen still shows them where they stand against the bar.
+> Stripe cannot charge them. For them this button would be decoration until another rail is
+> wired up; the review screen still shows them where they stand against the bar.
 
 ## Local development
 
@@ -367,12 +413,12 @@ src/lib/                supabase client, store (in-memory cache), router, useSes
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories,
                         stats + recurring + notes (pure aggregations over the decrypted rows),
                         reportPeriod/reportEligibility/reportDigest/reportVault/reviews
-                        (the paid spending review)
+                        (the spending review)
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0007_currencies.sql, 0008_drop_legacy.sql,
                         0009_spending_reviews.sql
-supabase/functions/     delete-account, review-checkout, stripe-webhook, generate-review
+supabase/functions/     delete-account, review-start, stripe-webhook, generate-review
 docs/DESIGN_SYSTEM.md   reusable design system
 ```
 

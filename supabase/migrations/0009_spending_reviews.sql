@@ -29,8 +29,10 @@ create table if not exists public.spending_reviews (
   period_from         timestamptz not null,
   period_to           timestamptz not null,
   home_currency       text not null check (home_currency ~ '^[A-Z]{3}$'),
-  -- What was actually charged, in Stripe's own units.
-  price_cents         integer not null check (price_cents > 0),
+  -- What was actually charged, in Stripe's own units. Zero is legitimate: a
+  -- review granted free to an allowlisted account (see the review-start
+  -- function) is paid for by nobody and says so.
+  price_cents         integer not null check (price_cents >= 0),
   price_currency      text not null check (price_currency ~ '^[a-z]{3}$'),
   checkout_session_id text unique,
   payment_intent_id   text,

@@ -28,18 +28,27 @@ const reviewsMock = vi.hoisted(() => ({
   fetchEligibility: vi.fn(),
   listReviews: vi.fn(),
   fetchReview: vi.fn(),
-  startCheckout: vi.fn(),
+  startReview: vi.fn(),
   generateReview: vi.fn(),
   storeReviewBody: vi.fn(),
   waitForPaidReview: vi.fn(),
 }));
+// REVIEW_BILLING is a module constant in the real lib, so the mock exposes it as
+// a getter over a mutable value — that is what lets a test render the priced
+// copy as well as the free copy.
+const billing = vi.hoisted(() => ({ mode: "off" as "off" | "stripe" }));
 vi.mock("@/lib/reviews", () => ({
   ...reviewsMock,
+  get REVIEW_BILLING() {
+    return billing.mode;
+  },
   // The pure helpers stay honest: prices are the strings lib/money produces,
   // and a "review" is whatever survives validation.
   reviewPriceLabel: () => formatCents(500, "USD"),
   reviewPrice: (row: SpendingReviewRow) =>
-    formatCents(row.price_cents, row.price_currency.toUpperCase()),
+    row.price_cents === 0
+      ? "Free"
+      : formatCents(row.price_cents, row.price_currency.toUpperCase()),
   asSpendingReview: (value: unknown) =>
     typeof (value as { title?: unknown } | null)?.title === "string"
       ? (value as SpendingReview)
@@ -191,7 +200,13 @@ beforeEach(() => {
   reviewsMock.listReviews.mockResolvedValue({ reviews: [], error: null });
   reviewsMock.fetchReview.mockResolvedValue(null);
   reviewsMock.fetchEligibility.mockResolvedValue({ facts: facts(), error: null });
-  reviewsMock.startCheckout.mockResolvedValue({ url: STRIPE_URL, error: null });
+  billing.mode = "off";
+  reviewsMock.startReview.mockResolvedValue({
+    reviewId: "rev-1",
+    url: null,
+    free: true,
+    error: null,
+  });
   reviewsMock.generateReview.mockResolvedValue({ review: review(), error: null });
   reviewsMock.storeReviewBody.mockResolvedValue({ error: null });
   reviewsMock.waitForPaidReview.mockResolvedValue(null);
@@ -212,8 +227,19 @@ afterEach(() => {
 // is on, why not when it isn't, and "can't check" when eligibility is unreadable.
 const buyButton = () =>
   screen.getByRole("button", {
-    name: /Unlock a review|Not enough logged yet|Can't check your history/,
+    name: /Write my review|Unlock a review|Not enough logged yet|Can't check your history/,
   });
+
+/** Put the screen in the paying configuration: priced copy, Stripe redirect. */
+function sellForMoney() {
+  billing.mode = "stripe";
+  reviewsMock.startReview.mockResolvedValue({
+    reviewId: "rev-1",
+    url: STRIPE_URL,
+    free: false,
+    error: null,
+  });
+}
 
 describe("Review — the offer", () => {
   it("shows only the unlock notice while the device is locked", async () => {
@@ -249,8 +275,25 @@ describe("Review — the offer", () => {
       "87",
     );
     expect(buyButton()).toBeEnabled();
-    expect(buyButton()).toHaveTextContent("Unlock a review · $5.00");
+    // Billing is off in this build, so the button must not advertise a price.
+    expect(buyButton()).toHaveTextContent("Write my review");
+    expect(
+      screen.getByText(/Free while this is being tried out/),
+    ).toBeInTheDocument();
     expect(reviewsMock.fetchEligibility).toHaveBeenCalledWith("past_3_months");
+  });
+
+  it("advertises the price once billing is on", async () => {
+    sellForMoney();
+    render(<Review />);
+    await screen.findByText("120 / 40");
+    expect(buyButton()).toHaveTextContent("Unlock a review · $5.00");
+    expect(
+      screen.getByText("One-time, per review. No subscription."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Free while this is being tried out/),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the blockers and warnings and refuses the sale", async () => {
@@ -340,12 +383,74 @@ describe("Review — the offer", () => {
 });
 
 describe("Review — buying", () => {
-  it("asks for an archive passphrase first, then starts checkout", async () => {
+  it("asks for an archive passphrase first, then writes the review", async () => {
+    reviewsMock.fetchReview.mockResolvedValue(row());
     render(<Review />);
     await screen.findByText("120 / 40");
     await userEvent.click(buyButton());
 
-    expect(reviewsMock.startCheckout).not.toHaveBeenCalled();
+    expect(reviewsMock.startReview).not.toHaveBeenCalled();
+    const field = screen.getByLabelText(
+      "Set a passphrase for your review archive",
+    );
+    await userEvent.type(field, "vault-pass");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and continue" }),
+    );
+
+    expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
+    expect(vault.setReviewPassphrase).toHaveBeenCalledWith("u1", "vault-pass");
+    expect(reviewsMock.startReview).toHaveBeenCalledWith(
+      "past_3_months",
+      "USD",
+    );
+    expect(reviewsMock.fetchReview).toHaveBeenCalledWith("rev-1");
+    expect(posthogMock.capture).toHaveBeenCalledWith("review_started", {
+      period: "past_3_months",
+      free: true,
+    });
+    // A free grant is written where the customer is standing: no redirect.
+    expect(window.location.href).toBe("http://localhost:3000/");
+  });
+
+  it("says so when a free review can't be read back", async () => {
+    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
+    reviewsMock.fetchReview.mockResolvedValue(null);
+    render(<Review />);
+    await screen.findByText("120 / 40");
+    await userEvent.click(buyButton());
+
+    expect(
+      await screen.findByText("Couldn't find the review that was just started."),
+    ).toBeInTheDocument();
+    expect(reviewsMock.generateReview).not.toHaveBeenCalled();
+  });
+
+  it("says so when a free grant comes back without an id", async () => {
+    vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
+    reviewsMock.startReview.mockResolvedValue({
+      reviewId: null,
+      url: null,
+      free: true,
+      error: null,
+    });
+    render(<Review />);
+    await screen.findByText("120 / 40");
+    await userEvent.click(buyButton());
+
+    expect(
+      await screen.findByText("Couldn't find the review that was just started."),
+    ).toBeInTheDocument();
+    expect(reviewsMock.fetchReview).not.toHaveBeenCalled();
+  });
+
+  it("asks for an archive passphrase first, then starts checkout", async () => {
+    sellForMoney();
+    render(<Review />);
+    await screen.findByText("120 / 40");
+    await userEvent.click(buyButton());
+
+    expect(reviewsMock.startReview).not.toHaveBeenCalled();
     const field = screen.getByLabelText(
       "Set a passphrase for your review archive",
     );
@@ -356,17 +461,19 @@ describe("Review — buying", () => {
 
     await waitFor(() => expect(window.location.href).toBe(STRIPE_URL));
     expect(vault.setReviewPassphrase).toHaveBeenCalledWith("u1", "vault-pass");
-    expect(reviewsMock.startCheckout).toHaveBeenCalledWith(
+    expect(reviewsMock.startReview).toHaveBeenCalledWith(
       "past_3_months",
       "USD",
     );
-    expect(posthogMock.capture).toHaveBeenCalledWith(
-      "review_checkout_started",
-      { period: "past_3_months" },
-    );
+    expect(posthogMock.capture).toHaveBeenCalledWith("review_started", {
+      period: "past_3_months",
+      free: false,
+    });
+    // Nothing is generated on this device before the money lands.
+    expect(reviewsMock.generateReview).not.toHaveBeenCalled();
   });
 
-  it("does not start checkout when the passphrase can't be saved", async () => {
+  it("does not start anything when the passphrase can't be saved", async () => {
     vault.setReviewPassphrase.mockResolvedValue({ error: "vault write failed" });
     render(<Review />);
     await screen.findByText("120 / 40");
@@ -380,11 +487,12 @@ describe("Review — buying", () => {
     );
 
     expect(await screen.findByText("vault write failed")).toBeInTheDocument();
-    expect(reviewsMock.startCheckout).not.toHaveBeenCalled();
+    expect(reviewsMock.startReview).not.toHaveBeenCalled();
     expect(window.location.href).toBe("http://localhost:3000/");
   });
 
   it("goes straight to checkout when a passphrase is already set", async () => {
+    sellForMoney();
     vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
     render(<Review />);
     await screen.findByText("120 / 40");
@@ -396,25 +504,35 @@ describe("Review — buying", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("surfaces a checkout error", async () => {
+  it("surfaces the server's refusal", async () => {
     vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
-    reviewsMock.startCheckout.mockResolvedValue({
+    reviewsMock.startReview.mockResolvedValue({
+      reviewId: null,
       url: null,
-      error: "That review used up its attempts.",
+      free: false,
+      error: "Spending reviews aren't open yet — this one is still being tried out.",
     });
     render(<Review />);
     await screen.findByText("120 / 40");
     await userEvent.click(buyButton());
 
     expect(
-      await screen.findByText("That review used up its attempts."),
+      await screen.findByText(
+        "Spending reviews aren't open yet — this one is still being tried out.",
+      ),
     ).toBeInTheDocument();
     expect(window.location.href).toBe("http://localhost:3000/");
+    expect(reviewsMock.generateReview).not.toHaveBeenCalled();
   });
 
   it("falls back to its own wording when checkout fails silently", async () => {
     vault.hasReviewPassphrase.mockResolvedValue({ set: true, error: null });
-    reviewsMock.startCheckout.mockResolvedValue({ url: null, error: null });
+    reviewsMock.startReview.mockResolvedValue({
+      reviewId: "rev-1",
+      url: null,
+      free: false,
+      error: null,
+    });
     render(<Review />);
     await screen.findByText("120 / 40");
     await userEvent.click(buyButton());
@@ -920,6 +1038,7 @@ describe("Review — the archive", () => {
 
 describe("Review — the archive lock", () => {
   it("locks the archive when the gate itself can't be read", async () => {
+    sellForMoney();
     // An unreadable `review_access` row must not read as "no passphrase set":
     // that is the one answer that would leave the archive open.
     vault.hasReviewPassphrase.mockResolvedValue({

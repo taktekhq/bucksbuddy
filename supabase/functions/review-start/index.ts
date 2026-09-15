@@ -1,28 +1,44 @@
-// BucksBuddy: review-checkout edge function.
+// BucksBuddy: review-start edge function.
 //
-// Starts the purchase of one spending review. It is the gate, so it does the
-// three things the browser cannot be trusted to do:
+// Authorises one spending review. It is the gate, so it does the three things
+// the browser cannot be trusted to do:
 //   1. decides eligibility itself, by calling `report_eligibility` as the caller
 //      (so row-level security scopes it) — the rule lives in the database, which
 //      can also count every row the account has rather than the newest few
 //      hundred the app keeps in memory;
 //   2. writes the `spending_reviews` row with the service-role key, so status,
 //      price and period are server-owned facts, not form fields;
-//   3. asks Stripe for a Checkout Session and hands back only its URL.
+//   3. decides HOW the review is paid for, and is the only party that may.
+//
+// There are two ways a review gets authorised, in this order:
+//
+//   ALLOWLIST — an account named in REVIEW_ALLOWLIST gets one free, marked paid
+//   at a price of 0 with no payment involved. This is how the feature runs while
+//   it is being tried out: no Stripe, no charge, and nobody else can reach it.
+//
+//   STRIPE — anyone else, once STRIPE_SECRET_KEY and APP_URL are set: the normal
+//   Checkout Session, whose URL is handed back for the browser to navigate to.
+//
+// With neither an allowlist entry nor Stripe configured, the answer is a plain
+// 403: the feature exists but is not open. That is deliberately the default, so
+// deploying this function does not by itself sell anything.
 //
 // The browser sends the window it wants as timestamps because it is the only
 // party that knows the user's local calendar months; we check the window is
-// really one or three whole months and really in the past before quoting a price
-// for it.
+// really one or three whole months and really in the past before authorising it.
 //
 // Deploy (Supabase Dashboard → Edge Functions → Deploy a new function → Via
-// Editor): name it exactly `review-checkout`, paste this file, Deploy. Keep
+// Editor): name it exactly `review-start`, paste this file, Deploy. Keep
 // "Verify JWT" ENABLED — the app sends the signed-in user's token. Or via CLI:
-// `supabase functions deploy review-checkout`.
+// `supabase functions deploy review-start`.
 //
 // Secrets to set (Dashboard → Edge Functions → Secrets):
-//   STRIPE_SECRET_KEY   — Stripe → Developers → API keys → Secret key
-//   APP_URL             — where the app is served, e.g. https://bucksbuddy.com
+//   REVIEW_ALLOWLIST    — comma-separated emails and/or auth user ids that get
+//                         reviews free. Leave unset to allow nobody.
+//   STRIPE_SECRET_KEY   — only when you want to charge. Stripe → Developers →
+//                         API keys → Secret key
+//   APP_URL             — only needed with Stripe: where the app is served,
+//                         e.g. https://bucksbuddy.com
 //   REVIEW_PRICE_CENTS  — optional, defaults to 500 ($5.00)
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are injected by
 // the platform.
@@ -54,6 +70,24 @@ const WINDOW_DAYS: Record<string, { min: number; max: number }> = {
 // a stuck client (or a bored one) from filling the table with pending rows.
 const MAX_PENDING_PER_HOUR = 5;
 
+/**
+ * Is this account on the free list? Matched on email OR auth user id, so it can
+ * be set before knowing either, and compared case-insensitively because an email
+ * typed into a dashboard field rarely matches the case Supabase stored.
+ */
+function isAllowlisted(email: string | undefined, userId: string): boolean {
+  const raw = Deno.env.get("REVIEW_ALLOWLIST") ?? "";
+  const entries = raw
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e !== "");
+  if (entries.length === 0) return false;
+  return (
+    entries.includes(userId.toLowerCase()) ||
+    (email !== undefined && entries.includes(email.toLowerCase()))
+  );
+}
+
 const DAY_MS = 86_400_000;
 
 type Body = {
@@ -78,12 +112,9 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     const appUrl = Deno.env.get("APP_URL");
-    if (!stripeKey || !appUrl) {
-      return json({ error: "Payments are not configured yet." }, 500);
-    }
     const priceCents = Number(Deno.env.get("REVIEW_PRICE_CENTS") ?? "500");
     if (!Number.isInteger(priceCents) || priceCents <= 0) {
-      return json({ error: "Payments are not configured yet." }, 500);
+      return json({ error: "Payments are misconfigured." }, 500);
     }
 
     // The caller's own client: identifies them, and runs the eligibility
@@ -137,18 +168,28 @@ Deno.serve(async (req) => {
 
     const admin = createClient(url, serviceKey);
 
+    const free = isAllowlisted(user.email, user.id);
+
     // --- don't let pending rows pile up ---
+    // Only the paying route can leave one behind, so a free review skips this
+    // entirely rather than being held up by a queue it cannot join.
+    //
     // postgrest returns a failure as `{ error, count: null }` rather than
     // throwing, and a null count coalesced to 0 would switch this limit off
     // exactly when the database is struggling. Fail closed instead.
-    const { count: pending, error: countErr } = await admin
-      .from("spending_reviews")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("status", "pending")
-      .gte("created_at", new Date(Date.now() - 3_600_000).toISOString());
+    const countPending = async () =>
+      await admin
+        .from("spending_reviews")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "pending")
+        .gte("created_at", new Date(Date.now() - 3_600_000).toISOString());
+
+    const { count: pending, error: countErr } = free
+      ? { count: 0, error: null }
+      : await countPending();
     if (countErr || pending === null) {
-      return json({ error: "Could not start checkout. Try again shortly." }, 503);
+      return json({ error: "Could not start a review. Try again shortly." }, 503);
     }
     if (pending >= MAX_PENDING_PER_HOUR) {
       return json(
@@ -157,24 +198,42 @@ Deno.serve(async (req) => {
       );
     }
 
-    // --- the row is created before the payment exists, and owns the facts ---
+    if (!free && (!stripeKey || !appUrl)) {
+      // Not on the free list, and there is no way to charge: the feature is not
+      // open. This is the default for a fresh deployment, on purpose.
+      return json(
+        {
+          error:
+            "Spending reviews aren't open yet — this one is still being tried out.",
+        },
+        403,
+      );
+    }
+
+    // --- the row owns the facts, and is created before any payment exists ---
+    // A free review is born `paid` at a price of 0: nothing is owed, so there is
+    // no pending state to wait out and no webhook to wait for.
     const { data: review, error: insertErr } = await admin
       .from("spending_reviews")
       .insert({
         user_id: user.id,
-        status: "pending",
+        status: free ? "paid" : "pending",
         period_id: periodId,
         period_from: from.toISOString(),
         period_to: to.toISOString(),
         home_currency: homeCurrency,
-        price_cents: priceCents,
+        price_cents: free ? 0 : priceCents,
         price_currency: "usd",
+        ...(free ? { paid_at: new Date().toISOString() } : {}),
       })
       .select("id")
       .single();
     if (insertErr || !review) {
-      return json({ error: insertErr?.message ?? "Could not start checkout." }, 500);
+      return json({ error: insertErr?.message ?? "Could not start a review." }, 500);
     }
+
+    // The free path stops here: the browser can go straight to generating it.
+    if (free) return json({ review_id: review.id, free: true }, 200);
 
     // --- Stripe Checkout, hosted: a plain redirect, so the app needs no
     // third-party script and no new Content-Security-Policy entry. ---

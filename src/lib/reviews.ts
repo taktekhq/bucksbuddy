@@ -1,9 +1,9 @@
-// The data layer for paid spending reviews. Pure data — no React.
+// The data layer for spending reviews. Pure data — no React.
 //
 // Three of these calls go to edge functions rather than to a table, because the
-// browser is not allowed to decide them: whether an account may buy a review,
+// browser is not allowed to decide them: whether an account may have a review,
 // whether one has been paid for, and what the model writes. See
-// supabase/functions/review-checkout, stripe-webhook and generate-review, and
+// supabase/functions/review-start, stripe-webhook and generate-review, and
 // migration 0009 for the row-level security that backs it up — the only column
 // the browser may write on a review is the encrypted body, because it is the
 // only party holding the key.
@@ -16,10 +16,15 @@ import type { SpendingDigest } from "@/lib/reportDigest";
 import { MIN_SPEND_ENTRIES, type ReportFacts } from "@/lib/reportEligibility";
 import type { SpendingReview, SpendingReviewRow } from "@/types/db";
 
-// What a review costs, for the offer copy. The charge itself is set by the
-// `REVIEW_PRICE_CENTS` secret on the review-checkout function (default 500) —
-// change one and change the other. A bought review always shows the price it was
-// actually charged, from its own row, so the archive can never be wrong.
+// Whether this build advertises a price. It governs COPY ONLY — the server is
+// the sole authority on whether a review is free, charged, or refused (see the
+// review-start function). Set it to "stripe" when you turn payments on, and keep
+// `REVIEW_PRICE_CENTS` in step with the function's secret of the same name. A
+// review already bought always shows the price it was actually charged, from its
+// own row, so the archive can never be wrong whatever this says.
+export const REVIEW_BILLING: "off" | "stripe" = "off";
+
+// What a review costs once billing is on, for the offer copy.
 export const REVIEW_PRICE_CENTS = 500;
 
 /** "$5.00" — the advertised price. */
@@ -110,29 +115,46 @@ export async function fetchReview(id: string): Promise<SpendingReviewRow | null>
 }
 
 /**
- * Start a purchase. Returns Stripe's hosted checkout URL to navigate to — a
- * plain redirect, so no third-party script runs in the app.
+ * Ask the server to authorise one review. It decides how, and it is the only
+ * party that may:
  *
- * The window is computed here, from the user's local calendar, and the function
- * checks it really is one or three finished months before quoting a price.
+ *   * `free: true` with a review id — this account is on the allowlist, the row
+ *     is already paid at a price of 0, and the browser may generate it now.
+ *   * a `url` — a Stripe hosted checkout to navigate to. A plain redirect, so no
+ *     third-party script runs in the app.
+ *   * an error — not eligible, or the feature is not open to this account.
+ *
+ * The window is computed here, from the user's local calendar, because only this
+ * side knows it; the function checks it really is one or three finished months.
  */
-export async function startCheckout(
+export async function startReview(
   periodId: ReportPeriodId,
   homeCurrency: Currency,
   now = new Date(),
-): Promise<{ url: string | null; error: string | null }> {
+): Promise<{
+  reviewId: string | null;
+  url: string | null;
+  free: boolean;
+  error: string | null;
+}> {
   const { from, to } = reportPeriodBounds(periodId, now);
-  const { data, error } = await invoke<{ url: string; review_id: string }>(
-    "review-checkout",
-    {
-      period_id: periodId,
-      period_from: from.toISOString(),
-      period_to: to.toISOString(),
-      home_currency: homeCurrency,
-    },
-  );
-  if (error) return { url: null, error };
-  return { url: data?.url ?? null, error: null };
+  const { data, error } = await invoke<{
+    url?: string;
+    review_id: string;
+    free?: boolean;
+  }>("review-start", {
+    period_id: periodId,
+    period_from: from.toISOString(),
+    period_to: to.toISOString(),
+    home_currency: homeCurrency,
+  });
+  if (error) return { reviewId: null, url: null, free: false, error };
+  return {
+    reviewId: data?.review_id ?? null,
+    url: data?.url ?? null,
+    free: data?.free === true,
+    error: null,
+  };
 }
 
 /** Ask for the review to be written. The digest is computed on this device. */
@@ -215,8 +237,9 @@ export function asSpendingReview(value: unknown): SpendingReview | null {
   };
 }
 
-/** "$5.00" — what a review row was actually charged. */
+/** What a review row actually cost: "$5.00", or "Free" when nobody paid. */
 export function reviewPrice(row: SpendingReviewRow): string {
+  if (row.price_cents === 0) return "Free";
   return formatCents(row.price_cents, row.price_currency.toUpperCase());
 }
 
