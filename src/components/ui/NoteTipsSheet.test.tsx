@@ -19,10 +19,16 @@ describe("NoteTipsSheet", () => {
   it("lists the cheat codes when open", () => {
     render(<NoteTipsSheet open onClose={() => {}} />);
     const sheet = screen.getByRole("dialog", { name: "Note tips" });
+    expect(sheet).toHaveTextContent("Recurring payments");
     expect(sheet).toHaveTextContent("Same note, same payment");
-    expect(sheet).toHaveTextContent("“subscription” or “membership”");
-    expect(sheet).toHaveTextContent("“(yearly)”, “(monthly)”, “(weekly)”");
-    expect(sheet).toHaveTextContent("“(ended)”");
+    // The keywords sit together under one header, as sub-points.
+    const keywords = screen.getByText("Recurring keywords").parentElement!;
+    const points = [...keywords.querySelectorAll("li")].map((li) => li.textContent);
+    expect(points).toEqual([
+      "“subscription” or “membership”Counts as recurring from the first entry.",
+      "“(yearly)”, “(monthly)”, “(weekly)”Sets how often it repeats.",
+      "“(ended)”Drops it off the Recurring page.",
+    ]);
     expect(sheet).not.toHaveTextContent("domain");
     expect(sheet).not.toHaveTextContent("with");
     // Short enough to read at a glance: every line under 70 characters.
