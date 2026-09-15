@@ -92,6 +92,40 @@ async function verifyWebhookSignatures() {
   check("comparison accepts an exact match", constantTimeEqual("abc", "abc"), true);
 }
 
+// ---------------------------------------------------------------- window ----
+async function verifyWindowCheck() {
+  console.log("\ngenerate-review — the period the digest claims");
+  const { namesDay } = await loadRegion(
+    "supabase/functions/generate-review/index.ts",
+    ["namesDay"],
+  );
+
+  // The row stores the instant a device's local midnight was; the digest labels
+  // that window with the local calendar date. The check has to hold for a device
+  // anywhere, which is the bug it was written for: comparing the local date
+  // against the instant's UTC date rejected every request east of UTC.
+  check("UTC: the instant's own date", namesDay("2026-08-01", "2026-08-01T00:00:00.000Z"), true);
+  check("Beirut (+03): local date runs a day ahead of the instant",
+    namesDay("2026-08-01", "2026-07-31T21:00:00.000Z"), true);
+  check("Kiritimati (+14): still a day ahead",
+    namesDay("2026-08-01", "2026-07-31T10:00:00.000Z"), true);
+  check("Los Angeles (-07): local date behind the instant",
+    namesDay("2026-07-31", "2026-08-01T07:00:00.000Z"), true);
+  check("Baker Island (-12): still behind",
+    namesDay("2026-07-31", "2026-08-01T12:00:00.000Z"), true);
+
+  // And it still refuses a digest for a different window: the periods on offer
+  // are whole months apart, so a day of slack cannot confuse two of them.
+  check("a month early is refused", namesDay("2026-07-01", "2026-08-01T00:00:00.000Z"), false);
+  check("a month late is refused", namesDay("2026-09-01", "2026-08-01T00:00:00.000Z"), false);
+  check("two days out is refused", namesDay("2026-08-03", "2026-08-01T00:00:00.000Z"), false);
+
+  // Anything that is not a date the device wrote is not a date.
+  check("a non-string claim is refused", namesDay(20260801, "2026-08-01T00:00:00.000Z"), false);
+  check("a missing claim is refused", namesDay(undefined, "2026-08-01T00:00:00.000Z"), false);
+  check("an unparseable instant is refused", namesDay("2026-08-01", "not a date"), false);
+}
+
 // --------------------------------------------------------------- numbers ----
 async function verifyNumberGuard() {
   console.log("\ngenerate-review — the no-invented-amounts guard");
@@ -170,6 +204,22 @@ async function verifyNumberGuard() {
   check("two decimals without a symbol are still held strictly",
     clean("It came to 562.00 in all."), false);
 
+  console.log("  a month-over-month decrease:");
+  // The digest holds a decrease as a negative percentage; a truthful sentence
+  // about it can only ever quote the unsigned figure, because the token matcher
+  // starts at the first digit.
+  const down = { changePct: -53.3, last: { cents: 22000, display: "$220.00" } };
+  const downAmounts = new Set();
+  const downNumbers = new Set();
+  collectAmounts(down, downAmounts);
+  collectNumbers(down, downNumbers);
+  check("a decrease quoted without its minus passes",
+    unsupportedAmounts("Food spending fell 53.3% from June to August.", downAmounts, downNumbers).length === 0, true);
+  check("the signed form passes too",
+    unsupportedAmounts("Food is down -53.3% on the window.", downAmounts, downNumbers).length === 0, true);
+  check("an invented percentage is still caught",
+    unsupportedAmounts("Food spending fell 61.4%.", downAmounts, downNumbers).length === 0, false);
+
   console.log("  other currencies:");
   const lbp = new Set();
   const lbpNumbers = new Set();
@@ -182,6 +232,7 @@ async function verifyNumberGuard() {
 }
 
 await verifyWebhookSignatures();
+await verifyWindowCheck();
 await verifyNumberGuard();
 
 console.log(`\n${passed} checks passed, ${failures.length} failed`);

@@ -103,7 +103,7 @@ table is gone. On a database that never had it, this is a no-op.
 > only shows once USD is in the list with a rate.
 >
 > **Savings Safe:** a vault icon next to Settings opens a dark "Safe" screen (available
-> to everyone).
+> to everyone). A sparkles icon beside it opens the **spending review** (see below).
 > - **Cash** moved to the safe is recorded as a normal transaction with the `safe`
 >   category — so it leaves your spendable balance (Out) and shows in history; taking it
 >   back is an In. The safe's cash total is the all-time net of those transactions.
@@ -221,6 +221,11 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
 
 One optional extra: a written review of a finished month, or of the three months ending
 with it. Nothing that already worked is behind it.
+
+**Where it is.** A sparkles icon in Home's nav bar, left of the Safe and Settings icons,
+opens the review screen (`#/review`). It shows for every signed-in account, including ones
+that cannot have a review yet — the screen's other job is to say where an account stands
+against the bar, and that is the only way anyone finds out.
 
 **Free, and allowlisted, while it is being tried out.** The `REVIEW_ALLOWLIST` secret on
 the `review-start` function names the accounts that may have one, by email or by auth user

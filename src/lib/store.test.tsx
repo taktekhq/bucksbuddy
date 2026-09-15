@@ -877,6 +877,16 @@ describe("StoreProvider / useStore", () => {
       { from: 0, to: 499 },
       { from: 500, to: 999 },
     ]);
+    // Every page was sorted by the same two keys. Without the `id` tiebreaker a
+    // boundary landing inside a group of entries logged in the same second could
+    // return one row on both pages and another on neither, and the totals a
+    // review is written from would be quietly wrong.
+    expect(mock.orders).toEqual([
+      { column: "occurred_at", ascending: false },
+      { column: "id", ascending: false },
+      { column: "occurred_at", ascending: false },
+      { column: "id", ascending: false },
+    ]);
     expect(rows).toHaveLength(501);
     // Every row came back decrypted, in page order.
     expect(new Set(rows.slice(0, 500).map((r) => r.amount_usd_cents))).toEqual(

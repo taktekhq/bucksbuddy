@@ -32,7 +32,45 @@
 //                    whichever one answered in the review's `model` column. Set
 //                    this only to override that order.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GoogleGenAI } from "https://esm.sh/@google/genai@2.22.0";
+
+// The Gemini SDK is imported LAZILY, inside the handler and before this request
+// spends anything. A static import that fails to resolve takes the whole
+// function down at boot with a platform error and no explanation; loaded this
+// way, a resolution failure costs no attempt and lands in the row as a sentence,
+// with the detail in the function logs. Deno caches the module after the first
+// successful load, so this is a one-off, not a per-request cost.
+//
+// Only the surface this function uses is typed, because the module is now
+// untyped at the import site.
+type Turn = { role: "user" | "model"; parts: { text: string }[] };
+type GenAI = {
+  models: {
+    generateContent: (req: {
+      model: string;
+      contents: Turn[];
+      config: Record<string, unknown>;
+    }) => Promise<{
+      text?: string;
+      candidates?: { finishReason?: string }[];
+    }>;
+  };
+};
+type GenAICtor = new (opts: { apiKey: string }) => GenAI;
+
+let cachedCtor: GenAICtor | null = null;
+
+async function genAIClient(apiKey: string): Promise<GenAI> {
+  if (!cachedCtor) {
+    try {
+      const mod = await import("https://esm.sh/@google/genai@2.22.0");
+      cachedCtor = (mod as { GoogleGenAI: GenAICtor }).GoogleGenAI;
+    } catch (err) {
+      console.error("generate-review: could not load @google/genai:", err);
+      throw new Error("Couldn't load the Gemini client on the server.");
+    }
+  }
+  return new cachedCtor({ apiKey });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -162,8 +200,30 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
-// --- the numbers guarantee ---
+// --- the window check, and the numbers guarantee ---
 // #region verifiable — lifted out and exercised by scripts/verify-edge-functions.mjs
+
+/**
+ * Does `claimed` — a `YYYY-MM-DD` the device wrote from its OWN calendar — name
+ * the day of `instant`, an ISO timestamp stored on the review row?
+ *
+ * The two are the same moment described twice. The row holds the instant that
+ * the device's local midnight was; the digest labels the window with the local
+ * date that midnight belongs to. Those agree only at UTC: east of it the local
+ * date runs a day ahead of the instant's UTC date (Beirut's 2026-08-01 midnight
+ * is 2026-07-31T21:00Z), west of it a day behind. So a day either side counts as
+ * naming it — which still refuses a digest for a different window, because the
+ * periods on offer are whole months apart.
+ */
+function namesDay(claimed: unknown, instant: string): boolean {
+  if (typeof claimed !== "string") return false;
+  const t = new Date(instant).getTime();
+  if (Number.isNaN(t)) return false;
+  const day = 86_400_000;
+  return [-day, 0, day].some(
+    (shift) => claimed === new Date(t + shift).toISOString().slice(0, 10),
+  );
+}
 
 /**
  * The amounts a review may quote: the digest's `display` strings — the ones the
@@ -199,7 +259,16 @@ function collectAmounts(value: unknown, into: Set<string>): void {
  */
 function collectNumbers(value: unknown, into: Set<string>): void {
   if (typeof value === "number" || typeof value === "string") {
-    into.add(normalize(String(value)));
+    const text = normalize(String(value));
+    into.add(text);
+    // Also without the sign. The digest holds a decrease as `changePct: -53.3`,
+    // and a review describing it truthfully writes "fell 53.3%" — the token
+    // matcher starts at the first digit and can never capture the minus, so
+    // pooling only the signed form flagged every honest sentence about spending
+    // going down. The unsigned form is the same figure the device computed, and
+    // this is the loose pool for ambiguous bare numbers; the strict pool of
+    // formatted amounts is untouched.
+    if (text.startsWith("-")) into.add(text.slice(1));
   } else if (Array.isArray(value)) for (const v of value) collectNumbers(v, into);
   else if (value && typeof value === "object") {
     for (const v of Object.values(value)) collectNumbers(v, into);
@@ -395,7 +464,9 @@ Deno.serve(async (req) => {
     // --- the paywall ---
     const { data: review } = await admin
       .from("spending_reviews")
-      .select("id, status, attempts, period_id, period_from, period_to, body_enc")
+      .select(
+        "id, status, attempts, period_id, period_from, period_to, body_enc, price_cents",
+      )
       .eq("id", reviewId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -407,32 +478,38 @@ Deno.serve(async (req) => {
       return json({ error: "This review has already been written." }, 409);
     }
     if (review.attempts >= MAX_ATTEMPTS) {
+      // Only offer a refund for a review that was actually charged for. A free
+      // grant is priced at zero and there is nothing to give back.
       return json(
         {
           error:
-            "This review used up its attempts. Get in touch and we'll refund it.",
+            review.price_cents > 0
+              ? "This review used up its attempts. Get in touch and we'll refund it."
+              : "This review used up its attempts.",
         },
         409,
       );
     }
-    // The digest has to describe the window that was actually bought — not just
-    // a window of the same shape. Otherwise a crafted pair of requests could pay
+    // The digest has to describe the window this review is for — not just a
+    // window of the same shape. Otherwise a crafted pair of requests could pay
     // for one period and be handed a review of another.
     const period = digest.period as { id?: unknown; from?: unknown; to?: unknown } | undefined;
-    const sameDay = (a: unknown, b: string) =>
-      typeof a === "string" && a === new Date(b).toISOString().slice(0, 10);
     if (
       !period ||
       period.id !== review.period_id ||
-      !sameDay(period.from, review.period_from) ||
+      !namesDay(period.from, review.period_from) ||
       // `to` is stored exclusive and the digest carries the last day inside it.
-      !sameDay(
+      !namesDay(
         period.to,
         new Date(new Date(review.period_to).getTime() - 86_400_000).toISOString(),
       )
     ) {
       return json({ error: "That digest is for a different period." }, 400);
     }
+
+    // Load the client before the attempt is claimed: if the module cannot be
+    // resolved, nothing has been spent and the row says why.
+    const ai = await genAIClient(apiKey);
 
     // Spend the attempt as a COMPARE-AND-SWAP, not a read-then-write: it is the
     // claim on this generation. Without the `attempts` predicate, N concurrent
@@ -450,7 +527,6 @@ Deno.serve(async (req) => {
     }
 
     // --- write it ---
-    const ai = new GoogleGenAI({ apiKey });
     const amounts = new Set<string>();
     collectAmounts(digest, amounts);
     const numbers = new Set<string>();
@@ -458,7 +534,7 @@ Deno.serve(async (req) => {
 
     // Gemini takes the conversation as `contents`; the model's own turn has the
     // role "model". The corrective re-ask below appends to this.
-    const contents: { role: "user" | "model"; parts: { text: string }[] }[] = [
+    const contents: Turn[] = [
       {
         role: "user",
         parts: [
@@ -597,6 +673,14 @@ Deno.serve(async (req) => {
     return json({ review: written }, 200);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    // What the archive shows. An SDK failure carries Google's whole serialised
+    // error body, and `error` is a plaintext column this app renders as a
+    // review's subtitle — so the row gets a sentence and the raw text stays in
+    // the function logs, where it is actually useful.
+    console.error("generate-review failed:", message);
+    const stored = message.length > 160 || /[{}]/.test(message)
+      ? "The review couldn't be written. Tap to try again."
+      : message;
     if (reviewId) {
       // Record why, and give up for good once the attempts are gone so the
       // owner can see the refund is owed.
@@ -608,7 +692,7 @@ Deno.serve(async (req) => {
       await admin
         .from("spending_reviews")
         .update({
-          error: message,
+          error: stored,
           ...((row?.attempts ?? 0) >= MAX_ATTEMPTS ? { status: "failed" } : {}),
         })
         .eq("id", reviewId)

@@ -71,6 +71,14 @@ describe("Home", () => {
     expect(screen.getByText("2 g")).toBeInTheDocument();
   });
 
+  it("navigates to the spending review from the nav bar", async () => {
+    render(<Home />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Spending review" }),
+    );
+    expect(navigate).toHaveBeenCalledWith("/review");
+  });
+
   it("navigates to the safe and settings", async () => {
     render(<Home />);
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));

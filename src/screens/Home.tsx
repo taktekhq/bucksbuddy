@@ -7,6 +7,7 @@ import {
   EyeOff,
   Lock,
   Settings,
+  Sparkles,
   Vault,
 } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
@@ -118,7 +119,8 @@ export function Home() {
           zIndex: -1,
         }}
       />
-      {/* Carrot mark + wordmark + safe + settings — the plain Apple nav bar. */}
+      {/* Carrot mark + wordmark + review + safe + settings — the plain Apple nav
+          bar. Settings stays rightmost, where it has always been. */}
       <header className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <Carrot className="text-2xl" />
@@ -129,6 +131,19 @@ export function Home() {
           </span>
         </div>
         <div className="flex items-center gap-4">
+          {/* Sparkles is this feature's own glyph — the archive marks each stored
+              review with it — so the icon means the same thing in both places.
+              It shows for every account, including one that cannot have a review
+              yet: the screen's job is to say where you stand against the bar, and
+              that is the only way anyone finds out. */}
+          <button
+            type="button"
+            onClick={() => navigate("/review")}
+            className="press -m-2 p-2 text-label-secondary"
+            aria-label="Spending review"
+          >
+            <Sparkles className="h-6 w-6" strokeWidth={1.75} />
+          </button>
           <button
             type="button"
             onClick={() => navigate("/safe")}
