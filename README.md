@@ -25,6 +25,10 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   amounts or notes. See **Encryption** below.
 - **Export:** CSV or PDF, for this month, last month, the past 3 months, or all time.
   Generated client-side from the decrypted rows, so it works on encrypted data.
+- **Feedback:** a speech bubble next to the Safe on Home opens a form that files a
+  **GitHub issue** — the message, screenshots picked from the phone's photo library, the
+  account email to reply to, and (off by default, behind a toggle that says exactly what
+  it means) a dump of the account's raw entries. See **Feedback** below.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -60,10 +64,15 @@ on USD with nothing to do. Run it before deploying the app: the app reads only t
 columns, so until the migration is in every account shows the defaults (USD + LBP at
 89,500) and the currency card in Settings shows the database's error.
 
-Finally [`0008_drop_legacy.sql`](supabase/migrations/0008_drop_legacy.sql) drops what
+Then [`0008_drop_legacy.sql`](supabase/migrations/0008_drop_legacy.sql) drops what
 nothing reads any more: the old single-rate `profiles.lbp_per_usd` column (0007 copied it
 into the currency list) and the leftover `safe_entries` table. Run it after 0007, once the
 app that came with 0007 is deployed.
+
+Finally [`0009_feedback.sql`](supabase/migrations/0009_feedback.sql) sets up in-app
+feedback: the private `feedback` storage bucket its screenshots go to, and the
+`feedback_reports` log. The Feedback screen needs the edge function below as well; until
+both are in place the form renders but sending fails.
 
 > **Changing the main currency** doesn't convert what's already saved: the stored
 > numbers stay as they are and are simply read in the new currency (a fresh account
@@ -178,6 +187,59 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
   not the secret. So the operator can see *"an Out in groceries on June 1"* but not the
   amount.
 
+## Feedback (the GitHub issue button)
+
+The speech bubble next to the Safe on Home opens `#/feedback`. Sending files an issue on
+this repo. The browser can't do that itself — GitHub needs a token, and a token in a
+client-side bundle is a token everyone has — so it works the same way as account deletion:
+the app sends its session JWT to the
+[`feedback`](supabase/functions/feedback/index.ts) edge function, which holds the token and
+posts the issue.
+
+**Deploy it once:**
+
+```bash
+supabase secrets set GITHUB_TOKEN=github_pat_… GITHUB_REPO=taktekhq/bucksbuddy
+supabase functions deploy feedback
+```
+
+(Or Dashboard → Edge Functions → Deploy a new function → Via Editor, named exactly
+`feedback`, with "Verify JWT" left on.) The token should be a **fine-grained PAT scoped to
+this repository alone**, with *Repository permissions → Issues: Read and write* and nothing
+else. It lives in Supabase's secrets and never in the repo or the bundle.
+
+What rides along with a report:
+
+- **The message**, quoted in the issue body so it never reads as our own prose.
+- **The account email + user id**, so a reply has somewhere to go.
+- **Device and browser**, always — the difference between "the keypad is broken" and a bug
+  someone can reproduce.
+- **Screenshots**, up to 4 × 5 MB, picked from the photo library. They upload straight from
+  the browser into the private `feedback` bucket at `<user id>/<ticket>/`, and the function
+  signs them into the issue. Binaries never go through the function body.
+- **The account's raw data — only if the reporter turns it on.** The toggle is off by
+  default and, once on, says plainly that the raw data is sent, used only to fix the bug,
+  and deleted once the bug is fixed. For an end-to-end encrypted account this is the one
+  way that data ever leaves the device, so it is deliberately a decision rather than a
+  default. It is disabled outright while the device is locked, because the values in memory
+  are garbled stand-ins and attaching them would be worse than attaching nothing.
+
+**Keeping the promise.** An issue carrying account data is labelled `has-user-data` and its
+body names the storage folder to remove. `feedback_reports` has the same, queryable:
+
+```sql
+select issue_number, storage_prefix, created_at
+from public.feedback_reports
+where shared_data
+order by created_at desc;
+```
+
+Delete that folder from the `feedback` bucket when the issue closes. Nothing does it
+automatically — "once the bug is fixed" isn't something a cron job can know.
+
+`feedback_reports` is also the rate limit: 20 reports per account per day, so an issue
+tracker can't be turned into a firehose.
+
 ## Local development
 
 ```bash
@@ -214,14 +276,16 @@ Sign-in is email + password (no email link), so you stay inside the app the whol
 index.html              app entry
 src/main.tsx            mount + register service worker
 src/App.tsx             auth gate + hash router
-src/screens/            Landing, Home, History, Recurring, Stats, Safe, Settings, …
+src/screens/            Landing, Home, History, Recurring, Stats, Safe, Settings, Feedback, …
 src/components/          AddComposer + ui/* building blocks, history rows/stacks, CurrencySettings, ExportCard
 src/lib/                supabase client, store (in-memory cache), router, useSession,
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories,
-                        stats + recurring + notes (pure aggregations over the decrypted rows)
+                        stats + recurring + notes (pure aggregations over the decrypted rows),
+                        feedback (the GitHub-issue report: attachments, snapshot, submit)
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
-supabase/migrations/    0001_init.sql … 0006_public_stats.sql, 0007_currencies.sql, 0008_drop_legacy.sql
+supabase/migrations/    0001_init.sql … 0007_currencies.sql, 0008_drop_legacy.sql, 0009_feedback.sql
+supabase/functions/     delete-account, feedback (the only things holding privileged keys)
 docs/DESIGN_SYSTEM.md   reusable design system
 ```
 

@@ -18,6 +18,11 @@ describe("router", () => {
     expect(result.current).toBe("/settings");
   });
 
+  it("recognizes the /feedback route", () => {
+    act(() => navigate("/feedback"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/feedback");
+  });
+
   it("recognizes the /legal route", () => {
     act(() => navigate("/legal"));
     expect(renderHook(() => useRoute()).result.current).toBe("/legal");

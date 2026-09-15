@@ -29,6 +29,7 @@ vi.mock("@/screens/Receipts", () => ({
 }));
 vi.mock("@/screens/Settings", () => ({ Settings: () => <div>SettingsScreen</div> }));
 vi.mock("@/screens/Safe", () => ({ Safe: () => <div>SafeScreen</div> }));
+vi.mock("@/screens/Feedback", () => ({ Feedback: () => <div>FeedbackScreen</div> }));
 vi.mock("@/screens/Reset", () => ({ Reset: () => <div>ResetScreen</div> }));
 
 import App from "@/App";
@@ -94,7 +95,7 @@ describe("App", () => {
     expect(screen.queryByTestId("store")).not.toBeInTheDocument();
   });
 
-  it("routes to Home, Settings, Safe and History when signed in", () => {
+  it("routes to Home, Settings, Safe, Feedback and History when signed in", () => {
     useSession.mockReturnValue({ session, ready: true, recoveryMode: false });
 
     useRoute.mockReturnValue("/");
@@ -108,6 +109,10 @@ describe("App", () => {
     useRoute.mockReturnValue("/safe");
     rerender(<App />);
     expect(screen.getByText("SafeScreen")).toBeInTheDocument();
+
+    useRoute.mockReturnValue("/feedback");
+    rerender(<App />);
+    expect(screen.getByText("FeedbackScreen")).toBeInTheDocument();
 
     useRoute.mockReturnValue("/history");
     rerender(<App />);

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 
-// Minimal hash router. Routes are "/", "/settings", "/safe", "/history",
-// "/recurring", "/stats", "/legal", "/contact", "/reset". Hash-based so the static SPA needs
-// no server rewrites and the back button works.
+// Minimal hash router. Routes are "/", "/settings", "/safe", "/feedback",
+// "/history", "/recurring", "/stats", "/legal", "/contact", "/reset". Hash-based
+// so the static SPA needs no server rewrites and the back button works.
 //
 // "/" is the home/landing entry (the marketing landing for signed-out visitors,
-// the app for signed-in ones); "/history" is the full-history page;
+// the app for signed-in ones); "/feedback" files a bug report or an idea as a
+// GitHub issue; "/history" is the full-history page;
 // "/recurring" lists the signed-in user's recurring payments; "/stats" is
 // the stats page (personal breakdown when signed in, community numbers for
 // everyone); "/legal" is the public privacy + terms page; "/contact" is the
@@ -19,6 +20,7 @@ export type Route =
   | "/"
   | "/settings"
   | "/safe"
+  | "/feedback"
   | "/history"
   | "/recurring"
   | "/stats"
@@ -37,6 +39,7 @@ function current(): Route {
   if (
     h === "/settings" ||
     h === "/safe" ||
+    h === "/feedback" ||
     h === "/history" ||
     h === "/recurring" ||
     h === "/stats" ||

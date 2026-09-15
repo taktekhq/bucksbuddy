@@ -11,6 +11,7 @@ import { Recurring } from "@/screens/Recurring";
 import { Stats } from "@/screens/Stats";
 import { Receipts } from "@/screens/Receipts";
 import { Settings } from "@/screens/Settings";
+import { Feedback } from "@/screens/Feedback";
 import { Safe } from "@/screens/Safe";
 import { Reset } from "@/screens/Reset";
 
@@ -64,6 +65,8 @@ export default function App() {
           <Settings />
         ) : route === "/safe" ? (
           <Safe />
+        ) : route === "/feedback" ? (
+          <Feedback />
         ) : route === "/history" ? (
           <History />
         ) : route === "/recurring" ? (

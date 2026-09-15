@@ -71,12 +71,14 @@ describe("Home", () => {
     expect(screen.getByText("2 g")).toBeInTheDocument();
   });
 
-  it("navigates to the safe and settings", async () => {
+  it("navigates to feedback, the safe and settings", async () => {
     render(<Home />);
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(navigate).toHaveBeenCalledWith("/settings");
     await userEvent.click(screen.getByRole("button", { name: "Safe" }));
     expect(navigate).toHaveBeenCalledWith("/safe");
+    await userEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    expect(navigate).toHaveBeenCalledWith("/feedback");
 
     // The balance card itself is also a shortcut into the safe.
     navigate.mockClear();
