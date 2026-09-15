@@ -35,7 +35,7 @@ import {
 } from "@/lib/reviews";
 import { buildDigest } from "@/lib/reportDigest";
 import { MIN_SPEND_ENTRIES, type ReportFacts } from "@/lib/reportEligibility";
-import type { SpendingReview, SpendingReviewRow } from "@/types/db";
+import type { SpendingReviewRow } from "@/types/db";
 
 function set(handlers: Record<string, Handler> = {}) {
   mock = makeSupabaseMock(handlers);
@@ -91,7 +91,8 @@ function facts(overrides: Partial<ReportFacts> = {}): ReportFacts {
   };
 }
 
-function review(overrides: Partial<SpendingReview> = {}): SpendingReview {
+/** A v1 PROSE body, as stored before the redesign. Carries no version field. */
+function prose(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     title: "Three months of takeaway",
     summary: "Spending held steady; food is the story.",
@@ -104,6 +105,27 @@ function review(overrides: Partial<SpendingReview> = {}): SpendingReview {
     ],
     notables: ["Coffee twice a day in July"],
     caveats: ["August has 6 unlogged days"],
+    ...overrides,
+  };
+}
+
+/** A v2 FINDINGS body, as the function writes one now. */
+function findings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    version: 2,
+    headline: "Steady months, with delivery climbing",
+    standing: "steady",
+    findings: [
+      {
+        kind: "improve",
+        basis: "logged",
+        title: "Delivery is the line to hold down",
+        detail: "It carries about a fifth of what you spent.",
+        evidence: [{ label: "Delivery", value: "$210.00" }],
+        category: "Food · Delivery",
+      },
+    ],
+    blindSpots: ["Nearly half the days have nothing logged."],
     ...overrides,
   };
 }
@@ -423,15 +445,12 @@ describe("startReview", () => {
 describe("generateReview", () => {
   it("sends the locally computed digest and returns the written review", async () => {
     set({
-      "fn:generate-review": () => ({ data: { review: review() }, error: null }),
+      "fn:generate-review": () => ({ data: { review: findings() }, error: null }),
     });
     const { review: got, error } = await generateReview("rev-1", digest);
     expect(error).toBeNull();
-    expect(got?.title).toBe("Three months of takeaway");
-    expect(got?.sections[0].figures[0]).toEqual({
-      label: "Food",
-      value: "$412.00",
-    });
+    expect(got?.version).toBe(2);
+    expect(got).toEqual(findings());
     expect(mock.supabase.functions.invoke).toHaveBeenCalledWith(
       "generate-review",
       { body: { review_id: "rev-1", digest } },
@@ -528,10 +547,68 @@ describe("reviewPrice", () => {
   });
 });
 
-describe("asSpendingReview", () => {
-  it("accepts a valid review and keeps only the fields it knows", () => {
+describe("asSpendingReview — the current shape", () => {
+  it("accepts a findings body and keeps only the fields it knows", () => {
     const got = asSpendingReview({
-      ...review(),
+      ...findings(),
+      // Fields a newer function might add, and a token count the edge function
+      // has no business storing in a review. Both are dropped, not refused.
+      mood: "wry",
+      prompt_tokens: 1200,
+    });
+    expect(got).toEqual(findings());
+  });
+
+  it("takes an empty findings list and no blind spots", () => {
+    const got = asSpendingReview(findings({ findings: [], blindSpots: [] }));
+    expect(got).toEqual(findings({ findings: [], blindSpots: [] }));
+  });
+
+  it("defaults a basis the body does not carry", () => {
+    // The field exists for a goals-aware server this build has not met; an
+    // absent one is a default, not a failure.
+    const got = asSpendingReview(
+      findings({
+        findings: [{ kind: "good", title: "t", detail: "d", evidence: [] }],
+      }),
+    );
+    expect(got).toEqual(
+      findings({
+        findings: [
+          { kind: "good", basis: "logged", title: "t", detail: "d", evidence: [], category: null },
+        ],
+      }),
+    );
+  });
+
+  it("carries a kind and a standing it has never heard of rather than refusing", () => {
+    // The service worker updates on its own schedule, so an installed copy of
+    // this app can be a version behind the function that wrote the review it is
+    // opening. Refusing would put "couldn't be opened on this device" on screen
+    // for a review that is perfectly fine and already paid for.
+    const got = asSpendingReview(
+      findings({
+        standing: "accelerating",
+        findings: [
+          { kind: "goal", basis: "goal", title: "t", detail: "d", evidence: [] },
+        ],
+      }),
+    );
+    expect(got?.version).toBe(2);
+    expect((got as { standing: string }).standing).toBe("accelerating");
+    expect((got as { findings: { kind: string }[] }).findings[0].kind).toBe("goal");
+  });
+
+  it("falls back to no direction when the standing is not a string at all", () => {
+    const got = asSpendingReview(findings({ standing: 7 }));
+    expect((got as { standing: string }).standing).toBe("unclear");
+  });
+});
+
+describe("asSpendingReview — the superseded prose shape", () => {
+  it("still opens a review bought before the redesign", () => {
+    const got = asSpendingReview({
+      ...prose(),
       sections: [
         {
           heading: "Where it went",
@@ -542,7 +619,10 @@ describe("asSpendingReview", () => {
       ],
       prompt_tokens: 1200,
     });
+    // Tagged version 1 on the way in — the stored body has no version field, so
+    // the shape is what says which it is. The tag is never written back.
     expect(got).toEqual({
+      version: 1,
       title: "Three months of takeaway",
       summary: "Spending held steady; food is the story.",
       sections: [
@@ -557,7 +637,7 @@ describe("asSpendingReview", () => {
     });
   });
 
-  it("accepts a review with no sections, notables or caveats", () => {
+  it("accepts a prose review with no sections, notables or caveats", () => {
     const got = asSpendingReview({
       title: "Nothing to say",
       summary: "Too little logged.",
@@ -565,55 +645,99 @@ describe("asSpendingReview", () => {
       notables: [],
       caveats: [],
     });
-    expect(got?.sections).toEqual([]);
+    expect(got).toEqual({
+      version: 1,
+      title: "Nothing to say",
+      summary: "Too little logged.",
+      sections: [],
+      notables: [],
+      caveats: [],
+    });
   });
+});
 
+describe("asSpendingReview — what is not a review", () => {
   const rejected: [string, unknown][] = [
     ["null", null],
     ["undefined", undefined],
-    ["a missing title", { ...review(), title: undefined }],
-    ["a non-string title", { ...review(), title: 12 }],
-    ["a missing summary", { ...review(), summary: undefined }],
-    ["a non-string summary", { ...review(), summary: ["a", "b"] }],
-    ["sections that are not an array", { ...review(), sections: "one" }],
-    ["notables that are not an array", { ...review(), notables: "coffee" }],
-    ["notables holding a non-string", { ...review(), notables: ["ok", 3] }],
-    ["caveats that are not an array", { ...review(), caveats: null }],
-    ["caveats holding a non-string", { ...review(), caveats: [{ text: "x" }] }],
-    ["a null section", { ...review(), sections: [null] }],
+    ["a string", "a review"],
+    // --- the current shape ---
+    ["a missing headline", findings({ headline: undefined })],
+    ["a non-string headline", findings({ headline: 12 })],
+    ["findings that are not an array", findings({ findings: "one" })],
+    ["blind spots that are not an array", findings({ blindSpots: null })],
+    ["blind spots holding a non-string", findings({ blindSpots: [{ text: "x" }] })],
+    ["a null finding", findings({ findings: [null] })],
+    [
+      "a finding with no kind",
+      findings({ findings: [{ title: "t", detail: "d", evidence: [] }] }),
+    ],
+    [
+      "a finding with a non-string title",
+      findings({ findings: [{ kind: "good", title: 1, detail: "d", evidence: [] }] }),
+    ],
+    [
+      "a finding with no detail",
+      findings({ findings: [{ kind: "good", title: "t", evidence: [] }] }),
+    ],
+    [
+      "a finding whose evidence is not an array",
+      findings({ findings: [{ kind: "good", title: "t", detail: "d", evidence: {} }] }),
+    ],
+    [
+      "a null piece of evidence",
+      findings({ findings: [{ kind: "good", title: "t", detail: "d", evidence: [null] }] }),
+    ],
+    [
+      "evidence with a non-string label",
+      findings({
+        findings: [
+          { kind: "good", title: "t", detail: "d", evidence: [{ label: 5, value: "$1" }] },
+        ],
+      }),
+    ],
+    [
+      "evidence with a non-string value",
+      findings({
+        findings: [
+          { kind: "good", title: "t", detail: "d", evidence: [{ label: "Food", value: 412 }] },
+        ],
+      }),
+    ],
+    // --- the superseded shape ---
+    ["a missing title", prose({ title: undefined })],
+    ["a non-string title", prose({ title: 12 })],
+    ["a missing summary", prose({ summary: undefined })],
+    ["a non-string summary", prose({ summary: ["a", "b"] })],
+    ["sections that are not an array", prose({ sections: "one" })],
+    ["notables that are not an array", prose({ notables: "coffee" })],
+    ["notables holding a non-string", prose({ notables: ["ok", 3] })],
+    ["caveats that are not an array", prose({ caveats: null })],
+    ["caveats holding a non-string", prose({ caveats: [{ text: "x" }] })],
+    ["a null section", prose({ sections: [null] })],
     [
       "a section with a non-string heading",
-      { ...review(), sections: [{ heading: 1, body: "b", figures: [] }] },
+      prose({ sections: [{ heading: 1, body: "b", figures: [] }] }),
     ],
     [
       "a section with a missing body",
-      { ...review(), sections: [{ heading: "h", figures: [] }] },
+      prose({ sections: [{ heading: "h", figures: [] }] }),
     ],
     [
       "a section whose figures are not an array",
-      { ...review(), sections: [{ heading: "h", body: "b", figures: {} }] },
+      prose({ sections: [{ heading: "h", body: "b", figures: {} }] }),
     ],
     [
       "a null figure",
-      { ...review(), sections: [{ heading: "h", body: "b", figures: [null] }] },
+      prose({ sections: [{ heading: "h", body: "b", figures: [null] }] }),
     ],
     [
       "a figure with a non-string label",
-      {
-        ...review(),
-        sections: [
-          { heading: "h", body: "b", figures: [{ label: 5, value: "$1" }] },
-        ],
-      },
+      prose({ sections: [{ heading: "h", body: "b", figures: [{ label: 5, value: "$1" }] }] }),
     ],
     [
       "a figure with a non-string value",
-      {
-        ...review(),
-        sections: [
-          { heading: "h", body: "b", figures: [{ label: "Food", value: 412 }] },
-        ],
-      },
+      prose({ sections: [{ heading: "h", body: "b", figures: [{ label: "Food", value: 412 }] }] }),
     ],
   ];
 

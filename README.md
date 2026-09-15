@@ -27,13 +27,14 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   model. See **Encryption** and **Spending reviews** below.
 - **Export:** CSV or PDF, for this month, last month, the past 3 months, or all time.
   Generated client-side from the decrypted rows, so it works on encrypted data.
-- **Spending review (in testing — free, and only for allowlisted accounts):** an AI-written
-  read-back of a logged month — or three — for accounts with enough history. The figures are
-  totalled on the device and the model only writes prose over them, so a review can be dull
-  but cannot invent a number. Kept in an archive, behind the same passphrase as everything
-  else. The $5 Stripe
-  purchase it is meant to become is written and tested but **not deployed**. See **Spending
-  reviews** below.
+- **Spending review (in testing — free, and only for allowlisted accounts):** a chart-first
+  breakdown of everything logged, with a short set of an auditor's findings under it. The
+  charts and every figure are computed on the device and owe the model nothing; the model's
+  only job is judgement — what is working, what to hold down, what might cost less — and it
+  writes no digit outside a field checked against the device's own totals, so a review can
+  be dull but cannot invent a number. Kept in an archive, behind the same passphrase as
+  everything else. The $5 Stripe purchase it is meant to become is written and tested but
+  **not deployed**. See **Spending reviews** below.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -201,8 +202,9 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
 
   > **The one exception, and it is opt-in per use:** asking for a **spending review** sends that
   > period's *finished figures* — per-category and per-month totals, counts, day coverage, the
-  > biggest few expenses, repeated charges — through the review function to Google's Gemini,
-  > which writes the prose. Notes are never sent, individual rows are never sent, and nothing
+  > biggest few expenses, repeated charges, Safe transfers — through the review function to
+  > Google's Gemini, which writes the findings. Notes are never sent, individual rows are
+  > never sent, and nothing
   > outside the chosen period is sent. The review screen states this before the button, and
   > nobody who does not ask for a review is affected. The review that comes back is encrypted
   > with the same master key before it is stored, so it is at rest under your passphrase like
@@ -229,10 +231,23 @@ One optional extra: a written review of what you have logged. Nothing that alrea
 worked is behind it.
 
 **Where it is.** A sparkles icon in Home's nav bar, left of the Safe and Settings icons,
-opens the review screen (`#/review`) — its own dark violet room, distinct from the Safe's
+opens the review screen (`#/review`) — its own calm blue room, distinct from the Safe's
 green vault (see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md)). It shows for every
-signed-in account, including ones that cannot have a review yet: the screen's other job is
-to say where an account stands against the bar, and that is the only way anyone finds out.
+signed-in account, including ones that cannot have a review yet: the whole breakdown is
+computed on the device and needs no review at all, so an account below the bar still gets
+every chart and figure, plus a line saying where it stands.
+
+**The order of the screen is the design.** It reads numbers first — a scope switch, then
+the window drawn as charts and figures — and only then the short set of findings a model
+wrote about them, with earlier reviews last. Everything money-shaped is computed here, on
+this device, over rows only this device can decrypt (`src/lib/reportDigest.ts`); the model
+never computes anything and never sees a note. So the breakdown is exact whether or not a
+review was ever bought, and the review is judgement rather than arithmetic.
+
+One asymmetry falls out of that, and it is deliberate: the app's own **Fixed costs**
+section names subscriptions, because recurring payments are detected on the device from the
+note text you typed and that text never leaves the phone. The auditor can only say "a
+$14.99 charge repeats in Fees".
 
 **Two reviews, not a choice of window.** Picking a span was a decision nobody could make
 well — you cannot know in advance which one writes a better review — so the offer is two
@@ -262,10 +277,20 @@ where the constraint is not money but the owner's own model quota. A refunded re
 not count against the month.
 
 Because a window can end mid-month, every per-month figure carries how many of that month's
-days are **inside** the window, and the month-over-month comparison is computed on the
-**daily rate** rather than the totals. Otherwise, spending at exactly last month's rate
-would read as "down 50%" on the 15th — and the model is told to copy these figures
-verbatim, so that would have been handed over as a fact.
+days are **inside** the window, and the month-to-month comparison uses only the **whole**
+months — a month still running is left out of it rather than scaled. Scaling looked like the
+answer and is worse: normalising to a daily rate invents movement in everything charged once
+a month, because rent logged once is $600 in a thirty-day month and $600 in a sixteen-day
+one, which as a rate reads as *"up 87.5%"* when nothing changed at all. With fewer than two
+finished months there is no comparison, and the section says nothing instead.
+
+**The model may write no digit at all** except inside an `evidence` value, and each of those
+is checked digit-by-digit against the device's own figures — a formatted amount strictly
+against the strings the app itself would print, so the raw cents integer behind `$1,240.50`
+cannot be printed as `$124050`. That is what makes the numbers guarantee exact rather than
+best-effort: a regex over prose could never see *"up 30%"*, *"3 times"* or *"12 days"*, and
+now none of them can exist. A finding's category is likewise checked against the digest's
+own labels. "Three times" costs the reader nothing.
 
 **Free, and allowlisted, while it is being tried out.** The `REVIEW_ALLOWLIST` secret on
 the `review-start` function names the accounts that may have one, by email or by auth user
@@ -313,14 +338,16 @@ account did.
    about money. A free grant never goes near it.
 4. The device reads the window's rows, decrypts them, and totals everything itself
    (`src/lib/reportDigest.ts`).
-5. **`generate-review`** checks the row is paid, then has Gemini write prose over those
-   finished figures, and returns it. Nothing is stored server-side.
+5. **`generate-review`** checks the row is paid, then has Gemini write its findings over
+   those finished figures, and returns them. Nothing is stored server-side.
 6. The device encrypts the review with the account's own master key and writes it to
    `body_enc` — the one column the browser is allowed to write.
 
 **What leaves the device, exactly.** The digest: per-category and per-month totals, counts,
-day coverage, weekday split, the biggest few expenses, repeated charges, and
-month-over-month changes — each amount accompanied by the string the app would print.
+day coverage, weekday split, the biggest few expenses, repeated charges, Safe transfers, and
+the change between the window's whole months — each amount accompanied by the string the app
+would print. Nothing else is sent, and the screen's own breakdown is drawn from the same
+figures without sending anything at all.
 **Notes are never sent** (they name people and merchants, and add nothing to a spending
 pattern), nothing outside the chosen window is sent, and no time-of-day is sent (entries are
 stamped when they are *logged*, so an hour histogram would describe phone habits while
@@ -397,7 +424,7 @@ note that anything named `VITE_*` or `NEXT_PUBLIC_*` **would**, so they do not g
 |---|---|
 | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/apikey) → **Get API key** |
 | `REVIEW_ALLOWLIST` | You write it: the emails and/or auth user ids that may have a review, comma-separated (`me@example.com,you@example.com`). Unset or empty allows **nobody**, which is what makes deploying the function safe. |
-| `GEMINI_MODEL` | *Optional.* An id to **try first**. Leave it unset and the function walks its own list, **lightest first** — Flash-Lite, then Flash — stopping at the first one your key can call and recording it in the review's `model` column so you can see which won. Lightest first is deliberate: a review is prose over figures that are already computed, so the smallest tier is enough, and the smallest tier is the one least likely to answer *"currently experiencing high demand"*. Set this to put a bigger model first if the writing disappoints (Pro ids generally need billing on the Cloud project; Flash and Flash-Lite are the free-tier ones). |
+| `GEMINI_MODEL` | *Optional.* An id to **try first**. Leave it unset and the function walks its own list, **lightest first** — Flash-Lite, then Flash — stopping at the first one your key can call and recording it in the review's `model` column so you can see which won. Lightest first is deliberate: a review is judgement over figures that are already computed, so the smallest tier is enough, and the smallest tier is the one least likely to answer *"currently experiencing high demand"*. Set this to put a bigger model first if the writing disappoints (Pro ids generally need billing on the Cloud project; Flash and Flash-Lite are the free-tier ones). |
 
 That is the whole of it. `REVIEW_PRICE_CENTS`, `APP_URL` and the Stripe secrets are unset,
 so `review-start` has no way to charge anybody and refuses every account that is not on the

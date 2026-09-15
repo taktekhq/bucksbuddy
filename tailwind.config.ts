@@ -36,18 +36,33 @@ const config: Config = {
         danger: "#FF3B30", // real errors (shares red)
 
         // --- The review's own dark room ---
-        // A second dark world, deliberately violet so it is never mistaken for
-        // the Safe's green vault or for the savings greens and gold. Carrot
-        // stays the accent, so it still reads as this app after dark. Every
-        // text pair clears WCAG AA on its ground (ratios noted).
+        // A second dark world: a calm deep blue, the colour of a reading lamp
+        // rather than of money. Blue is the one hue this app has not already
+        // spent — the Safe is a green vault, savings are green and gold, money
+        // is green and red, and the accent is carrot — so a blue room is never
+        // mistaken for a balance or a verdict.
+        //
+        // The floor is the load-bearing value here, and it is deliberately not
+        // near-black. Below about L* 10 a blue this saturated reads as black,
+        // and the app already has two near-black rooms — the observatory indigo
+        // behind Stats, Receipts and Recurring (#23234A → #141428, floor L* 7.2)
+        // and History's charcoal (#1C1C1E) — so a darker floor would lose the
+        // room's identity over the bottom two-thirds of a scroll and land on top
+        // of both. #0A2233 sits at L* 12.3 with the hue still visible.
+        //
+        // Every text pair clears WCAG AA on every ground it is used on (ratios
+        // on the card noted). Carrot clears the 3:1 non-text floor everywhere
+        // here, so carrot ICONS and FILLS are legal in this room; carrot as
+        // WORDS only clears 4.5:1 on `ink` and `mid`, so use `carrot-light`
+        // (#FF8A3D, 5.74:1 on the card) for any carrot text after dark.
         review: {
-          top: "#2A1A3E", // gradient top, and the status-bar tint
-          mid: "#1E1330", // gradient middle
-          ink: "#150D24", // the floor behind everything
-          card: "#271A3B", // cards and rows
-          tile: "#31214A", // figure tiles — `grouped`, after dark
-          text: "#F7F4FB", // primary text — 14.9:1 on card
-          muted: "#B7A8CC", // captions — 7.3:1 on card
+          top: "#123A56", // gradient top, and the status-bar tint
+          mid: "#0D2C42", // gradient middle
+          ink: "#0A2233", // gradient end, and the floor behind everything
+          card: "#10314A", // cards and rows
+          tile: "#17415E", // figure tiles — `grouped`, after dark
+          text: "#F2F7FB", // primary text — 12.5:1 on card
+          muted: "#A8C2D8", // captions — 7.3:1 on card
         },
       },
       fontFamily: {

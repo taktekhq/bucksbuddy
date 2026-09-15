@@ -191,7 +191,7 @@ async function verifyNumberGuard() {
   // Shaped like a real digest: every amount carries the string the app prints,
   // alongside the raw cents and the counts that must NOT become quotable amounts.
   const digest = {
-    version: 1,
+    version: 2,
     period: { label: "June 2026 – August 2026", from: "2026-06-01", to: "2026-08-31", days: 92 },
     totals: {
       spent: { cents: 124050, display: "$1,240.50" },
@@ -285,10 +285,163 @@ async function verifyNumberGuard() {
     unsupportedAmounts("You spent LL 95,000 this month.", lbp, lbpNumbers).length === 0, false);
 }
 
+// ---------------------------------------------------------- the auditor ----
+// The whole-review guard, which is a different claim from the token guard above.
+//
+// A review is now a set of auditor's findings in which EVERY NUMERAL lives in
+// one field, `evidence[].value`. That is what makes the numbers guarantee
+// airtight rather than best-effort: the token scan above can only see decimals,
+// comma-grouped numbers and runs of four or more digits, so "up 30%",
+// "3 times" and "12 days" were invisible to it and a model could state any of
+// them, wrongly, and ship. With the digits confined, prose is checked by "does
+// it contain a digit at all" and evidence by exact membership.
+async function verifyAuditorGuard() {
+  console.log("\ngenerate-review — the auditor's findings guard");
+  const { collectAmounts, collectNumbers, collectLabels, reviewProblems, parseReview, clamp } =
+    await loadRegion("supabase/functions/generate-review/index.ts", [
+      "collectAmounts",
+      "collectNumbers",
+      "collectLabels",
+      "reviewProblems",
+      "parseReview",
+      "clamp",
+    ]);
+
+  const digest = {
+    version: 2,
+    period: { label: "Recent months · June 2026 – September 2026", days: 92, months: 4 },
+    totals: {
+      spent: { cents: 124050, display: "$1,240.50" },
+      spendCount: 41,
+      dailyAverage: { cents: 1348, display: "$13.48" },
+    },
+    saving: {
+      intoSafe: { cents: 30000, display: "$300.00" },
+      netIntoSafe: { cents: 30000, display: "$300.00" },
+      savedSharePct: 18.4,
+      leftOverSharePct: 22.1,
+    },
+    coverage: { days: 92, daysLogged: 41, coveragePct: 44.6, longestGapDays: 12 },
+    categories: [
+      { id: "food", label: "Food", spent: { cents: 47200, display: "$472.00" }, sharePct: 38.1 },
+    ],
+    subcategories: [
+      { id: "food", label: "Food · Delivery", spent: { cents: 21000, display: "$210.00" } },
+    ],
+  };
+  const amounts = new Set();
+  collectAmounts(digest, amounts);
+  const numbers = new Set();
+  collectNumbers(digest, numbers);
+  const labels = new Set();
+  collectLabels(digest, labels);
+
+  const finding = (over = {}) => ({
+    kind: "improve",
+    basis: "logged",
+    title: "Delivery is the line to hold down",
+    detail: "It carries about a fifth of everything you spent, and the cheaper mode of the same thing sits beside it.",
+    evidence: [{ label: "Delivery", value: "$210.00" }],
+    category: "Food · Delivery",
+    ...over,
+  });
+  const review = (over = {}) => ({
+    version: 2,
+    headline: "Steady months, with delivery climbing",
+    standing: "steady",
+    findings: [finding()],
+    blindSpots: ["Nearly half the days have nothing logged."],
+    ...over,
+  });
+  const ok = (r) => reviewProblems(r, amounts, numbers, labels).length === 0;
+
+  console.log("  a clean review:");
+  check("passes", ok(review()), true);
+  check("an evidence value copied exactly passes",
+    ok(review({ findings: [finding({ evidence: [{ label: "Spent", value: "$1,240.50" }] })] })), true);
+  check("a percentage from the digest passes",
+    ok(review({ findings: [finding({ evidence: [{ label: "Share", value: "38.1%" }] })] })), true);
+  check("a saving figure passes",
+    ok(review({ findings: [finding({ evidence: [{ label: "Put away", value: "$300.00" }] })] })), true);
+  check("a small day count that IS in the digest passes",
+    ok(review({ findings: [finding({ evidence: [{ label: "Longest gap", value: "12 days" }] })] })), true);
+  check("a finding about the whole window needs no category",
+    ok(review({ findings: [finding({ category: undefined })] })), true);
+
+  console.log("  the digit ban on prose:");
+  check("a digit in the headline is caught",
+    ok(review({ headline: "Spending up 12% on the quarter" })), false);
+  check("a digit in a finding title is caught",
+    ok(review({ findings: [finding({ title: "Delivery took 38.1% of it" })] })), false);
+  check("a digit in a finding detail is caught",
+    ok(review({ findings: [finding({ detail: "It ran at 3 times the grocery rate." })] })), false);
+  check("a digit in an evidence label is caught",
+    ok(review({ findings: [finding({ evidence: [{ label: "Top 3", value: "$210.00" }] })] })), false);
+  check("a digit in a blind spot is caught",
+    ok(review({ blindSpots: ["Only 41 expenses to read."] })), false);
+  check("the same claims spelled as words pass",
+    ok(review({
+      headline: "Steady months, with delivery climbing",
+      findings: [finding({ detail: "It ran at about three times the grocery rate." })],
+      blindSpots: ["Nearly half the days have nothing logged."],
+    })), true);
+
+  console.log("  evidence values the digest does not support:");
+  check("one changed digit is caught",
+    ok(review({ findings: [finding({ evidence: [{ label: "Delivery", value: "$210.50" }] })] })), false);
+  check("a raw cents field printed as money is caught",
+    ok(review({ findings: [finding({ evidence: [{ label: "Spent", value: "$124050" }] })] })), false);
+  check("an invented percentage is caught",
+    ok(review({ findings: [finding({ evidence: [{ label: "Share", value: "44%" }] })] })), false);
+  // THE HOLE THE DIGIT BAN CLOSES. A small bare integer is invisible to
+  // NUMERIC_TOKEN, so the prose scan could never have judged this one.
+  check("a small count NOT in the digest is caught",
+    ok(review({ findings: [finding({ evidence: [{ label: "Gap", value: "7 days" }] })] })), false);
+  check("a made-up total is caught",
+    ok(review({ findings: [finding({ evidence: [{ label: "Together", value: "$682.00" }] })] })), false);
+
+  console.log("  categories must be lines the reader actually has:");
+  check("a category label from the digest passes",
+    ok(review({ findings: [finding({ category: "Food" })] })), true);
+  check("a month label from the digest passes",
+    ok(review({ findings: [finding({ category: "Recent months · June 2026 – September 2026" })] })), true);
+  check("an invented category is caught",
+    ok(review({ findings: [finding({ category: "Dining out" })] })), false);
+
+  console.log("  parseReview clamps verbosity and throws only on shape:");
+  const long = "x".repeat(400);
+  check("a long detail is cut, not rejected",
+    parseReview(review({ findings: [finding({ detail: long })] })).findings[0].detail.length <= 150,
+    true);
+  check("a long headline is cut", parseReview(review({ headline: long })).headline.length <= 60, true);
+  check("clamp cuts at a word boundary", clamp("the quick brown fox jumped", 18), "the quick brown");
+  check("clamp leaves a short string alone", clamp("short", 18), "short");
+  // An amount cut at a word boundary would be a DIFFERENT amount, so evidence
+  // values are hard-truncated and left for the guard to reject instead.
+  check("an evidence value is not word-clamped",
+    parseReview(review({ findings: [finding({ evidence: [{ label: "V", value: "$1,240,500.00 and more besides" }] })] }))
+      .findings[0].evidence[0].value, "$1,240,500.00 and more b");
+  check("a finding that clamps to nothing is dropped, not fatal",
+    parseReview(review({ findings: [finding({ title: "   " }), finding()] })).findings.length, 1);
+  check("a missing headline throws", (() => {
+    try { parseReview(review({ headline: 42 })); return false; } catch { return true; }
+  })(), true);
+  check("no findings at all throws", (() => {
+    try { parseReview(review({ findings: [] })); return false; } catch { return true; }
+  })(), true);
+  check("a finding missing its evidence array throws", (() => {
+    try { parseReview(review({ findings: [finding({ evidence: undefined })] })); return false; }
+    catch { return true; }
+  })(), true);
+  check("a basis the model omitted defaults rather than throwing",
+    parseReview(review({ findings: [finding({ basis: undefined })] })).findings[0].basis, "logged");
+}
+
 await verifyWebhookSignatures();
 await verifyWindowCheck();
 await verifyRetryClassification();
 await verifyNumberGuard();
+await verifyAuditorGuard();
 
 console.log(`\n${passed} checks passed, ${failures.length} failed`);
 if (failures.length > 0) {
