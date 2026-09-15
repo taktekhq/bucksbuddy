@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  AMOUNT_TOLERANCE,
+  MERGE_DAYS,
   MIN_OCCURRENCES,
+  PRICE_CHANGE_TOLERANCE,
+  SAME_PRICE_TOLERANCE,
   cadenceOf,
   detectRecurring,
   monthlyEquivalent,
+  priceTrack,
 } from "@/lib/recurring";
 import type { Transaction } from "@/types/db";
 
@@ -56,10 +59,22 @@ describe("cadenceOf", () => {
     expect(cadenceOf([365, 366])).toBe("yearly");
   });
 
-  it("is null when the spacing is irregular", () => {
+  it("forgives a log that's a couple of days late or early", () => {
+    expect(cadenceOf([33, 25])).toBe("monthly");
+  });
+
+  it("allows one skipped log in between, but not a series made of skips", () => {
+    expect(cadenceOf([30, 61, 31])).toBe("monthly");
+    expect(cadenceOf([7, 14])).toBe("weekly");
+    expect(cadenceOf([14, 14])).toBe("biweekly");
+    expect(cadenceOf([60, 60, 30])).toBeNull(); // more skips than not
+  });
+
+  it("is null when the spacing is irregular, or there are no gaps", () => {
     expect(cadenceOf([1, 1, 2])).toBeNull(); // daily coffee
     expect(cadenceOf([30, 7])).toBeNull(); // mixed
     expect(cadenceOf([3, 3])).toBeNull(); // between weekly and nothing
+    expect(cadenceOf([])).toBeNull();
   });
 });
 
@@ -72,9 +87,31 @@ describe("monthlyEquivalent", () => {
   });
 });
 
+describe("priceTrack", () => {
+  it("holds steady within the tolerance and reports no previous price", () => {
+    expect(SAME_PRICE_TOLERANCE).toBe(0.1);
+    // The latest amount is the current price.
+    expect(priceTrack([1000, 1050, 980])).toEqual({ current: 980, previous: null });
+    expect(priceTrack([1000])).toEqual({ current: 1000, previous: null });
+  });
+
+  it("accepts a price change once the old price has held for two entries", () => {
+    expect(PRICE_CHANGE_TOLERANCE).toBe(0.5);
+    expect(priceTrack([1599, 1599, 1999])).toEqual({ current: 1999, previous: 1599 });
+    expect(priceTrack([1599, 1599, 1999, 1999, 2499])).toEqual({ current: 2499, previous: 1999 });
+  });
+
+  it("rejects a change that comes too soon, is too big, or keeps happening", () => {
+    expect(priceTrack([1599, 1999])).toBeNull(); // old price never held
+    expect(priceTrack([1000, 1000, 1600])).toBeNull(); // more than 50%
+    expect(priceTrack([5000, 6000, 5200, 7000])).toBeNull(); // groceries, not a bill
+  });
+});
+
 describe("detectRecurring", () => {
-  it("finds a monthly subscription from three matching entries", () => {
-    const rows = monthly(3); // Apr 1, May 1, Jun 1
+  it("finds a monthly subscription from two matching entries", () => {
+    expect(MIN_OCCURRENCES).toBe(2);
+    const rows = monthly(2); // May 1, Jun 1
     const { payments, monthlyOutCents, monthlyInCents, anyMasked } = detectRecurring(
       rows,
       "u1",
@@ -87,28 +124,25 @@ describe("detectRecurring", () => {
     expect(p.isIncome).toBe(false);
     expect(p.note).toBe("Netflix");
     expect(p.cadence).toBe("monthly");
+    expect(p.fromNote).toBe(false);
     expect(p.amountCents).toBe(1599);
+    expect(p.previousAmountCents).toBeNull();
     expect(p.monthlyCents).toBe(1599);
-    expect(p.count).toBe(3);
-    expect(p.firstAt).toBe(at(2026, 3, 1));
+    expect(p.count).toBe(2);
+    expect(p.firstAt).toBe(at(2026, 4, 1));
     expect(p.lastAt).toBe(at(2026, 5, 1));
     // Due 30 days after Jun 1 — still ahead of Jun 10.
     expect(p.nextDueAt).toBe(at(2026, 6, 1));
     expect(p.overdue).toBe(false);
     // Occurrences come back newest first.
-    expect(p.rows.map((r) => r.occurred_at)).toEqual([
-      at(2026, 5, 1),
-      at(2026, 4, 1),
-      at(2026, 3, 1),
-    ]);
+    expect(p.rows.map((r) => r.occurred_at)).toEqual([at(2026, 5, 1), at(2026, 4, 1)]);
     expect(monthlyOutCents).toBe(1599);
     expect(monthlyInCents).toBe(0);
     expect(anyMasked).toBe(false);
   });
 
-  it("needs at least MIN_OCCURRENCES entries", () => {
-    expect(MIN_OCCURRENCES).toBe(3);
-    expect(detectRecurring(monthly(2), "u1", NOW).payments).toHaveLength(0);
+  it("needs at least two occurrences without a hint", () => {
+    expect(detectRecurring(monthly(1), "u1", NOW).payments).toHaveLength(0);
   });
 
   it("only ever counts the given user's rows", () => {
@@ -129,13 +163,32 @@ describe("detectRecurring", () => {
     expect(payments[1].amountCents).toBe(999);
   });
 
-  it("groups note-less entries by category alone", () => {
-    const rows = monthly(4, { category: "rent", note: null, amount_usd_cents: 80000 });
+  it("folds notes that mean the same thing into one series", () => {
+    const rows = [
+      tx({ note: "Netflix", occurred_at: at(2026, 2, 1) }),
+      tx({ note: "netflix sub", occurred_at: at(2026, 3, 1) }),
+      tx({ note: "Netlfix", occurred_at: at(2026, 4, 1) }),
+      tx({ note: "NETFLIX family", occurred_at: at(2026, 5, 1) }),
+    ];
     const { payments } = detectRecurring(rows, "u1", NOW);
     expect(payments).toHaveLength(1);
-    expect(payments[0].key).toBe("false:rent:");
-    expect(payments[0].note).toBeNull();
     expect(payments[0].count).toBe(4);
+    // Named by the latest note, keyed by it too.
+    expect(payments[0].note).toBe("NETFLIX family");
+    expect(payments[0].key).toBe("false:fees/subscriptions:netflix family");
+  });
+
+  it("groups note-less entries by category alone, apart from the noted ones", () => {
+    const rows = [
+      ...monthly(4, { category: "rent", note: null, amount_usd_cents: 80000 }),
+      ...monthly(3, { category: "rent", note: "parking spot", amount_usd_cents: 5000 }, 5, 15),
+    ];
+    const { payments } = detectRecurring(rows, "u1", NOW);
+    expect(payments.map((p) => [p.note, p.count])).toEqual([
+      [null, 4],
+      ["parking spot", 3],
+    ]);
+    expect(payments[0].key).toBe("false:rent:");
   });
 
   it("treats a blank note like no note", () => {
@@ -143,22 +196,77 @@ describe("detectRecurring", () => {
     expect(detectRecurring(rows, "u1", NOW).payments[0].note).toBeNull();
   });
 
+  it("takes a cadence hint in the note at its word, even for a single entry", () => {
+    const rows = [tx({ category: "fees", note: "Domain (yearly)", amount_usd_cents: 1200, occurred_at: at(2026, 0, 15) })];
+    const p = detectRecurring(rows, "u1", NOW).payments[0];
+    expect(p.cadence).toBe("yearly");
+    expect(p.fromNote).toBe(true);
+    expect(p.note).toBe("Domain");
+    expect(p.count).toBe(1);
+    expect(p.monthlyCents).toBe(100);
+    expect(p.nextDueAt).toBe(at(2027, 0, 15));
+    expect(p.overdue).toBe(false);
+  });
+
+  it("lets the latest hint override what the dates say", () => {
+    // Logged monthly by mistake at first; the newest note says weekly.
+    const rows = [
+      tx({ category: "gym", note: "Gym", amount_usd_cents: 2500, occurred_at: at(2026, 3, 1) }),
+      tx({ category: "gym", note: "Gym (monthly)", amount_usd_cents: 2500, occurred_at: at(2026, 4, 1) }),
+      tx({ category: "gym", note: "Gym (weekly)", amount_usd_cents: 2500, occurred_at: at(2026, 5, 1) }),
+    ];
+    const p = detectRecurring(rows, "u1", NOW).payments[0];
+    expect(p.cadence).toBe("weekly");
+    expect(p.note).toBe("Gym");
+  });
+
   it("rejects irregular spacing (daily coffee is not a subscription)", () => {
-    const rows = [1, 2, 3, 4].map((d) =>
+    const rows = [1, 4, 7, 12].map((d) =>
       tx({ category: "coffee", note: null, amount_usd_cents: 350, occurred_at: at(2026, 5, d) }),
     );
     expect(detectRecurring(rows, "u1", NOW).payments).toHaveLength(0);
   });
 
-  it("rejects amounts that wander more than the tolerance from the median", () => {
-    expect(AMOUNT_TOLERANCE).toBe(0.15);
+  it("counts entries logged a day or two apart as one occurrence", () => {
+    expect(MERGE_DAYS).toBe(2);
+    // Netflix logged twice on May 1/2 by mistake, then Jun 1.
+    const rows = [
+      tx({ occurred_at: at(2026, 4, 1) }),
+      tx({ occurred_at: at(2026, 4, 2) }),
+      tx({ occurred_at: at(2026, 5, 1) }),
+    ];
+    const p = detectRecurring(rows, "u1", NOW).payments[0];
+    expect(p.cadence).toBe("monthly");
+    expect(p.count).toBe(2);
+    expect(p.rows).toHaveLength(3);
+    // Daily coffee all folds into one occurrence — not recurring.
+    const coffee = [1, 2, 3, 4].map((d) =>
+      tx({ category: "coffee", note: null, amount_usd_cents: 350, occurred_at: at(2026, 5, d) }),
+    );
+    expect(detectRecurring(coffee, "u1", NOW).payments).toHaveLength(0);
+  });
+
+  it("keeps a series through a price change and reports the old price", () => {
+    const rows = [
+      tx({ amount_usd_cents: 1599, occurred_at: at(2026, 2, 1) }),
+      tx({ amount_usd_cents: 1599, occurred_at: at(2026, 3, 1) }),
+      tx({ amount_usd_cents: 1999, occurred_at: at(2026, 4, 1) }),
+      tx({ amount_usd_cents: 1999, occurred_at: at(2026, 5, 1) }),
+    ];
+    const p = detectRecurring(rows, "u1", NOW).payments[0];
+    expect(p.amountCents).toBe(1999);
+    expect(p.previousAmountCents).toBe(1599);
+    expect(p.monthlyCents).toBe(1999);
+  });
+
+  it("rejects amounts that jump around, even on a steady schedule", () => {
     const rows = [
       tx({ category: "groceries", note: null, amount_usd_cents: 5000, occurred_at: at(2026, 5, 1) }),
       tx({ category: "groceries", note: null, amount_usd_cents: 9000, occurred_at: at(2026, 5, 8) }),
       tx({ category: "groceries", note: null, amount_usd_cents: 5200, occurred_at: at(2026, 5, 15) }),
     ];
     expect(detectRecurring(rows, "u1", NOW).payments).toHaveLength(0);
-    // Within tolerance it's a series, with the median as the typical amount.
+    // Within tolerance it's a series, priced at its latest amount.
     const steady = [
       tx({ category: "groceries", note: null, amount_usd_cents: 5000, occurred_at: at(2026, 5, 1) }),
       tx({ category: "groceries", note: null, amount_usd_cents: 5400, occurred_at: at(2026, 5, 8) }),
@@ -168,16 +276,6 @@ describe("detectRecurring", () => {
     expect(p.cadence).toBe("weekly");
     expect(p.amountCents).toBe(5200);
     expect(p.monthlyCents).toBe(Math.round((5200 * 52) / 12));
-  });
-
-  it("uses the mean of the middle two as the median for an even count", () => {
-    const rows = [
-      tx({ amount_usd_cents: 1000, occurred_at: at(2026, 2, 1) }),
-      tx({ amount_usd_cents: 1100, occurred_at: at(2026, 3, 1) }),
-      tx({ amount_usd_cents: 1000, occurred_at: at(2026, 4, 1) }),
-      tx({ amount_usd_cents: 1100, occurred_at: at(2026, 5, 1) }),
-    ];
-    expect(detectRecurring(rows, "u1", NOW).payments[0].amountCents).toBe(1050);
   });
 
   it("flags a series whose next occurrence is already behind us", () => {
@@ -214,12 +312,13 @@ describe("detectRecurring", () => {
     expect(s.monthlyInCents).toBe(300000 + Math.round((10000 * 52) / 12));
   });
 
-  it("recognises a yearly series", () => {
-    const rows = [2024, 2025, 2026].map((y) =>
+  it("recognises a yearly series from the dates alone", () => {
+    const rows = [2025, 2026].map((y) =>
       tx({ category: "fees", note: "domain", amount_usd_cents: 1200, occurred_at: at(y, 0, 15) }),
     );
     const p = detectRecurring(rows, "u1", NOW).payments[0];
     expect(p.cadence).toBe("yearly");
+    expect(p.fromNote).toBe(false);
     expect(p.monthlyCents).toBe(100);
   });
 

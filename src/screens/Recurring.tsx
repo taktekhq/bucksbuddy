@@ -3,6 +3,7 @@ import { ChevronLeft, Lock, Repeat } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
+import { useFloorColor } from "@/lib/useFloorColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { amountColorClass, formatCents } from "@/lib/money";
 import { CADENCE_LABEL, detectRecurring, type RecurringPayment } from "@/lib/recurring";
@@ -27,9 +28,9 @@ function shortDate(iso: string): string {
   });
 }
 
-/** "3 times" — a series is never seen fewer than MIN_OCCURRENCES times. */
+/** "1 time" / "3 times". */
 function times(n: number): string {
-  return `${n} times`;
+  return `${n} ${n === 1 ? "time" : "times"}`;
 }
 
 /** The first block of a UUID, enough to recognise an account at a glance. */
@@ -42,6 +43,9 @@ export function Recurring({ userId }: { userId: string }) {
 
   // Tint the status bar to match the top of the page.
   useThemeColor("#23234A");
+  // And the document behind everything, so nothing the browser exposes
+  // beyond the page (a collapsed toolbar, the home-indicator inset) is light.
+  useFloorColor(OBSERVATORY_FLOOR);
 
   const summary = useMemo(
     () => detectRecurring(transactions, userId),
@@ -130,8 +134,10 @@ export function Recurring({ userId }: { userId: string }) {
               <Repeat className="h-8 w-8 text-white/30" strokeWidth={1.75} />
               <p className="text-white/55">Nothin&apos; on repeat yet, Doc.</p>
               <p className="max-w-xs text-xs text-white/40">
-                Log the same entry three times on a regular schedule — weekly,
-                every two weeks, monthly or yearly — and it shows up here.
+                Log the same entry twice on a regular schedule — weekly, every
+                two weeks, monthly or yearly — and it shows up here. Or write
+                &quot;(yearly)&quot; or &quot;(monthly)&quot; in the note and it
+                counts right away.
               </p>
             </div>
           ) : (
@@ -143,8 +149,9 @@ export function Recurring({ userId }: { userId: string }) {
                 <Group title="Coming in" payments={income} currency={homeCurrency} />
               )}
               <p className="px-1 text-center text-xs text-white/40">
-                Found from the entries logged so far, not set up by hand. A series
-                needs three matching entries on a steady schedule.
+                Found from the entries logged so far, not set up by hand: two
+                similar entries on a steady schedule, or one whose note says how
+                often it repeats.
               </p>
             </>
           )}
@@ -228,7 +235,11 @@ function PaymentCard({
             {payment.isIncome ? "+" : "-"}
             {formatCents(payment.amountCents, currency)}
           </span>
-          <span className="block text-xs text-white/45">{times(payment.count)}</span>
+          <span className="block text-xs text-white/45">
+            {payment.previousAmountCents !== null
+              ? `was ${formatCents(payment.previousAmountCents, currency)}`
+              : times(payment.count)}
+          </span>
         </span>
       </button>
       {open && (

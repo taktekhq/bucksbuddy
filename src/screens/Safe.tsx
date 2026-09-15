@@ -12,6 +12,7 @@ import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import posthog from "@/lib/posthog";
 import { useThemeColor } from "@/lib/useThemeColor";
+import { useFloorColor } from "@/lib/useFloorColor";
 import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import {
@@ -127,6 +128,9 @@ export function Safe() {
 
   // Tint the status bar to match the vault's top color.
   useThemeColor("#0E4A37");
+  // And the document behind everything, so nothing the browser exposes
+  // beyond the page (a collapsed toolbar, the home-indicator inset) is light.
+  useFloorColor(VAULT_FLOOR);
 
   // Best-effort live gold price (USD per gram); null while loading or if the
   // API is unreachable. Grams work fine without it.

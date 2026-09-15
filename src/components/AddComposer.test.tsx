@@ -129,6 +129,34 @@ describe("AddComposer (add mode)", () => {
     );
   });
 
+  it("offers past notes for the category and fills one in on tap", async () => {
+    storeValue = makeStoreValue({
+      transactions: [
+        tx({ id: "n1", is_income: false, category: "gas", note: "Total station", occurred_at: "2026-06-02T10:00:00.000Z" }),
+        tx({ id: "n2", is_income: false, category: "gas", note: "Medco", occurred_at: "2026-06-01T10:00:00.000Z" }),
+        tx({ id: "n3", is_income: false, category: "coffee", note: "Latte", occurred_at: "2026-06-03T10:00:00.000Z" }),
+      ],
+    });
+    render(<AddComposer editing={null} onClearEdit={() => {}} />);
+    // Nothing to suggest until a category is picked.
+    expect(screen.queryByRole("list", { name: "Past notes" })).not.toBeInTheDocument();
+
+    await chooseCategory(/Gas/);
+    const chips = screen.getByRole("list", { name: "Past notes" });
+    expect(chips).toHaveTextContent("Total station");
+    expect(chips).toHaveTextContent("Medco");
+    expect(chips).not.toHaveTextContent("Latte");
+
+    // Typing narrows the chips; tapping one fills the note.
+    const note = screen.getByLabelText("Note") as HTMLInputElement;
+    await userEvent.type(note, "med");
+    expect(screen.queryByRole("button", { name: "Total station" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Medco" }));
+    expect(note.value).toBe("Medco");
+    // The exact note is no longer offered — nothing left to tap.
+    expect(screen.queryByRole("list", { name: "Past notes" })).not.toBeInTheDocument();
+  });
+
   it("stores a null note when left blank", async () => {
     render(<AddComposer editing={null} onClearEdit={() => {}} />);
     await userEvent.type(screen.getByLabelText("Amount"), "5");

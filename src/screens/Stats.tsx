@@ -7,6 +7,7 @@ import { MonthSwitcher } from "@/components/ui/MonthSwitcher";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
+import { useFloorColor } from "@/lib/useFloorColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
@@ -34,6 +35,9 @@ const OBSERVATORY_FLOOR = "#141428";
 export function Stats({ signedIn }: { signedIn: boolean }) {
   // Tint the status bar to match the top of the page.
   useThemeColor("#23234A");
+  // And the document behind everything, so nothing the browser exposes
+  // beyond the page (a collapsed toolbar, the home-indicator inset) is light.
+  useFloorColor(OBSERVATORY_FLOOR);
 
   return (
     <main
