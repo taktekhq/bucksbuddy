@@ -3,6 +3,7 @@ import { ChevronLeft, Lock, Repeat } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
+import { useFloorColor } from "@/lib/useFloorColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { amountColorClass, formatCents } from "@/lib/money";
 import { CADENCE_LABEL, detectRecurring, type RecurringPayment } from "@/lib/recurring";
@@ -42,6 +43,9 @@ export function Recurring({ userId }: { userId: string }) {
 
   // Tint the status bar to match the top of the page.
   useThemeColor("#23234A");
+  // And the document behind everything, so nothing the browser exposes
+  // beyond the page (a collapsed toolbar, the home-indicator inset) is light.
+  useFloorColor(OBSERVATORY_FLOOR);
 
   const summary = useMemo(
     () => detectRecurring(transactions, userId),

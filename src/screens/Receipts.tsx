@@ -3,6 +3,7 @@ import { ChevronLeft, Lock } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
+import { useFloorColor } from "@/lib/useFloorColor";
 import { categoryColor, categoryIcon, categoryLabel } from "@/lib/categories";
 import { monthLabel } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
@@ -37,6 +38,9 @@ export function Receipts({ kind }: { kind: "treats" | "weekend" }) {
 
   // Tint the status bar to match the top of the page.
   useThemeColor("#23234A");
+  // And the document behind everything, so nothing the browser exposes
+  // beyond the page (a collapsed toolbar, the home-indicator inset) is light.
+  useFloorColor(OBSERVATORY_FLOOR);
 
   const rows = useMemo(
     () =>

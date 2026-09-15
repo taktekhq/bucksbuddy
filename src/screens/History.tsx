@@ -6,6 +6,7 @@ import { MonthSwitcher } from "@/components/ui/MonthSwitcher";
 import { useStore } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { useThemeColor } from "@/lib/useThemeColor";
+import { useFloorColor } from "@/lib/useFloorColor";
 import { requestEdit } from "@/lib/editIntent";
 import { currentMonthRange, monthAnchor, monthLabel } from "@/lib/dates";
 import { groupByCategory, groupByDay } from "@/lib/history";
@@ -50,6 +51,9 @@ export function History() {
 
   // Tint the status bar to match the top of the page.
   useThemeColor("#2C2C2E");
+  // And the document behind everything, so nothing the browser exposes
+  // beyond the page (a collapsed toolbar, the home-indicator inset) is light.
+  useFloorColor(RABBIT_HOLE_FLOOR);
 
   function handleEdit(tx: Transaction) {
     requestEdit(tx.id);
