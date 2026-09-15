@@ -332,7 +332,15 @@ export function AddComposer({
         </div>
       )}
 
-      <NoteTipsSheet open={tipsOpen} onClose={() => setTipsOpen(false)} />
+      <NoteTipsSheet
+        open={tipsOpen}
+        onClose={() => setTipsOpen(false)}
+        onPick={(keyword) => {
+          // Drop the tapped keyword onto the end of the note, and back to the form.
+          setNote((n) => (n.trim() === "" ? keyword : `${n.trimEnd()} ${keyword}`));
+          setTipsOpen(false);
+        }}
+      />
       <CategorySheet
         open={sheetOpen}
         isIncome={isIncome}

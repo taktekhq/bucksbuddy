@@ -1,16 +1,26 @@
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { CalendarClock, Repeat, Square, StickyNote, type LucideIcon } from "lucide-react";
+import { Repeat, StickyNote, type LucideIcon } from "lucide-react";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  // Tapping a keyword hands it over — the composer drops it into the note.
+  onPick?: (keyword: string) => void;
 };
 
 // The cheat codes a note understands (see lib/notes and lib/recurring): a
 // bottom sheet opened from the tiny info button next to the note field, so
 // the tricks are one tap away without cluttering the form. Drag down or tap
 // the backdrop to dismiss, same as the category sheet.
-const TIPS: { icon: LucideIcon; title: string; body: string }[] = [
+type Tip = {
+  icon: LucideIcon;
+  title: string;
+  body?: string;
+  // Sub-points: what to do, then how — keywords in `backticks` render as code.
+  items?: { title: string; body: string }[];
+};
+
+const TIPS: Tip[] = [
   {
     icon: StickyNote,
     title: "Same note, same payment",
@@ -18,22 +28,52 @@ const TIPS: { icon: LucideIcon; title: string; body: string }[] = [
   },
   {
     icon: Repeat,
-    title: "\u201Csubscription\u201D or \u201Cmembership\u201D",
-    body: "Counts as recurring from the first entry.",
-  },
-  {
-    icon: CalendarClock,
-    title: "\u201C(yearly)\u201D, \u201C(monthly)\u201D, \u201C(weekly)\u201D",
-    body: "Sets how often it repeats.",
-  },
-  {
-    icon: Square,
-    title: "\u201C(ended)\u201D",
-    body: "Drops it off the Recurring page.",
+    title: "Recurring keywords",
+    items: [
+      {
+        title: "Start a recurring item",
+        body: "First note: add `subscription` or `membership`.",
+      },
+      {
+        title: "Set how often it repeats",
+        body: "Any note: add `(yearly)`, `(monthly)` or `(weekly)`.",
+      },
+      {
+        title: "Stop a recurring item",
+        body: "Last note: add `(ended)`.",
+      },
+    ],
   },
 ];
 
-export function NoteTipsSheet({ open, onClose }: Props) {
+const KEYWORD_CLASS = "rounded bg-grouped px-1 py-0.5 font-numeric text-[13px] text-label";
+
+// Render a line with its `keywords` as code — tappable when there's somewhere
+// to put them: "Add `(ended)` to…" → Add <code>(ended)</code> to…
+function withKeywords(text: string, onPick?: (keyword: string) => void) {
+  return text.split("`").map((part, i) => {
+    if (i % 2 === 0) return part;
+    if (!onPick) {
+      return (
+        <code key={i} className={KEYWORD_CLASS}>
+          {part}
+        </code>
+      );
+    }
+    return (
+      <button
+        key={i}
+        type="button"
+        onClick={() => onPick(part)}
+        className={`press ${KEYWORD_CLASS} underline decoration-label-secondary/40 decoration-dotted underline-offset-2`}
+      >
+        {part}
+      </button>
+    );
+  });
+}
+
+export function NoteTipsSheet({ open, onClose, onPick }: Props) {
   function handleDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose();
   }
@@ -65,8 +105,7 @@ export function NoteTipsSheet({ open, onClose }: Props) {
             {/* Grabber. */}
             <div className="mx-auto mb-4 h-1.5 w-10 cursor-grab rounded-full bg-grouped" />
 
-            <h2 className="text-base font-semibold text-label">Notes that do more</h2>
-            <p className="mt-1 text-sm text-label-secondary">A few words in a note do more.</p>
+            <h2 className="text-base font-semibold text-label">Recurring payments</h2>
 
             <ul className="mt-4 flex flex-col gap-4">
               {TIPS.map((tip) => (
@@ -74,9 +113,23 @@ export function NoteTipsSheet({ open, onClose }: Props) {
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-carrot-soft text-carrot">
                     <tip.icon className="h-4 w-4" strokeWidth={2} />
                   </span>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-label">{tip.title}</p>
-                    <p className="mt-0.5 text-sm text-label-secondary">{tip.body}</p>
+                    {tip.body && (
+                      <p className="mt-0.5 text-sm text-label-secondary">{tip.body}</p>
+                    )}
+                    {tip.items && (
+                      <ul className="mt-2 flex flex-col gap-2.5">
+                        {tip.items.map((item) => (
+                          <li key={item.title}>
+                            <p className="text-sm font-medium text-label">{item.title}</p>
+                            <p className="mt-0.5 text-sm leading-relaxed text-label-secondary">
+                              {withKeywords(item.body, onPick)}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </li>
               ))}

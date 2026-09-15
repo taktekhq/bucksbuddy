@@ -167,6 +167,25 @@ describe("AddComposer (add mode)", () => {
     expect(screen.queryByRole("dialog", { name: "Note tips" })).not.toBeInTheDocument();
   });
 
+  it("drops a tapped keyword onto the end of the note and closes the tips", async () => {
+    render(<AddComposer editing={null} onClearEdit={() => {}} />);
+    await chooseCategory(/Gas/);
+    const note = screen.getByLabelText("Note") as HTMLInputElement;
+
+    // Into an empty note: just the keyword.
+    await userEvent.click(screen.getByRole("button", { name: "Note tips" }));
+    await userEvent.click(screen.getByRole("button", { name: "subscription" }));
+    expect(note.value).toBe("subscription");
+    expect(screen.queryByRole("dialog", { name: "Note tips" })).not.toBeInTheDocument();
+
+    // After text: a space, then the keyword.
+    await userEvent.clear(note);
+    await userEvent.type(note, "Domain ");
+    await userEvent.click(screen.getByRole("button", { name: "Note tips" }));
+    await userEvent.click(screen.getByRole("button", { name: "(yearly)" }));
+    expect(note.value).toBe("Domain (yearly)");
+  });
+
   it("stores a null note when left blank", async () => {
     render(<AddComposer editing={null} onClearEdit={() => {}} />);
     await userEvent.type(screen.getByLabelText("Amount"), "5");
