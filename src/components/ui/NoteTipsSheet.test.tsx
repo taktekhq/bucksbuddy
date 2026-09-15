@@ -22,6 +22,8 @@ describe("NoteTipsSheet", () => {
     expect(sheet).toHaveTextContent("Same note, same payment");
     expect(sheet).toHaveTextContent("“subscription” or “membership”");
     expect(sheet).toHaveTextContent("“(yearly)”, “(monthly)”, “(weekly)”");
+    expect(sheet).toHaveTextContent("A domain name");
+    expect(sheet).toHaveTextContent("“(ended)”");
     expect(sheet).toHaveTextContent("“with” someone");
     expect(sheet).toHaveTextContent(/price change keeps a series going/);
   });

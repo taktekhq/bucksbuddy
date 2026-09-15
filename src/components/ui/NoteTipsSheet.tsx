@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { CalendarClock, Repeat, StickyNote, Users, type LucideIcon } from "lucide-react";
+import { CalendarClock, Globe, Repeat, Square, StickyNote, Users, type LucideIcon } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -14,7 +14,7 @@ const TIPS: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: StickyNote,
     title: "Same note, same payment",
-    body: "Write the same note each time (or tap one of the chips) and the Recurring page will spot what keeps coming back. A typo or a different word order is fine.",
+    body: "Write the same note each time (or tap one of the chips) and the Recurring page will spot what keeps coming back. A typo, a different word order or an extra word is fine; a note that shares only one word with another is a different thing.",
   },
   {
     icon: Repeat,
@@ -25,6 +25,16 @@ const TIPS: { icon: LucideIcon; title: string; body: string }[] = [
     icon: CalendarClock,
     title: "“(yearly)”, “(monthly)”, “(weekly)”",
     body: "Say how often it repeats and that's taken at your word, from the first entry. “every 2 weeks” and “annual” work too.",
+  },
+  {
+    icon: Globe,
+    title: "A domain name",
+    body: "\u201Csillyguy.com\u201D or the word \u201Cdomain\u201D counts as a yearly renewal from the first entry.",
+  },
+  {
+    icon: Square,
+    title: "\u201C(ended)\u201D",
+    body: "Put it on the last payment of something you cancelled and it drops off the Recurring page right away. \u201Ccancelled\u201D and \u201Cstopped\u201D work too.",
   },
   {
     icon: Users,

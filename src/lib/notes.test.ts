@@ -11,10 +11,10 @@ import {
 import type { Transaction } from "@/types/db";
 
 describe("parseNote", () => {
-  const plain = { recurring: false };
+  const plain = { recurring: false, ended: false };
 
   it("peels a cadence hint off the note, brackets and all", () => {
-    expect(parseNote("Domain (yearly)")).toEqual({ ...plain, text: "Domain", cadence: "yearly" });
+    expect(parseNote("Insurance (yearly)")).toEqual({ ...plain, text: "Insurance", cadence: "yearly" });
     expect(parseNote("[monthly] Gym")).toEqual({ ...plain, text: "Gym", cadence: "monthly" });
     expect(parseNote("cleaner every 2 weeks")).toEqual({ ...plain, text: "cleaner", cadence: "biweekly" });
     expect(parseNote("bi-weekly cleaner")).toEqual({ ...plain, text: "cleaner", cadence: "biweekly" });
@@ -33,9 +33,21 @@ describe("parseNote", () => {
   });
 
   it("spots 'subscription' / 'membership' as recurring, and drops them from the name", () => {
-    expect(parseNote("Claude subscription")).toEqual({ text: "Claude", cadence: null, recurring: true });
-    expect(parseNote("Gym Membership (yearly)")).toEqual({ text: "Gym", cadence: "yearly", recurring: true });
-    expect(parseNote("subscription")).toEqual({ text: "", cadence: null, recurring: true });
+    expect(parseNote("Claude subscription")).toEqual({ ...plain, text: "Claude", cadence: null, recurring: true });
+    expect(parseNote("Gym Membership (yearly)")).toEqual({ ...plain, text: "Gym", cadence: "yearly", recurring: true });
+    expect(parseNote("subscription")).toEqual({ ...plain, text: "", cadence: null, recurring: true });
+  });
+
+  it("takes a domain name as yearly, keeping the hostname but not the word", () => {
+    expect(parseNote("sillyguy.com subscription")).toEqual({ ...plain, text: "sillyguy.com", cadence: "yearly", recurring: true });
+    expect(parseNote("Domain: redcarnet.com")).toEqual({ ...plain, text: "redcarnet.com", cadence: "yearly", recurring: true });
+    expect(parseNote("closet.ai domain (monthly)")).toEqual({ ...plain, text: "closet.ai", cadence: "monthly", recurring: true });
+    expect(parseNote("Coffee at dot.com café").cadence).toBe("yearly"); // looks like a host; the trade-off
+  });
+
+  it("spots '(ended)' and drops it from the name", () => {
+    expect(parseNote("Framer subscription (ended)")).toEqual({ ...plain, text: "Framer", cadence: null, recurring: true, ended: true });
+    expect(parseNote("Gym cancelled")).toEqual({ ...plain, text: "Gym", cadence: null, ended: true });
   });
 
   it("drops who it was 'with' — the name isn't what it was", () => {
@@ -69,13 +81,22 @@ describe("editDistance", () => {
 });
 
 describe("notesMatch", () => {
-  it("matches equal, word-sharing and typo'd notes", () => {
+  it("matches equal, mostly-shared and typo'd notes", () => {
     expect(notesMatch("netflix", "netflix")).toBe(true);
     expect(notesMatch("netflix", "netflix sub")).toBe(true);
     expect(notesMatch("netflix family plan", "family plan on netflix")).toBe(true);
+    expect(notesMatch("canva", "canva for family")).toBe(true); // 1 of 2
+    expect(notesMatch("amazon prime", "amazon prime turkish")).toBe(true); // 2 of 3
     expect(notesMatch("netlfix", "netflix")).toBe(true);
     expect(notesMatch("netlfix sub", "netflix")).toBe(true); // typo in one word
-    expect(notesMatch("gym pass", "gym  pas")).toBe(true); // typo across the whole note
+    expect(notesMatch("gym pass", "gym pas")).toBe(true); // typo across the whole note
+  });
+
+  it("does not match on one word out of many", () => {
+    expect(notesMatch("claude", "claude extra credits")).toBe(false); // 1 of 3
+    expect(notesMatch("icloud for sara", "linkedin premium for sara")).toBe(false);
+    expect(notesMatch("google workspace", "google ai studio balance")).toBe(false);
+    expect(notesMatch("sillyguy com", "bucksbuddy com")).toBe(false);
   });
 
   it("does not match on a stopword alone, a different word, or a short fragment", () => {
