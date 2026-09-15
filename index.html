@@ -11,11 +11,18 @@
     <meta name="theme-color" content="#F2F2F7" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="BucksBuddy" />
-    <!-- black-translucent lets the page background show behind the status bar
-         (the only thing iOS 26 still honors; theme-color is ignored there).
-         Status-bar icons are forced white, so App renders a subtle scrim in the
-         notch area to keep them legible on light screens. -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Deliberately NOT black-translucent. That value makes WebKit size the
+         installed web view to screen.height minus the *top* inset and anchor it
+         at the top, so the strip above the home indicator falls outside the web
+         view entirely — nothing the page draws can reach it, and anything
+         pinned to `bottom: 0` (the category sheet) floats above the real bottom
+         edge of the screen. `default` lays the web view out edge to edge and
+         paints an opaque status bar over it, so safe-area-inset-bottom lands on
+         the actual screen edge and --safe-bottom does its job.
+         iOS freezes these apple-mobile-web-app-* tags at install time: an app
+         already on the Home Screen has to be removed and re-added to pick this
+         up — a service-worker update won't do it. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="description" content="What's up, Doc? Your dead-simple money tracker." />
 
     <!-- Social share cards (Open Graph + Twitter). Absolute URLs because most

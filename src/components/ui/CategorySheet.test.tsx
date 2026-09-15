@@ -94,6 +94,25 @@ describe("CategorySheet", () => {
     expect(onChangeDirection).toHaveBeenCalledWith(true);
   });
 
+  it("keeps the grid scrollable without letting it start a sheet drag", () => {
+    const { container } = setup();
+    const sheet = getDraggableNode(container);
+    const scroller = sheet.querySelector(".overflow-y-auto") as HTMLElement;
+    expect(scroller).toBeInTheDocument();
+
+    // framer-motion opens a drag from a bubbling pointerdown on the sheet; the
+    // scroller stops it in the capture phase so the gesture scrolls instead.
+    const seen: string[] = [];
+    sheet.addEventListener("pointerdown", () => seen.push("sheet"));
+    fireEvent.pointerDown(screen.getByRole("button", { name: /Groceries/ }));
+    expect(seen).toEqual([]);
+
+    // Anything outside the scroller still reaches the sheet, so drag-to-dismiss
+    // keeps working from the grabber and the In/Out toggle.
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Out" }));
+    expect(seen).toEqual(["sheet"]);
+  });
+
   it("closes when the backdrop is clicked", () => {
     const { onClose, container } = setup();
     // The backdrop is the first fixed-inset overlay.
