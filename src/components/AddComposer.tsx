@@ -11,6 +11,7 @@ import {
   type CurrencyRate,
 } from "@/lib/currency";
 import { formatCents } from "@/lib/money";
+import { noteSuggestions } from "@/lib/notes";
 import posthog from "@/lib/posthog";
 import type { Transaction } from "@/types/db";
 
@@ -40,7 +41,8 @@ export function AddComposer({
   editing: Transaction | null;
   onClearEdit: () => void;
 }) {
-  const { homeCurrency, currencies, addTransaction, updateTransaction } = useStore();
+  const { homeCurrency, currencies, transactions, addTransaction, updateTransaction } =
+    useStore();
   const [isIncome, setIsIncome] = useState(false);
   const [category, setCategory] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>(homeCurrency);
@@ -151,6 +153,13 @@ export function AddComposer({
     }
   }
 
+  // Past notes in this category, narrowed by what's typed, to tap instead of
+  // retyping — the same note every time is what lets the recurring page find
+  // the series later.
+  const suggestions = category
+    ? noteSuggestions(transactions, { isIncome, category, query: note })
+    : [];
+
   const SelectedIcon = category ? categoryIcon(category) : null;
   const catColor = category ? categoryColor(category) : "#8E8E93";
   const dirColor = isIncome ? INCOME_COLOR : EXPENSE_COLOR;
@@ -249,18 +258,39 @@ export function AddComposer({
         </button>
       )}
 
-      {/* NOTE — optional, available once a category is chosen. */}
+      {/* NOTE — optional, available once a category is chosen. Past notes
+          for this category sit underneath as chips; tapping one fills it in. */}
       {category && (
-        <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3">
-          <StickyNote className="h-5 w-5 shrink-0 text-label-secondary" strokeWidth={2} />
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Add a note (optional)"
-            aria-label="Note"
-            maxLength={140}
-            className="min-w-0 flex-1 bg-transparent text-base text-label outline-none placeholder:text-label-secondary"
-          />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3 rounded-card border border-separator px-4 py-3">
+            <StickyNote className="h-5 w-5 shrink-0 text-label-secondary" strokeWidth={2} />
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Add a note (optional)"
+              aria-label="Note"
+              maxLength={140}
+              className="min-w-0 flex-1 bg-transparent text-base text-label outline-none placeholder:text-label-secondary"
+            />
+          </div>
+          {suggestions.length > 0 && (
+            <ul
+              aria-label="Past notes"
+              className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]"
+            >
+              {suggestions.map((s) => (
+                <li key={s} className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setNote(s)}
+                    className="press max-w-[14rem] truncate rounded-pill bg-grouped px-3 py-1.5 text-sm text-label"
+                  >
+                    {s}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

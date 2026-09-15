@@ -33,7 +33,9 @@ function payment(overrides: Partial<RecurringPayment> = {}): RecurringPayment {
     isIncome: false,
     note: "Netflix",
     cadence: "monthly",
+    fromNote: false,
     amountCents: 1599,
+    previousAmountCents: null,
     monthlyCents: 1599,
     count: 3,
     firstAt: "2026-04-01T12:00:00.000Z",
@@ -161,6 +163,25 @@ describe("Recurring", () => {
 
     await userEvent.click(card);
     expect(screen.queryByText("Apr 1")).not.toBeInTheDocument();
+  });
+
+  it("shows the old price instead of the count after a price change", () => {
+    detectRecurring.mockReturnValue(
+      summary({ payments: [payment({ amountCents: 1799, previousAmountCents: 1599 })] }),
+    );
+    render(<Recurring userId={USER} />);
+    expect(screen.getByText("-$17.99")).toBeInTheDocument();
+    expect(screen.getByText("was $15.99")).toBeInTheDocument();
+    expect(screen.queryByText("3 times")).not.toBeInTheDocument();
+  });
+
+  it("says '1 time' for a series known only from its note", () => {
+    detectRecurring.mockReturnValue(
+      summary({ payments: [payment({ count: 1, cadence: "yearly", fromNote: true })] }),
+    );
+    render(<Recurring userId={USER} />);
+    expect(screen.getByText("1 time")).toBeInTheDocument();
+    expect(screen.getByText("Yearly · next Jul 1")).toBeInTheDocument();
   });
 
   it("shows only the side that has anything", () => {

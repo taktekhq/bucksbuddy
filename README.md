@@ -92,10 +92,17 @@ app that came with 0007 is deployed.
 > when each is next due. Nothing is set up by hand and there is no schema change:
 > `src/lib/recurring.ts` finds the series in the entries already logged, on the
 > device (so it works on end-to-end encrypted data), scoped to the signed-in user id.
-> A series is three or more entries with the same direction, category and note,
-> spaced weekly / every two weeks / monthly / yearly, with every amount within 15%
-> of the median. The page is read-only; it sits behind the same unlock nudge as the
-> rest of the app when the device is locked.
+> The rules are forgiving, because entries are typed by hand: two entries in the same
+> direction + category whose notes *mean* the same thing (a shared word, one containing
+> the other, or a typo apart — `src/lib/notes.ts`), spaced weekly / every two weeks /
+> monthly / yearly with a couple of days' slack and one skipped log allowed; entries a
+> day or two apart count as one. A note can also say so outright — "Domain (yearly)"
+> counts from its first entry. Amounts are compared to the price before them: within
+> 10% is the same price, a bigger jump (up to 50%) is a price change and keeps the
+> series once the old price had held for two entries; the page shows the new price with
+> the old one underneath. To keep notes from drifting, the composer offers the past
+> notes of the chosen category as chips under the note field. The page is read-only; it
+> sits behind the same unlock nudge as the rest of the app when the device is locked.
 
 ### 2. Create your user (password sign-in)
 
@@ -196,7 +203,7 @@ src/screens/            Landing, Home, History, Recurring, Stats, Safe, Settings
 src/components/          AddComposer + ui/* building blocks, history rows/stacks, CurrencySettings, ExportCard
 src/lib/                supabase client, store (in-memory cache), router, useSession,
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories,
-                        stats + recurring (pure aggregations over the decrypted rows)
+                        stats + recurring + notes (pure aggregations over the decrypted rows)
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0006_public_stats.sql, 0007_currencies.sql, 0008_drop_legacy.sql
