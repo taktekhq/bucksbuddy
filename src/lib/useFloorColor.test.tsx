@@ -23,22 +23,6 @@ describe("useFloorColor", () => {
     expect(document.body.style.background).toBe("rgb(1, 2, 3)");
   });
 
-  it("leaves the document alone when the color is null", () => {
-    document.body.style.background = "rgb(1, 2, 3)";
-    renderHook(() => useFloorColor(null));
-    expect(document.body.style.background).toBe("rgb(1, 2, 3)");
-  });
-
-  it("restores the document when the color goes back to null", () => {
-    document.body.style.background = "rgb(1, 2, 3)";
-    const { rerender } = renderHook(({ c }) => useFloorColor(c), {
-      initialProps: { c: "rgb(20, 20, 40)" as string | null },
-    });
-    expect(document.body.style.background).toBe("rgb(20, 20, 40)");
-    rerender({ c: null });
-    expect(document.body.style.background).toBe("rgb(1, 2, 3)");
-  });
-
   it("follows a changed color", () => {
     const { rerender } = renderHook(({ c }) => useFloorColor(c), {
       initialProps: { c: "rgb(1, 1, 1)" },

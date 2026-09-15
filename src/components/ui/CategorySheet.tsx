@@ -3,7 +3,6 @@ import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { InOutToggle } from "@/components/ui/InOutToggle";
 import { CategoryGrid } from "@/components/ui/CategoryGrid";
-import { useFloorColor } from "@/lib/useFloorColor";
 import {
   categoriesFor,
   categoryColor,
@@ -13,10 +12,6 @@ import {
   splitCategory,
   subcategoriesFor,
 } from "@/lib/categories";
-
-// The sheet's own surface (tailwind `surface`), mirrored onto the document
-// underneath while the sheet is open — see the useFloorColor call below.
-const SHEET_FLOOR = "#FFFFFF";
 
 type Props = {
   open: boolean;
@@ -47,15 +42,6 @@ export function CategorySheet({
   useEffect(() => {
     if (open) setExpanded(null);
   }, [open]);
-
-  // A standalone iOS app doesn't get the whole screen: the strip above the home
-  // indicator is outside the web view, and iOS paints it with the *document's*
-  // background rather than anything the page draws. So a white sheet pinned to
-  // `bottom: 0` still reads as floating above the bottom of the screen, with a
-  // band of light canvas under it. Painting the floor to match closes that seam
-  // — the same trick the Safe uses for its dark page. Everywhere the app gets
-  // the full viewport this is a no-op.
-  useFloorColor(open ? SHEET_FLOOR : null);
 
   function handleDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose();

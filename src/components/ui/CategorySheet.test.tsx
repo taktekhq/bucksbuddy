@@ -94,37 +94,6 @@ describe("CategorySheet", () => {
     expect(onChangeDirection).toHaveBeenCalledWith(true);
   });
 
-  it("paints the document floor white while open, and restores it on close", () => {
-    document.body.style.background = "rgb(242, 242, 247)";
-    const { rerender } = render(
-      <CategorySheet
-        open={false}
-        isIncome={false}
-        selected={null}
-        onChangeDirection={() => {}}
-        onSelect={() => {}}
-        onClose={() => {}}
-      />,
-    );
-    expect(document.body.style.background).toBe("rgb(242, 242, 247)");
-
-    const props = {
-      isIncome: false,
-      selected: null,
-      onChangeDirection: () => {},
-      onSelect: () => {},
-      onClose: () => {},
-    };
-    rerender(<CategorySheet open {...props} />);
-    // Matches the sheet's own surface, so the iOS home-indicator inset below
-    // the sheet stops reading as a gap under it.
-    expect(document.body.style.background).toBe("rgb(255, 255, 255)");
-    expect(document.documentElement.style.background).toBe("rgb(255, 255, 255)");
-
-    rerender(<CategorySheet open={false} {...props} />);
-    expect(document.body.style.background).toBe("rgb(242, 242, 247)");
-  });
-
   it("keeps the grid scrollable without letting it start a sheet drag", () => {
     const { container } = setup();
     const sheet = getDraggableNode(container);
