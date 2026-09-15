@@ -24,6 +24,8 @@ import { isSpending } from "@/lib/stats";
 import {
   boundDate,
   reportWindowLabel,
+  periodName,
+  type LegacyReportPeriodId,
   type ReportPeriodId,
 } from "@/lib/reportPeriod";
 import type { Transaction } from "@/types/db";
@@ -71,18 +73,34 @@ export type DigestRepeat = {
   medianGapDays: number;
 };
 
+// First month against last, per category. Carries BOTH the totals and the daily
+// rates, because the last month of a window that ends today is usually
+// unfinished: its total is smaller for no other reason than that fewer days have
+// happened. The rate is the comparable pair, so `changePct` and `direction` are
+// computed from it, and each side's `days` travels with the figures so the
+// review can say "over its first 15 days" instead of implying a full month.
 export type DigestChange = {
   category: string;
   first: DigestMoney;
   last: DigestMoney;
-  changePct: number | null;
+  /** Days of each month inside the window — equal only if both are whole. */
+  firstDays: number;
+  lastDays: number;
+  /** Spending per day, which is what the two are compared on. */
+  firstPerDay: DigestMoney;
+  lastPerDay: DigestMoney;
+  /**
+   * Change in the DAILY RATE, not in the totals — so the name says which, since
+   * the model reads these keys. Null when the first month's rate is zero.
+   */
+  changePctPerDay: number | null;
   direction: "up" | "down" | "flat" | "new";
 };
 
 export type SpendingDigest = {
   version: 1;
   period: {
-    id: ReportPeriodId;
+    id: ReportPeriodId | LegacyReportPeriodId;
     label: string;
     from: string;
     to: string;
@@ -154,10 +172,27 @@ function divide(total: number, by: number): number {
   return by === 0 ? 0 : Math.round(total / by);
 }
 
-/** Every local calendar day in [from, to), as "YYYY-MM-DD". */
+/**
+ * Every local calendar day the window touches, as "YYYY-MM-DD".
+ *
+ * Stepping starts at the MIDNIGHT of the window's first day, not at its first
+ * instant. A window anchored on the account's first entry starts at whatever
+ * time that was, and stepping in 24-hour hops from 09:30 would end a day early
+ * — leaving the last sliver of the window in no day at all.
+ */
+/** "This month vs last · August 2026 – September 2026". */
+function namedWindowLabel(
+  id: ReportPeriodId | LegacyReportPeriodId,
+  from: Date,
+  to: Date,
+): string {
+  return `${periodName(id)} · ${reportWindowLabel(from, to)}`;
+}
+
 function daysBetween(from: Date, to: Date): string[] {
   const out: string[] = [];
-  for (const d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
+  const first = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  for (const d = first; d < to; d.setDate(d.getDate() + 1)) {
     out.push(boundDate(d));
   }
   return out;
@@ -179,7 +214,13 @@ function longestRunWithout(days: string[], has: (day: string) => boolean): numbe
  * a review bought on the last day of a month and opened the next morning must
  * describe the months it was sold for, not the ones that are now "last".
  */
-export type ReportWindow = { id: ReportPeriodId; from: Date; to: Date };
+// A review already stored under a superseded window still has to be readable,
+// so the id is whatever its row carries — the digest only echoes it.
+export type ReportWindow = {
+  id: ReportPeriodId | LegacyReportPeriodId;
+  from: Date;
+  to: Date;
+};
 
 export function buildDigest(
   rows: Transaction[],
@@ -242,9 +283,22 @@ export function buildDigest(
   const months: DigestMonth[] = [];
   const monthIndex = new Map<string, DigestMonth>();
   const monthSpendCents = new Map<string, Map<string, number>>();
-  for (const d = new Date(from); d < to; d.setMonth(d.getMonth() + 1)) {
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const monthDays = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  // The months come from the DAYS, not from a second walk over the calendar, so
+  // the two can never disagree: every month here has at least one day inside the
+  // window, and its `days` is how many — which is not the same as days in the
+  // month. The current month is partial and an all-time window starts on the day
+  // logging did; dividing a month's spending by its calendar length would halve
+  // the daily average of a month half-elapsed and hand the model a figure that
+  // reads as fact. (Walking the calendar instead also has a trap: stepping a
+  // month from the 31st lands on March 3rd and skips February.)
+  const windowDaysByMonth = new Map<string, number>();
+  for (const day of days) {
+    const key = day.slice(0, 7);
+    windowDaysByMonth.set(key, (windowDaysByMonth.get(key) ?? 0) + 1);
+  }
+  for (const [key, monthDays] of windowDaysByMonth) {
+    const [year, month] = key.split("-").map(Number);
+    const d = new Date(year, month - 1, 1);
     const entry: DigestMonth = {
       key,
       label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
@@ -391,20 +445,42 @@ export function buildDigest(
     .slice(0, TOP_CATEGORIES);
 
   // --- first month against last, per category (only with 2+ months) ---
+  //
+  // Compared on the DAILY RATE, never on the totals. The last month of a window
+  // that ends today is part-way through, so its total is smaller by arithmetic
+  // rather than by anything the reader did: on the 15th, spending at exactly
+  // last month's rate would otherwise read as "down 50%" in every category — and
+  // the model is told to copy these figures verbatim, so that would have been
+  // handed to the reader as a fact.
   const monthOverMonth: DigestChange[] = [];
   if (months.length > 1) {
-    const firstMonth = monthSpendCents.get(months[0].key)!;
-    const lastMonth = monthSpendCents.get(months[months.length - 1].key)!;
+    const firstEntry = months[0];
+    const lastEntry = months[months.length - 1];
+    const firstMonth = monthSpendCents.get(firstEntry.key)!;
+    const lastMonth = monthSpendCents.get(lastEntry.key)!;
     for (const id of new Set([...firstMonth.keys(), ...lastMonth.keys()])) {
       const first = firstMonth.get(id) ?? 0;
       const last = lastMonth.get(id) ?? 0;
+      const firstPerDay = divide(first, firstEntry.days);
+      const lastPerDay = divide(last, lastEntry.days);
       monthOverMonth.push({
         category: categoryLabel(id),
         first: money(first),
         last: money(last),
-        changePct: first === 0 ? null : pct(last - first, first),
+        firstDays: firstEntry.days,
+        lastDays: lastEntry.days,
+        firstPerDay: money(firstPerDay),
+        lastPerDay: money(lastPerDay),
+        changePctPerDay:
+          firstPerDay === 0 ? null : pct(lastPerDay - firstPerDay, firstPerDay),
         direction:
-          first === 0 ? "new" : last === first ? "flat" : last > first ? "up" : "down",
+          firstPerDay === 0
+            ? "new"
+            : lastPerDay === firstPerDay
+              ? "flat"
+              : lastPerDay > firstPerDay
+                ? "up"
+                : "down",
       });
     }
     monthOverMonth.sort((a, b) => b.last.cents - a.last.cents);
@@ -416,7 +492,10 @@ export function buildDigest(
     version: 1,
     period: {
       id: periodId,
-      label: reportWindowLabel(from, to),
+      // Named as well as dated, because the model has to know whether it is
+      // looking at a comparison, a quarter or an entire history — and because
+      // two of the windows end today, so their dates alone do not say.
+      label: namedWindowLabel(periodId, from, to),
       from: boundDate(from),
       // One millisecond back, not one day: the last local day of the window can
       // be 23 hours long across a spring-forward, and a fixed 24 hours would then

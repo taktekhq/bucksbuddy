@@ -41,7 +41,8 @@ look can be reused on new screens.
 
 ## Color tokens
 
-Defined as Tailwind colors. Light-first; dark mode is future work.
+Defined as Tailwind colors. Light-first; dark mode is future work — the two
+dark screens below are their own rooms, not a theme.
 
 | Token | Value | Use |
 |---|---|---|
@@ -60,6 +61,38 @@ Defined as Tailwind colors. Light-first; dark mode is future work.
 | `income` | `#34C759` | Apple green — positive net, money **in** |
 | `expense` | `#FF3B30` | Apple red — negative net, money **out** |
 | `danger` | `#FF3B30` | Real errors (shares red) |
+
+### The dark rooms
+
+Two screens leave the light canvas entirely, and they must not be mistaken for
+each other. Each paints a gradient on its scrolling content over a fixed floor in
+the gradient's terminal color, and calls `useThemeColor` (status bar) **and**
+`useFloorColor` (document background) — without the second, web Safari's
+collapsing toolbar and an overscroll bounce flash the light canvas at the edges.
+
+| Room | Gradient | Floor | Meaning |
+|---|---|---|---|
+| The Safe (`screens/Safe.tsx`) | `#0E4A37 → #0A3A2A → #06281E` | `#06281E` | The vault: money put away, in terminal green with gold |
+| The review (`screens/Review.tsx`) | `#2A1A3E → #1E1330 → #150D24` | `#150D24` | Reading, after hours — violet, so it is never the vault |
+
+The review's own tokens, for its cards and type. Carrot stays the accent, so the
+room still reads as this app; every text pair clears WCAG AA on its ground.
+
+| Token | Value | Use | On card |
+|---|---|---|---|
+| `review-top` | `#2A1A3E` | Gradient top, status-bar tint | — |
+| `review-mid` | `#1E1330` | Gradient middle | — |
+| `review-ink` | `#150D24` | The floor behind everything | — |
+| `review-card` | `#271A3B` | Cards and rows | — |
+| `review-tile` | `#31214A` | Figure tiles — `grouped`, after dark | — |
+| `review-text` | `#F7F4FB` | Primary text | 14.9:1 |
+| `review-muted` | `#B7A8CC` | Captions, sub-labels | 7.3:1 |
+
+- **A card in a dark room gets a hairline, not a shadow:** `ring-1 ring-inset
+  ring-white/10`. `shadow-card` is elevation for white cards on the gray canvas
+  and is invisible on a dark ground.
+- **Dividers go to `white/10`** rather than `separator`, which is a dark ink at
+  12% and disappears.
 
 **Rules:**
 

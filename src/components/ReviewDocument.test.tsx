@@ -38,7 +38,7 @@ function figureValue(container: HTMLElement, label: string): string | null {
   return term?.nextElementSibling?.textContent ?? null;
 }
 
-const DISCLAIMER = /It isn't financial advice\./;
+const DISCLAIMER = /Not financial advice\./;
 
 describe("ReviewDocument", () => {
   it("renders the subtitle, title and summary", () => {

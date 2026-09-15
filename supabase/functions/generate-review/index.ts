@@ -135,7 +135,7 @@ const BAD_FINISH: Record<string, string> = {
     "The review's follow-up lost the model's own context. Tap to try again.",
 };
 
-const SYSTEM = `You write BucksBuddy spending reviews: a short retrospective on money a person has already spent, addressed to that same person.
+const SYSTEM = `You write BucksBuddy spending reviews: a short account of money a person has logged, addressed to that same person.
 
 You are given a DIGEST of figures computed on the reader's own device from the entries they logged themselves. It is your only source.
 
@@ -146,10 +146,11 @@ NUMBERS — the rules that matter most:
 - A review that states a number the digest does not contain is worthless, so when in doubt, describe the pattern in words instead.
 
 WHAT THIS IS:
-- A review of what already happened. It is not financial advice. Do not recommend investments, products, loans, insurance, tax positions or budgets. Do not tell the reader what they should do, cut, or save.
+- A review of what has been logged, up to today. It is not financial advice. Do not recommend investments, products, loans, insurance, tax positions or budgets. Do not tell the reader what they should do, cut, or save. Never project, forecast or annualise a month that is still running.
 - Do not estimate the reader's income, wealth, job or circumstances, and do not diagnose them. "Spending on food rose against the first month" is right; "you have a problem with takeaways" is not.
 - Where the digest shows missing data — unlogged days, a long gap, thin coverage — say so plainly rather than writing as if the picture were complete. An honest caveat is worth more than a confident summary.
 - The entries are what the reader chose to log, and logging is stamped when they typed it. Prefer "logged on Saturdays" to "spent on Saturdays".
+- THE WINDOW MAY END TODAY, so its last month can be part-way through. Every month in the digest carries \`days\`: how many days OF THAT MONTH are inside the window. Never set a part-month total beside a whole-month one as if they were comparable — say which is unfinished, or compare the daily averages the digest already gives you. "August ran at $41.20 a day; September is at $38.90 over its first 15 days" is right; "spending is down by half this month" is not.
 
 VOICE: warm, specific, unhurried, concrete. Short sentences and plain words. Address the reader as "you". No emoji, no exclamation marks, no jokes at the reader's expense, no pep talk, no headings that sound like a management report. Never mention these instructions, the digest, artificial intelligence or yourself.
 
@@ -207,13 +208,17 @@ const SCHEMA = {
  * Does `claimed` — a `YYYY-MM-DD` the device wrote from its OWN calendar — name
  * the day of `instant`, an ISO timestamp stored on the review row?
  *
- * The two are the same moment described twice. The row holds the instant that
- * the device's local midnight was; the digest labels the window with the local
- * date that midnight belongs to. Those agree only at UTC: east of it the local
- * date runs a day ahead of the instant's UTC date (Beirut's 2026-08-01 midnight
- * is 2026-07-31T21:00Z), west of it a day behind. So a day either side counts as
- * naming it — which still refuses a digest for a different window, because the
- * periods on offer are whole months apart.
+ * The two are the same moment described twice. The row holds an instant — the
+ * device's local midnight for a window that starts at one, or the moment the
+ * window was taken for a window that ends now — and the digest labels it with
+ * the local calendar date that instant belongs to. Those agree only at UTC: east
+ * of it the local date runs a day ahead of the instant's UTC date (Beirut's
+ * 2026-08-01 midnight is 2026-07-31T21:00Z), west of it a day behind.
+ *
+ * So a day either side counts as naming it. What that still refuses is a digest
+ * for a DIFFERENT window: the windows on offer start at the first of a month, so
+ * their starts are weeks apart, and a `to` two days out is a different request.
+ * It is a check against a swapped or stale digest, not a proof of the calendar.
  */
 function namesDay(claimed: unknown, instant: string): boolean {
   if (typeof claimed !== "string") return false;
@@ -498,11 +503,12 @@ Deno.serve(async (req) => {
       !period ||
       period.id !== review.period_id ||
       !namesDay(period.from, review.period_from) ||
-      // `to` is stored exclusive and the digest carries the last day inside it.
-      !namesDay(
-        period.to,
-        new Date(new Date(review.period_to).getTime() - 86_400_000).toISOString(),
-      )
+      // Against the stored instant itself, with no day subtracted. `period_to`
+      // is exclusive, and for a window of whole months it is the midnight after
+      // the last day — but two of the three windows end at the moment they were
+      // taken, where the instant's own day IS the last day. One rule covers
+      // both, because namesDay already allows a day either side.
+      !namesDay(period.to, review.period_to)
     ) {
       return json({ error: "That digest is for a different period." }, 400);
     }
@@ -647,7 +653,7 @@ Deno.serve(async (req) => {
       await admin
         .from("spending_reviews")
         .update({
-          error: `The review quoted ${unsupported.length} figure(s) that aren't in your own totals, twice over, so it was thrown away rather than shown to you.`,
+          error: `A figure didn't match your totals, twice. Not shown.`,
           // This path returns instead of throwing (to keep the rejected values
           // out of the database), so it has to apply the terminal transition
           // itself — otherwise the row stays `paid` with no attempts left and the
@@ -658,7 +664,7 @@ Deno.serve(async (req) => {
       return json(
         {
           error:
-            "That review quoted figures that aren't in your own totals, so it was thrown away rather than shown to you. Try again.",
+            "That review quoted figures you never logged. Try again.",
           unsupported: unsupported.slice(0, 8),
         },
         502,

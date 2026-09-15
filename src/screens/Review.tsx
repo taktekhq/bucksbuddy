@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ChevronLeft, Check, Lock, Sparkles } from "lucide-react";
+import { useThemeColor } from "@/lib/useThemeColor";
+import { useFloorColor } from "@/lib/useFloorColor";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ReviewDocument } from "@/components/ReviewDocument";
 import { navigate } from "@/lib/router";
@@ -11,7 +13,8 @@ import {
   REPORT_PERIODS,
   reportPeriodLabel,
   reportWindowLabel,
-  isReportPeriodId,
+  periodName,
+  isKnownPeriodId,
   type ReportPeriodId,
 } from "@/lib/reportPeriod";
 import {
@@ -34,7 +37,12 @@ import {
 } from "@/lib/reviews";
 import type { SpendingReview, SpendingReviewRow } from "@/types/db";
 
-// The spending review.
+// The spending review, in its own dark room.
+//
+// Two of the three windows end NOW rather than at the start of this month, so a
+// review can answer "how is this month going". That makes it a snapshot: the
+// window a review was written for is stored on its own row, and the archive
+// labels each one with that window rather than with today's.
 //
 // Everything money-shaped happens on this device: the rows are read and
 // decrypted here, the arithmetic is done here (lib/reportDigest), and the
@@ -90,6 +98,9 @@ export function Review() {
 
   const [periodId, setPeriodId] = useState<ReportPeriodId>(DEFAULT_REPORT_PERIOD);
   const [facts, setFacts] = useState<ReportFacts | null>(null);
+  // When this account's logging started, as the last eligibility answer reported
+  // it. Only "all time" needs it, and only the database knows it.
+  const [firstEntryAt, setFirstEntryAt] = useState<string | null>(null);
   const [factsError, setFactsError] = useState<string | null>(null);
   const [rows, setRows] = useState<SpendingReviewRow[]>([]);
   const [unlocked, setUnlocked] = useState(false);
@@ -109,8 +120,8 @@ export function Review() {
   // it written, then seal it with the account's own key and store that.
   const write = useCallback(
     async (row: SpendingReviewRow) => {
-      if (!isReportPeriodId(row.period_id)) {
-        setError("That review is for a period this app version doesn't know.");
+      if (!isKnownPeriodId(row.period_id)) {
+        setError("That review is from a newer version of the app.");
         return;
       }
       setError(null);
@@ -125,9 +136,7 @@ export function Review() {
       // this returns before generateReview so the attempt is not spent.
       if (entries === null || entries.length === 0) {
         setBusy(null);
-        setError(
-          "Couldn't read your entries just yet. Nothing has been used up — tap the review below to try again.",
-        );
+        setError("Couldn't read your entries. Nothing used up — tap to retry.");
         return;
       }
       const digest = buildDigest(
@@ -190,9 +199,7 @@ export function Review() {
         await refreshRows();
         if (paid?.status === "paid") await write(paid);
         else if (paid?.status === "pending") {
-          setError(
-            "The payment hasn't confirmed yet. It'll appear below once it does.",
-          );
+          setError("The payment hasn't confirmed yet. It'll appear below.");
         }
         return;
       }
@@ -217,6 +224,7 @@ export function Review() {
       const { facts: f, error: e } = await fetchEligibility(periodId);
       if (!live) return;
       setFacts(f);
+      setFirstEntryAt(f?.firstEntryAt ?? null);
       setFactsError(e);
       posthog.capture("review_gate_seen", {
         period: periodId,
@@ -237,6 +245,9 @@ export function Review() {
     const { reviewId, url, free, error: startError } = await startReview(
       periodId,
       homeCurrency,
+      // Only "all time" reads this. It is held as its own state rather than read
+      // off `facts` at the call, so there is one place it can come from.
+      firstEntryAt,
     );
     if (startError !== null) {
       setBusy(null);
@@ -268,7 +279,7 @@ export function Review() {
     // A plain navigation to Stripe's hosted page: no third-party script runs in
     // the app, and no Content-Security-Policy entry is needed for it.
     window.location.href = url;
-  }, [periodId, homeCurrency, refreshRows, write]);
+  }, [periodId, homeCurrency, firstEntryAt, refreshRows, write]);
 
   const show = useCallback(
     async (row: SpendingReviewRow) => {
@@ -283,9 +294,7 @@ export function Review() {
         // states are worth a tap rather than an apology.
         if (row.status === "paid" || row.status === "ready") await write(row);
         else {
-          setError(
-            "That review was never written. If you were charged for it, get in touch and it'll be refunded.",
-          );
+          setError("That review was never written. Get in touch if you paid.");
         }
         return;
       }
@@ -304,10 +313,9 @@ export function Review() {
       <Shell>
         <Card>
           <div className="flex items-start gap-3">
-            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-label-secondary" />
-            <p className="text-[15px] leading-relaxed text-label">
-              Your amounts are locked on this device. Enter your encryption
-              passphrase in Settings and a review can read them.
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-review-muted" />
+            <p className="text-[15px] text-review-text">
+              Unlock your amounts in Settings to write a review.
             </p>
           </div>
         </Card>
@@ -319,7 +327,7 @@ export function Review() {
     <Shell>
       {busy !== null && (
         <Card>
-          <p className="text-center text-[15px] text-label" role="status">
+          <p className="text-center text-[15px] text-review-text" role="status">
             {busy}
           </p>
         </Card>
@@ -343,6 +351,7 @@ export function Review() {
           periodId={periodId}
           onPeriod={setPeriodId}
           facts={facts}
+          firstEntryAt={firstEntryAt}
           factsError={factsError}
           onBuy={buy}
         />
@@ -364,14 +373,52 @@ export function Review() {
   );
 }
 
-/** "August 2026" / "June 2026 – August 2026" for a stored review. */
+/**
+ * What a stored review covered: "This month vs last · August 2026 – September
+ * 2026". The name has to be there — two of the windows end when they were asked
+ * for, so their month spans can be identical and the dates alone would not say
+ * which review this is.
+ */
 function reviewWindowLabelFor(row: SpendingReviewRow): string {
-  return reportWindowLabel(new Date(row.period_from), new Date(row.period_to));
+  const window = reportWindowLabel(
+    new Date(row.period_from),
+    new Date(row.period_to),
+  );
+  // A row can carry a window this version has never heard of — a newer build
+  // wrote it — and then the dates are all there is to show.
+  return isKnownPeriodId(row.period_id)
+    ? `${periodName(row.period_id)} · ${window}`
+    : window;
 }
 
+// The review has its own dark room — a different mentality from the bright
+// daily tracker, and deliberately violet rather than the Safe's green vault, so
+// the two dark screens are never mistaken for one another. Carrot stays the
+// accent, so it still reads as this app after dark. The mechanics are the
+// Safe's: the gradient is painted on the scrolling content and a fixed floor
+// sits behind it, because a collapsing browser toolbar and an overscroll bounce
+// would otherwise flash the light body canvas through.
+const ROOM_BG =
+  "linear-gradient(180deg, #2A1A3E 0px, #1E1330 320px, #150D24 640px)";
+const ROOM_FLOOR = "#150D24";
+
 function Shell({ children }: { children: ReactNode }) {
+  // Tint the status bar to match the top of the room, and paint the document
+  // floor too — without the second one, web Safari's collapsing toolbar and an
+  // overscroll bounce flash the light canvas at the edges of the dark room. The
+  // Safe and the rabbit hole both do exactly this.
+  useThemeColor("#2A1A3E");
+  useFloorColor(ROOM_FLOOR);
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
+    <main
+      className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))] text-review-text"
+      style={{ background: ROOM_BG }}
+    >
+      <div
+        aria-hidden
+        className="fixed inset-0"
+        style={{ background: ROOM_FLOOR, zIndex: -1 }}
+      />
       <header className="relative flex items-center justify-center py-1">
         <button
           type="button"
@@ -381,7 +428,7 @@ function Shell({ children }: { children: ReactNode }) {
         >
           <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
         </button>
-        <h1 className="font-display text-base font-bold uppercase text-label-muted">
+        <h1 className="font-display text-base font-bold uppercase text-review-muted">
           Review
         </h1>
       </header>
@@ -390,26 +437,32 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
+// Cards get a hairline instead of a shadow: a drop shadow is invisible on a
+// dark ground, and the ring is what separates a card from the room behind it.
 function Card({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
+    <div className="flex flex-col gap-3 rounded-card bg-review-card p-4 ring-1 ring-inset ring-white/10">
       {children}
     </div>
   );
 }
 
-// The offer: what it covers, where this account stands against the bar, what
-// leaves the device, and the one button.
+// The offer: what it covers, where this account stands, what leaves the device,
+// and the one button. Every line of copy here is at most 70 characters — the
+// counters carry the detail, so the words only have to name things.
 function Offer({
   periodId,
   onPeriod,
   facts,
+  firstEntryAt,
   factsError,
   onBuy,
 }: {
   periodId: ReportPeriodId;
   onPeriod: (id: ReportPeriodId) => void;
   facts: ReportFacts | null;
+  /** When logging started, for the "all time" row. Null until it is known. */
+  firstEntryAt: string | null;
   factsError: string | null;
   onBuy: () => void;
 }) {
@@ -417,19 +470,18 @@ function Offer({
 
   return (
     <section className="flex flex-col gap-2">
-      <SectionHeader>A review of your spending</SectionHeader>
-      <div className="overflow-hidden rounded-card bg-surface shadow-card">
-        <div className="flex flex-col gap-2 p-4">
-          <p className="text-[15px] leading-relaxed text-label">
-            Your logged months, read back to you: where the money went, what
-            repeats, and what changed. Written once, kept for good.
-          </p>
-        </div>
+      <SectionHeader className="text-review-muted">
+        A review of your spending
+      </SectionHeader>
+      <div className="overflow-hidden rounded-card bg-review-card ring-1 ring-inset ring-white/10">
+        <p className="px-4 pt-4 text-[15px] text-review-text">
+          Your own numbers, read back to you.
+        </p>
 
         <div
           role="radiogroup"
           aria-label="What the review covers"
-          className="divide-y divide-separator border-y border-separator"
+          className="mt-4 divide-y divide-white/10 border-y border-white/10"
         >
           {REPORT_PERIODS.map((option) => (
             <button
@@ -438,11 +490,21 @@ function Offer({
               role="radio"
               aria-checked={option.id === periodId}
               onClick={() => onPeriod(option.id)}
-              className="press flex w-full items-center justify-between px-4 py-3 text-base text-label"
+              className="press flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
             >
-              <span>{reportPeriodLabel(option.id)}</span>
+              <span className="flex flex-col">
+                <span className="text-base text-review-text">
+                  {option.label}
+                </span>
+                <span className="text-xs text-review-muted">
+                  {reportPeriodLabel(option.id, undefined, firstEntryAt)}
+                </span>
+              </span>
               {option.id === periodId && (
-                <Check className="h-5 w-5 text-carrot" strokeWidth={2.5} />
+                <Check
+                  className="h-5 w-5 shrink-0 text-carrot"
+                  strokeWidth={2.5}
+                />
               )}
             </button>
           ))}
@@ -450,47 +512,48 @@ function Offer({
 
         <div className="flex flex-col gap-3 p-4">
           {factsError !== null && (
-            <p className="text-sm leading-relaxed text-expense">
-              Reviews aren&apos;t set up on this database yet. {factsError}
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-expense">Reviews aren&apos;t set up yet.</p>
+              <p className="break-words text-xs text-review-muted">{factsError}</p>
+            </div>
           )}
           {facts !== null && copy !== null && (
             <Standing facts={facts} copy={copy} />
           )}
 
-          <p className="text-xs leading-relaxed text-label-secondary">
-            Writing a review sends this period&apos;s totals — categories, dates,
-            counts and amounts — to Google&apos;s Gemini, which writes the text.
-            Your notes are never sent, nothing outside the period is sent, and the
-            finished review is encrypted with your own key before it&apos;s saved.
-          </p>
-
           <button
             type="button"
             disabled={copy === null || !copy.ok}
             onClick={onBuy}
-            className="press rounded-pill bg-carrot py-3.5 text-lg font-semibold text-surface shadow-carrot transition disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
+            className="press rounded-pill bg-carrot py-3.5 text-lg font-semibold text-surface shadow-carrot transition disabled:bg-white/10 disabled:text-review-muted disabled:shadow-none"
           >
             {copy === null
-              ? "Can't check your history right now"
+              ? "Can't check your history"
               : !copy.ok
                 ? "Not enough logged yet"
                 : REVIEW_BILLING === "off"
                   ? "Write my review"
                   : `Unlock a review · ${reviewPriceLabel()}`}
           </button>
-          <p className="text-center text-xs text-label-secondary">
-            {REVIEW_BILLING === "off"
-              ? "Free while this is being tried out, and limited to a few accounts."
-              : "One-time, per review. No subscription."}
-          </p>
+
+          {/* Two short lines rather than a paragraph of small print: the same
+              four facts — what leaves, what never does, what happens to the
+              result, what it costs — and neither line over 70 characters. */}
+          <div className="flex flex-col gap-0.5 text-center text-xs leading-relaxed text-review-muted">
+            <p>Totals only — Gemini writes it, your notes stay here.</p>
+            <p>
+              {REVIEW_BILLING === "off"
+                ? "Encrypted with your key. Free while it's being tried out."
+                : "Encrypted with your key. One-time, per review."}
+            </p>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-// Where this account stands: the blockers, in the server's own counts.
+// Where this account stands: the server's own counts, then what is missing.
 function Standing({
   facts,
   copy,
@@ -501,19 +564,19 @@ function Standing({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-label-secondary">Expenses logged</span>
-        <span className="font-numeric text-sm font-bold tabular-nums text-label">
+        <span className="text-sm text-review-muted">Expenses logged</span>
+        <span className="font-numeric text-sm font-bold tabular-nums text-review-text">
           {facts.spendCount} / {facts.minSpendEntries}
         </span>
       </div>
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-label-secondary">Days with entries</span>
-        <span className="font-numeric text-sm font-bold tabular-nums text-label">
+        <span className="text-sm text-review-muted">Days with entries</span>
+        <span className="font-numeric text-sm font-bold tabular-nums text-review-text">
           {facts.loggedDays} / {facts.periodDays}
         </span>
       </div>
       <div
-        className="h-1.5 overflow-hidden rounded-pill bg-grouped"
+        className="h-1.5 overflow-hidden rounded-pill bg-white/10"
         role="progressbar"
         aria-valuenow={Math.round(coverageRatio(facts) * 100)}
         aria-valuemin={0}
@@ -526,12 +589,12 @@ function Standing({
         />
       </div>
       {copy.blockers.map((blocker) => (
-        <p key={blocker} className="text-sm leading-relaxed text-label">
+        <p key={blocker} className="text-sm text-review-text">
           {blocker}
         </p>
       ))}
       {copy.warnings.map((warning) => (
-        <p key={warning} className="text-sm leading-relaxed text-label-secondary">
+        <p key={warning} className="text-sm text-review-muted">
           {warning}
         </p>
       ))}
@@ -560,19 +623,19 @@ function Archive({
 
   return (
     <section className="flex flex-col gap-2">
-      <SectionHeader>Your reviews</SectionHeader>
+      <SectionHeader className="text-review-muted">Your reviews</SectionHeader>
       {locked ? (
         <Card>
           <PassphraseForm
             id="review-passphrase-unlock"
             label="Enter your encryption passphrase"
-            hint="The same passphrase that unlocks your amounts — there isn't a second one. It's asked once each time you open the app, so a borrowed phone doesn't come with your reviews open, and it locks this screen rather than the review itself."
+            hint="The same one that unlocks your amounts."
             submitLabel="Unlock"
             onSubmit={onUnlock}
           />
         </Card>
       ) : null}
-      <div className="divide-y divide-separator overflow-hidden rounded-card bg-surface shadow-card">
+      <div className="divide-y divide-white/10 overflow-hidden rounded-card bg-review-card ring-1 ring-inset ring-white/10">
         {rows.map((row) => (
           <button
             key={row.id}
@@ -582,10 +645,10 @@ function Archive({
             className="press flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left disabled:opacity-60"
           >
             <span className="flex flex-col">
-              <span className="text-base text-label">
+              <span className="text-base text-review-text">
                 {reviewWindowLabelFor(row)}
               </span>
-              <span className="text-xs text-label-secondary">
+              <span className="text-xs text-review-muted">
                 {statusLine(row)}
               </span>
             </span>
@@ -593,7 +656,7 @@ function Archive({
               <Check className="h-5 w-5 shrink-0 text-carrot" strokeWidth={2.5} />
             ) : (
               <Sparkles
-                className="h-4 w-4 shrink-0 text-label-secondary"
+                className="h-4 w-4 shrink-0 text-review-muted"
                 aria-hidden
               />
             )}
@@ -609,7 +672,7 @@ function statusLine(row: SpendingReviewRow): string {
   const price = reviewPrice(row);
   if (row.status === "refunded") return `Refunded · ${price}`;
   if (row.status === "failed") return row.error ?? "Didn't complete";
-  if (row.status === "pending") return "Not completed — nothing was charged";
+  if (row.status === "pending") return "Not paid — nothing was charged";
   // A free grant is priced at zero and was never paid for, so it does not get
   // told it was: reviewPrice() renders that row as "Free".
   if (!row.body_enc) {
@@ -650,7 +713,7 @@ function PassphraseForm({
         else setFailed(true);
       }}
     >
-      <label className="text-sm font-semibold text-label" htmlFor={id}>
+      <label className="text-sm font-semibold text-review-text" htmlFor={id}>
         {label}
       </label>
       <input
@@ -659,14 +722,14 @@ function PassphraseForm({
         value={value}
         autoComplete="off"
         onChange={(e) => setValue(e.target.value)}
-        className="rounded-card bg-grouped px-4 py-3 text-base text-label"
+        className="rounded-card bg-review-tile px-4 py-3 text-base text-review-text"
       />
-      <p className="text-xs leading-relaxed text-label-secondary">{hint}</p>
+      <p className="text-xs text-review-muted">{hint}</p>
       {failed && <p className="text-sm text-expense">That didn&apos;t match.</p>}
       <button
         type="submit"
         disabled={value === ""}
-        className="press rounded-pill bg-carrot py-3 text-base font-semibold text-surface transition disabled:bg-separator disabled:text-label-secondary"
+        className="press rounded-pill bg-carrot py-3 text-base font-semibold text-surface transition disabled:bg-white/10 disabled:text-review-muted"
       >
         {submitLabel}
       </button>

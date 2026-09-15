@@ -114,8 +114,23 @@ async function verifyWindowCheck() {
   check("Baker Island (-12): still behind",
     namesDay("2026-07-31", "2026-08-01T12:00:00.000Z"), true);
 
-  // And it still refuses a digest for a different window: the periods on offer
-  // are whole months apart, so a day of slack cannot confuse two of them.
+  // A window that ends NOW stores a mid-day instant, not a midnight — which is
+  // the case the first version of this block missed entirely, because every
+  // instant in it was midnight-aligned. The digest labels that instant with the
+  // local date it belongs to, so the check has to hold without subtracting a day.
+  check("a mid-day instant, named by its own UTC date",
+    namesDay("2026-09-15", "2026-09-15T11:30:00.000Z"), true);
+  check("Beirut (+03) naming the same mid-day moment",
+    namesDay("2026-09-15", "2026-09-15T08:30:00.000Z"), true);
+  check("Kiritimati (+14) naming it from the previous UTC day",
+    namesDay("2026-09-15", "2026-09-14T21:30:00.000Z"), true);
+  check("Los Angeles (-07) naming it from the next UTC day",
+    namesDay("2026-09-15", "2026-09-16T04:30:00.000Z"), true);
+  check("a mid-day instant two days out is still refused",
+    namesDay("2026-09-17", "2026-09-15T11:30:00.000Z"), false);
+
+  // And it still refuses a digest for a different window: the windows on offer
+  // start at the first of a month, so their starts are weeks apart.
   check("a month early is refused", namesDay("2026-07-01", "2026-08-01T00:00:00.000Z"), false);
   check("a month late is refused", namesDay("2026-09-01", "2026-08-01T00:00:00.000Z"), false);
   check("two days out is refused", namesDay("2026-08-03", "2026-08-01T00:00:00.000Z"), false);

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import { readAllPages } from "@/lib/pagedRead";
 import { navigate } from "@/lib/router";
 import { clearCache, loadCache, saveCache } from "@/lib/cache";
 import {
@@ -124,7 +125,10 @@ type Store = {
 // project already relies on being under the API's own row ceiling.
 const REVIEW_PAGE = 500;
 // A stop so a misbehaving page loop can't spin forever. 250k entries in one
-// window is far past anything real.
+// window is far past anything real — and an "all time" review really does ask
+// for the whole account, so this is now a ceiling that could in principle be
+// met rather than a formality. Meeting it returns null (see below): a review
+// totalled from a truncated read would be wrong with nothing to show it.
 const REVIEW_MAX_PAGES = 500;
 
 const StoreContext = createContext<Store | null>(null);
@@ -567,30 +571,33 @@ export function StoreProvider({
     // screen's — and unwrapping costs a 600k-iteration derive. So a screen that
     // asks this early legitimately gets "not yet", never "nothing there".
     if (!key) return null;
-    const rows: TransactionRow[] = [];
-    for (let page = 0; page < REVIEW_MAX_PAGES; page++) {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .gte("occurred_at", from.toISOString())
-        .lt("occurred_at", to.toISOString())
-        .order("occurred_at", { ascending: false })
-        // `id` breaks the tie. Entries logged in the same second — and a page
-        // boundary landing inside a group of them — would otherwise be ordered
-        // arbitrarily per query, so one row could come back on two pages and
-        // another on none. The totals would be wrong and nothing downstream
-        // could tell: the guard only checks the model quoted the digest, not
-        // that the digest counted every row.
-        .order("id", { ascending: false })
-        .range(page * REVIEW_PAGE, page * REVIEW_PAGE + REVIEW_PAGE - 1);
-      // A failed page must not read as the end of the window: that would silently
-      // truncate the totals a review is about to be written from.
-      if (error) return null;
-      const batch = (data ?? []) as TransactionRow[];
-      rows.push(...batch);
-      if (batch.length < REVIEW_PAGE) break;
-    }
-    return Promise.all(rows.map((r) => rowToTransaction(r, key)));
+    // Decrypted a page at a time rather than all at the end: an all-time window
+    // can be the whole account, and holding every raw row and every decrypted
+    // row at once — three WebCrypto calls per row — is the one place this could
+    // run a phone out of memory. readAllPages turns a failed page or a read that
+    // runs out of pages into null, which is what the callers already expect.
+    return readAllPages<Transaction>(
+      async (rangeFrom, rangeTo) => {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("*")
+          .gte("occurred_at", from.toISOString())
+          .lt("occurred_at", to.toISOString())
+          .order("occurred_at", { ascending: false })
+          // `id` breaks the tie. Entries logged in the same second — and a page
+          // boundary landing inside a group of them — would otherwise be ordered
+          // arbitrarily per query, so one row could come back on two pages and
+          // another on none. The totals would be wrong and nothing downstream
+          // could tell: the guard only checks the model quoted the digest, not
+          // that the digest counted every row.
+          .order("id", { ascending: false })
+          .range(rangeFrom, rangeTo);
+        if (error) return null;
+        const batch = (data ?? []) as TransactionRow[];
+        return Promise.all(batch.map((r) => rowToTransaction(r, key)));
+      },
+      { pageSize: REVIEW_PAGE, maxPages: REVIEW_MAX_PAGES },
+    );
   }, []);
 
   const sealReview = useCallback(async (review: unknown) => {

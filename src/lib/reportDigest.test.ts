@@ -86,7 +86,9 @@ describe("buildDigest — the period it declares", () => {
     expect(MAIN.version).toBe(1);
     expect(MAIN.period).toEqual({
       id: "past_3_months",
-      label: "June 2026 – August 2026",
+      // Named as well as dated: two of the windows on offer end today, so their
+      // dates alone would not tell the model which one it is reading.
+      label: "Past 3 finished months · June 2026 – August 2026",
       from: "2026-06-01",
       // `to` is exclusive on the way in and inclusive on the way out, so the
       // label reads as the last day actually covered.
@@ -346,6 +348,77 @@ describe("buildDigest — per calendar month", () => {
   });
 });
 
+describe("buildDigest — a window that ends today", () => {
+  // Two of the three windows on offer include the current, unfinished month, so
+  // a month's `days` is how many of its days are INSIDE the window, not how many
+  // the calendar has. The model is told to copy these figures verbatim, so a
+  // daily average divided by 31 on the 15th would be a plain falsehood.
+  const from = new Date(2026, 7, 1); // 1 August
+  const to = new Date(2026, 8, 15, 14, 30); // 15 September, mid-afternoon
+  const rows = [
+    out("groceries", 31000, at(2026, 7, 4)), // August
+    out("groceries", 15000, at(2026, 8, 3)), // September
+  ];
+  const digest = buildDigest(rows, win(from, to, "this_vs_last"), "USD");
+
+  it("counts the part-month as the days it actually covers", () => {
+    expect(digest.months.map((m) => m.key)).toEqual(["2026-08", "2026-09"]);
+    // August in full, September up to and including today.
+    expect(digest.months.map((m) => m.days)).toEqual([31, 15]);
+  });
+
+  it("divides the part-month's spending by those days, not by the month", () => {
+    // 15000 / 15 = 1000, not 15000 / 30 = 500.
+    expect(digest.months[1].dailyAverage).toEqual({
+      cents: 1000,
+      display: "$10.00",
+    });
+    expect(digest.months[0].dailyAverage).toEqual({
+      cents: 1000, // round(31000 / 31)
+      display: "$10.00",
+    });
+  });
+
+  it("counts coverage to today rather than to the end of the month", () => {
+    // 31 days of August + 15 of September.
+    expect(digest.period.days).toBe(46);
+    expect(digest.coverage.days).toBe(46);
+    expect(digest.period.to).toBe("2026-09-15");
+  });
+});
+
+describe("buildDigest — a window anchored mid-month", () => {
+  // "All time" starts at the account's first entry, whatever day and hour that
+  // was. Every month the window touches has to appear exactly once — including
+  // February, which a naive month-step from the 31st skips.
+  const from = new Date(2026, 0, 31, 9, 30); // 31 January, 09:30
+  const to = new Date(2026, 2, 3, 18, 0); // 3 March
+  const digest = buildDigest(
+    [out("groceries", 5000, at(2026, 1, 10))],
+    win(from, to, "all_time"),
+    "USD",
+  );
+
+  it("emits every month between the anchor and now, February included", () => {
+    expect(digest.months.map((m) => m.key)).toEqual([
+      "2026-01",
+      "2026-02",
+      "2026-03",
+    ]);
+  });
+
+  it("counts only the days of the first and last months inside the window", () => {
+    // 31 January alone, all of February, then 1-3 March.
+    expect(digest.months.map((m) => m.days)).toEqual([1, 28, 3]);
+    expect(digest.coverage.days).toBe(32);
+  });
+
+  it("names the window from the anchor, not from the month it sits in", () => {
+    expect(digest.period.from).toBe("2026-01-31");
+    expect(digest.period.to).toBe("2026-03-03");
+  });
+});
+
 describe("buildDigest — categories", () => {
   it("ranks base categories by total, breaking ties on the number of entries", () => {
     expect(
@@ -484,21 +557,47 @@ describe("buildDigest — first month against last", () => {
         c.category,
         c.first.cents,
         c.last.cents,
-        c.changePct,
+        c.changePctPerDay,
         c.direction,
       ]),
     ).toEqual([
-      // Sorted by what was spent in the last month.
+      // Sorted by what was spent in the last month. The percentage is the change
+      // in SPEND PER DAY, not in the totals — June has 30 days and August 31, so
+      // an unchanged total is a slightly lower daily rate, and that is the point:
+      // the last month of a window that ends today is usually part-way through.
       ["Rent", 0, 60000, null, "new"], //           absent in June
-      ["Groceries", 15000, 7000, -53.3, "down"],
-      ["Food", 2500, 2500, 0, "flat"],
-      ["Coffee", 800, 1600, 100, "up"],
+      ["Groceries", 15000, 7000, -54.8, "down"], // 500/day -> 226/day
+      ["Food", 2500, 2500, -2.4, "down"], //        83/day -> 81/day
+      ["Coffee", 800, 1600, 92.6, "up"], //         27/day -> 52/day
       ["Fees", 4800, 0, -100, "down"], //           absent in August
       ["Transport", 6000, 0, -100, "down"],
       ["Gym", 6000, 0, -100, "down"],
     ]);
     expect(MAIN.monthOverMonth[0].last.display).toBe("$600.00");
     expect(MAIN.monthOverMonth[1].first.display).toBe("$150.00");
+  });
+
+  it("compares a part-month on its rate, not on its smaller total", () => {
+    // The case the whole change exists for: on the 15th, spending at exactly
+    // last month's rate must not read as a halving.
+    const digest = buildDigest(
+      [
+        out("groceries", 31000, at(2026, 7, 4)), // all August, $10.00/day
+        out("groceries", 15000, at(2026, 8, 3)), // 15 days of September, $10.00/day
+      ],
+      win(new Date(2026, 7, 1), new Date(2026, 8, 15, 14, 30), "this_vs_last"),
+      "USD",
+    );
+    const [groceries] = digest.monthOverMonth;
+    expect(groceries.first.cents).toBe(31000);
+    expect(groceries.last.cents).toBe(15000);
+    // The totals halved; the rate did not move, so neither does the verdict.
+    expect(groceries.firstDays).toBe(31);
+    expect(groceries.lastDays).toBe(15);
+    expect(groceries.firstPerDay).toEqual({ cents: 1000, display: "$10.00" });
+    expect(groceries.lastPerDay).toEqual({ cents: 1000, display: "$10.00" });
+    expect(groceries.changePctPerDay).toBe(0);
+    expect(groceries.direction).toBe("flat");
   });
 
   it("has nothing to compare in a one-month window", () => {

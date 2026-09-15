@@ -85,6 +85,12 @@ drops a table an earlier copy of 0009 created: `review_access`, holding a second
 for the archive. There is only one passphrase now (see **The archive lock** below), so the
 table is gone. On a database that never had it, this is a no-op.
 
+Finally [`0011_review_periods.sql`](supabase/migrations/0011_review_periods.sql): the three
+review windows, two of which include the current month. It widens the `period_id` check (the
+superseded ids stay legal, so a stored review is never orphaned) and teaches
+`report_eligibility()` that a **null** window start means "from this account's first entry",
+which is what "all time" needs. Re-runnable, and required before a review can be asked for.
+
 > **If you ran an earlier copy of 0009** — one whose `price_cents` check read `> 0` — a
 > free review cannot be written, because a free grant is priced at zero. Either re-run
 > 0009 on a database with no reviews yet, or widen the constraint in place:
@@ -219,13 +225,35 @@ simple, recoverable experience, while the privacy-conscious can lock the operato
 
 ## Spending reviews
 
-One optional extra: a written review of a finished month, or of the three months ending
-with it. Nothing that already worked is behind it.
+One optional extra: a written review of what you have logged. Nothing that already
+worked is behind it.
 
 **Where it is.** A sparkles icon in Home's nav bar, left of the Safe and Settings icons,
-opens the review screen (`#/review`). It shows for every signed-in account, including ones
-that cannot have a review yet — the screen's other job is to say where an account stands
-against the bar, and that is the only way anyone finds out.
+opens the review screen (`#/review`) — its own dark violet room, distinct from the Safe's
+green vault (see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md)). It shows for every
+signed-in account, including ones that cannot have a review yet: the screen's other job is
+to say where an account stands against the bar, and that is the only way anyone finds out.
+
+**The three windows.** Two of them include the current, unfinished month, because "how is
+this month going" is the question a window that stops on the 1st cannot answer.
+
+| Window | Covers | Stored as |
+|---|---|---|
+| This month vs last | The 1st of last month → now | `this_vs_last` |
+| Past 3 months | The 1st of the month two back → now | `last_3_months` |
+| All time | The account's first entry → now | `all_time` |
+
+That makes a review a **snapshot, not a finished document**: asking again tomorrow covers a
+day more. Each review stores the window it was written for, so the archive labels it with
+that window rather than with today's — *"This month vs last · August 2026 – September
+2026"*. The two superseded windows (`last_month`, `past_3_months`, both whole finished
+months) stay readable; nothing offers them.
+
+Because a window can end mid-month, every per-month figure carries how many of that month's
+days are **inside** the window, and the month-over-month comparison is computed on the
+**daily rate** rather than the totals. Otherwise, spending at exactly last month's rate
+would read as "down 50%" on the 15th — and the model is told to copy these figures
+verbatim, so that would have been handed over as a fact.
 
 **Free, and allowlisted, while it is being tried out.** The `REVIEW_ALLOWLIST` secret on
 the `review-start` function names the accounts that may have one, by email or by auth user
@@ -241,12 +269,21 @@ browser, so the rule holds even with devtools open — and so it can count every
 account has rather than the 500 the app keeps in memory:
 
 - at least **40 logged expenses** inside the window (income and Safe transfers don't count), and
-- **history that reaches back to the start of the window** — a month of logging behind you.
+- **history that reaches back to the start of the window** — logging that was already going
+  when the window opened. All time is exempt: it *starts* at the first entry, so it covers
+  itself by construction.
 
 A window with a lot of unlogged days is a **warning, not a refusal**: a thin month is still
-the customer's call to buy, and the review is told to say so in its own text. Eligibility
-needs only counts and dates, which is lucky — the amounts are encrypted per-column and the
-server genuinely cannot read them.
+the customer's call, and the review is told to say so in its own text. (Not for all time,
+where the denominator is the account's whole life — an account that logged diligently for
+four months but opened two years ago is not "thin".) Eligibility needs only counts and
+dates, which is lucky — the amounts are encrypted per-column and the server genuinely
+cannot read them.
+
+Asking for all time sends a **null** window start, and the database resolves it to the first
+entry (migration 0011): only it knows when that was, and a floor date guessed in the browser
+would measure coverage against decades the account did not exist for. `review-start` then
+checks the window the browser claims really does start there.
 
 **What happens, in order.**
 
@@ -318,6 +355,10 @@ set `status` to `ready` — remembering that the body is gone, so the customer w
 generation (`attempts` may need lowering too).
 
 ### Setting it up (free, allowlisted — what is deployed today)
+
+Migrations first: `0009`, then `0010`, then `0011` (see **Run the database migration**
+above). A review cannot be asked for until 0011 is applied — the window ids it stores are
+refused by 0009's check constraint, and "all time" needs 0011's null-anchored eligibility.
 
 Two Edge Functions (Supabase Dashboard → **Edge Functions → Deploy a new function → Via
 Editor**; name each one exactly as below and paste the file). `SUPABASE_URL`,
@@ -439,11 +480,12 @@ src/lib/                supabase client, store (in-memory cache), router, useSes
                         crypto + e2e (encryption vault), currency/money/dates/csv/categories,
                         stats + recurring + notes (pure aggregations over the decrypted rows),
                         reportPeriod/reportEligibility/reportDigest/reviews
-                        (the spending review)
+                        (the spending review), pagedRead (read every page or null)
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0007_currencies.sql, 0008_drop_legacy.sql,
-                        0009_spending_reviews.sql, 0010_drop_review_access.sql
+                        0009_spending_reviews.sql, 0010_drop_review_access.sql,
+                        0011_review_periods.sql
 supabase/functions/     delete-account, review-start, stripe-webhook, generate-review
 docs/DESIGN_SYSTEM.md   reusable design system
 ```
