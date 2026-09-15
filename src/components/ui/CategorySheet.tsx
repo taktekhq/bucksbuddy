@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { InOutToggle } from "@/components/ui/InOutToggle";
 import { CategoryGrid } from "@/components/ui/CategoryGrid";
+import { useFloorColor } from "@/lib/useFloorColor";
 import {
   categoriesFor,
   categoryColor,
@@ -12,6 +13,10 @@ import {
   splitCategory,
   subcategoriesFor,
 } from "@/lib/categories";
+
+// The sheet's own surface (tailwind `surface`), mirrored onto the document
+// underneath while the sheet is open — see the useFloorColor call below.
+const SHEET_FLOOR = "#FFFFFF";
 
 type Props = {
   open: boolean;
@@ -43,6 +48,15 @@ export function CategorySheet({
     if (open) setExpanded(null);
   }, [open]);
 
+  // A standalone iOS app doesn't get the whole screen: the strip above the home
+  // indicator is outside the web view, and iOS paints it with the *document's*
+  // background rather than anything the page draws. So a white sheet pinned to
+  // `bottom: 0` still reads as floating above the bottom of the screen, with a
+  // band of light canvas under it. Painting the floor to match closes that seam
+  // — the same trick the Safe uses for its dark page. Everywhere the app gets
+  // the full viewport this is a no-op.
+  useFloorColor(open ? SHEET_FLOOR : null);
+
   function handleDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose();
   }
@@ -69,7 +83,7 @@ export function CategorySheet({
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md touch-none rounded-t-[28px] bg-surface px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-2 shadow-card"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[85dvh] max-w-md touch-none flex-col rounded-t-[28px] bg-surface px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-2 shadow-card"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -80,26 +94,31 @@ export function CategorySheet({
             onDragEnd={handleDragEnd}
           >
             {/* Grabber. */}
-            <div className="mx-auto mb-4 h-1.5 w-10 cursor-grab rounded-full bg-grouped" />
+            <div className="mx-auto mb-4 h-1.5 w-10 shrink-0 cursor-grab rounded-full bg-grouped" />
 
             {expanded ? (
-              <SubcategoryStep
-                baseId={expanded}
-                selected={selected}
-                onBack={() => setExpanded(null)}
-                onSelect={onSelect}
-              />
+              <SheetScroller>
+                <SubcategoryStep
+                  baseId={expanded}
+                  selected={selected}
+                  onBack={() => setExpanded(null)}
+                  onSelect={onSelect}
+                />
+              </SheetScroller>
             ) : (
               <>
-                {/* Categories on top (variable height). */}
-                <CategoryGrid
-                  categories={categoriesFor(isIncome)}
-                  selected={selectedBase}
-                  onSelect={pickCategory}
-                />
+                {/* Categories on top (variable height, scrolls when the grid is
+                    taller than the capped sheet). */}
+                <SheetScroller>
+                  <CategoryGrid
+                    categories={categoriesFor(isIncome)}
+                    selected={selectedBase}
+                    onSelect={pickCategory}
+                  />
+                </SheetScroller>
 
                 {/* In/Out pinned at the bottom. */}
-                <div className="mt-4">
+                <div className="mt-4 shrink-0">
                   <InOutToggle isIncome={isIncome} onChange={onChangeDirection} />
                 </div>
               </>
@@ -108,6 +127,23 @@ export function CategorySheet({
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+// The scrolling middle of the sheet. Two things have to be undone locally for a
+// scroll gesture to survive: the sheet sets `touch-action: none` for the drag,
+// and framer-motion opens a drag from a *bubbling* pointerdown on the sheet.
+// Stopping that event in the capture phase — before it reaches framer's
+// listener — keeps drag-to-dismiss working everywhere else on the sheet (the
+// grabber, the In/Out toggle, the padding around them) while the list scrolls.
+function SheetScroller({ children }: { children: ReactNode }) {
+  return (
+    <div
+      onPointerDownCapture={(e) => e.stopPropagation()}
+      className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain"
+    >
+      {children}
+    </div>
   );
 }
 

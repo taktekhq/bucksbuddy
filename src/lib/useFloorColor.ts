@@ -11,8 +11,12 @@ import { useEffect } from "react";
 // Both elements get the color: painting <html> alone would stop <body>'s
 // background from propagating to the canvas, and body would then paint its
 // light canvas over the page's z-index:-1 floor (see index.css).
-export function useFloorColor(color: string) {
+//
+// Pass null to leave the document alone — for a floor that only applies while
+// something is on screen (the category sheet paints one while it's open).
+export function useFloorColor(color: string | null) {
   useEffect(() => {
+    if (color === null) return;
     const html = document.documentElement.style;
     const body = document.body.style;
     const prev = { html: html.background, body: body.background };

@@ -94,6 +94,56 @@ describe("CategorySheet", () => {
     expect(onChangeDirection).toHaveBeenCalledWith(true);
   });
 
+  it("paints the document floor white while open, and restores it on close", () => {
+    document.body.style.background = "rgb(242, 242, 247)";
+    const { rerender } = render(
+      <CategorySheet
+        open={false}
+        isIncome={false}
+        selected={null}
+        onChangeDirection={() => {}}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(document.body.style.background).toBe("rgb(242, 242, 247)");
+
+    const props = {
+      isIncome: false,
+      selected: null,
+      onChangeDirection: () => {},
+      onSelect: () => {},
+      onClose: () => {},
+    };
+    rerender(<CategorySheet open {...props} />);
+    // Matches the sheet's own surface, so the iOS home-indicator inset below
+    // the sheet stops reading as a gap under it.
+    expect(document.body.style.background).toBe("rgb(255, 255, 255)");
+    expect(document.documentElement.style.background).toBe("rgb(255, 255, 255)");
+
+    rerender(<CategorySheet open={false} {...props} />);
+    expect(document.body.style.background).toBe("rgb(242, 242, 247)");
+  });
+
+  it("keeps the grid scrollable without letting it start a sheet drag", () => {
+    const { container } = setup();
+    const sheet = getDraggableNode(container);
+    const scroller = sheet.querySelector(".overflow-y-auto") as HTMLElement;
+    expect(scroller).toBeInTheDocument();
+
+    // framer-motion opens a drag from a bubbling pointerdown on the sheet; the
+    // scroller stops it in the capture phase so the gesture scrolls instead.
+    const seen: string[] = [];
+    sheet.addEventListener("pointerdown", () => seen.push("sheet"));
+    fireEvent.pointerDown(screen.getByRole("button", { name: /Groceries/ }));
+    expect(seen).toEqual([]);
+
+    // Anything outside the scroller still reaches the sheet, so drag-to-dismiss
+    // keeps working from the grabber and the In/Out toggle.
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Out" }));
+    expect(seen).toEqual(["sheet"]);
+  });
+
   it("closes when the backdrop is clicked", () => {
     const { onClose, container } = setup();
     // The backdrop is the first fixed-inset overlay.
