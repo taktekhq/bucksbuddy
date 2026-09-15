@@ -63,28 +63,35 @@ function json(body: unknown, status: number): Response {
 }
 
 // The client computes the window from the user's own local calendar, which this
-// function cannot see, so the window is checked by LENGTH: a span only possible
-// for the period that was asked for. That stops a request buying "this month vs
-// last" and being handed a review of five years.
+// function cannot see. Both windows on offer are CLAMPED to the account's first
+// entry, so their length is whatever the account's history is — a length
+// whitelist could no longer identify either one. What is checked instead:
 //
-// Two of the windows end at the moment they are asked for, so their length
-// depends on how far into the month it is: "this vs last" is all of last month
-// plus 0-31 elapsed days (February through a 31-day month, hence 28-62), and
-// "past 3 months" is the two previous months plus those elapsed days (the
-// shortest pair being Jan+Feb at 59, the longest Jul+Aug at 62). A day of slack
-// either side absorbs a timezone offset and the rounding below.
+//   * the span does not exceed what the review could possibly cover (below),
+//   * the window does not reach into the future,
+//   * it does not start before the account did (verified against the account's
+//     real first entry, further down).
 //
-// "All time" is anchored on the account's first entry, so its length is whatever
-// the account's history is. There is nothing to whitelist: the cap is a sanity
-// bound, not a rule.
-const WINDOW_DAYS: Record<string, { min: number; max: number }> = {
-  this_vs_last: { min: 27, max: 63 },
-  last_3_months: { min: 58, max: 94 },
-  all_time: { min: 0, max: 20_000 },
-  // Superseded windows, kept so a client that has not reloaded yet still works.
-  last_month: { min: 28, max: 31 },
-  past_3_months: { min: 89, max: 92 },
+// The recent review reaches three whole months back plus the elapsed part of
+// this one: at most 31+31+31+31 = 124 days, and a couple of days of slack for a
+// timezone offset. All time is whatever the history is, so its bound is a sanity
+// check rather than a rule. The superseded ids keep their original bands, for a
+// client that has not reloaded yet.
+const MAX_WINDOW_DAYS: Record<string, number> = {
+  last_3_months: 126,
+  all_time: 20_000,
+  this_vs_last: 63,
+  last_month: 31,
+  past_3_months: 92,
 };
+
+// Reviews one account may have per calendar month (UTC).
+//
+// ONE for a paying customer, which is what "no more than $5 a month" means with
+// a $5 review. TEN for an allowlisted account, where the constraint is not money
+// but the owner's own model quota: the cap is there so a stuck client cannot
+// mint reviews in a loop, and a tester needs room to iterate.
+const REVIEWS_PER_MONTH = { free: 10, paid: 1 };
 
 // How many unpaid checkouts one account may leave lying around per hour. Stops
 // a stuck client (or a bored one) from filling the table with pending rows.
@@ -109,6 +116,24 @@ function isAllowlisted(email: string | undefined, userId: string): boolean {
 }
 
 const DAY_MS = 86_400_000;
+
+/** The current UTC calendar month, and the day the next one starts. */
+function monthBounds(now: Date): { start: string; nextLabel: string } {
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0),
+  );
+  const next = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0),
+  );
+  return {
+    start: start.toISOString(),
+    nextLabel: next.toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "long",
+      timeZone: "UTC",
+    }),
+  };
+}
 
 type Body = {
   period_id?: unknown;
@@ -152,8 +177,10 @@ Deno.serve(async (req) => {
     // --- validate the requested window ---
     const body = (await req.json().catch(() => ({}))) as Body;
     const periodId = String(body.period_id ?? "");
-    const window = WINDOW_DAYS[periodId];
-    if (!window) return json({ error: "Unknown review period." }, 400);
+    const maxDays = MAX_WINDOW_DAYS[periodId];
+    if (maxDays === undefined) {
+      return json({ error: "Unknown review period." }, 400);
+    }
 
     const from = new Date(String(body.period_from ?? ""));
     const to = new Date(String(body.period_to ?? ""));
@@ -161,9 +188,7 @@ Deno.serve(async (req) => {
       return json({ error: "Bad review period." }, 400);
     }
     const days = Math.round((to.getTime() - from.getTime()) / DAY_MS);
-    if (days < window.min || days > window.max) {
-      return json({ error: "Bad review period." }, 400);
-    }
+    if (days > maxDays) return json({ error: "Bad review period." }, 400);
     // Two of the windows end now, so "finished" is not the rule — but a window
     // reaching into the future is still nonsense. A day of slack absorbs a clock
     // that disagrees with ours.
@@ -191,19 +216,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // An all-time window is whatever the client says it is, unless we check it:
-    // the length band cannot bound it, and eligibility was counted from the
-    // account's own first entry. `facts.firstEntryAt` is that instant, so the
-    // claimed start has to match it — a day of slack for the timezone the client
-    // computed in.
-    if (periodId === "all_time") {
-      const firstEntry = Date.parse(String(facts.firstEntryAt ?? ""));
-      if (Number.isNaN(firstEntry)) {
-        return json({ error: "Nothing logged yet." }, 403);
-      }
-      if (Math.abs(from.getTime() - firstEntry) > DAY_MS) {
-        return json({ error: "Bad review period." }, 400);
-      }
+    // Neither window may start before the account did, and eligibility was
+    // counted from the same anchor — `facts.firstEntryAt` is the account's real
+    // first entry, whoever asked. A day of slack for the timezone the client
+    // computed in. All time has to start AT it; the recent review may start
+    // later (it reaches three months back at most) but never earlier.
+    const firstEntry = Date.parse(String(facts.firstEntryAt ?? ""));
+    if (Number.isNaN(firstEntry)) {
+      return json({ error: "Nothing logged yet." }, 403);
+    }
+    if (from.getTime() < firstEntry - DAY_MS) {
+      return json({ error: "Bad review period." }, 400);
+    }
+    if (
+      periodId === "all_time" &&
+      Math.abs(from.getTime() - firstEntry) > DAY_MS
+    ) {
+      return json({ error: "Bad review period." }, 400);
     }
 
     const admin = createClient(url, serviceKey);
@@ -234,6 +263,33 @@ Deno.serve(async (req) => {
     if (pending >= MAX_PENDING_PER_HOUR) {
       return json(
         { error: "Too many checkouts started just now. Try again shortly." },
+        429,
+      );
+    }
+
+    // --- one review a month ---
+    // The spend cap, and it has to live here: a client cannot be trusted with
+    // it, and it is the only thing standing between a tapped button and an
+    // unbounded bill (a charged one for a customer, a model bill for the owner).
+    // Refunded rows do not count — that review was given back.
+    const month = monthBounds(new Date());
+    const { count: thisMonth, error: monthErr } = await admin
+      .from("spending_reviews")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .neq("status", "refunded")
+      .gte("created_at", month.start);
+    // Fail closed, like the limit above: a null count coalesced to zero would
+    // switch the cap off exactly when the database is struggling.
+    if (monthErr || thisMonth === null) {
+      return json({ error: "Could not start a review. Try again shortly." }, 503);
+    }
+    const allowance = free ? REVIEWS_PER_MONTH.free : REVIEWS_PER_MONTH.paid;
+    if (thisMonth >= allowance) {
+      return json(
+        {
+          error: `That's your review for this month. The next one opens ${month.nextLabel}.`,
+        },
         429,
       );
     }

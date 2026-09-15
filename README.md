@@ -234,20 +234,32 @@ green vault (see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md)). It shows for
 signed-in account, including ones that cannot have a review yet: the screen's other job is
 to say where an account stands against the bar, and that is the only way anyone finds out.
 
-**The three windows.** Two of them include the current, unfinished month, because "how is
-this month going" is the question a window that stops on the 1st cannot answer.
+**Two reviews, not a choice of window.** Picking a span was a decision nobody could make
+well — you cannot know in advance which one writes a better review — so the offer is two
+products, each answering a question someone actually has.
 
-| Window | Covers | Stored as |
+| Review | Covers | Stored as |
 |---|---|---|
-| This month vs last | The 1st of last month → now | `this_vs_last` |
-| Past 3 months | The 1st of the month two back → now | `last_3_months` |
+| Recent months | The 3 months before this one → now, clamped to the first entry | `last_3_months` |
 | All time | The account's first entry → now | `all_time` |
 
-That makes a review a **snapshot, not a finished document**: asking again tomorrow covers a
-day more. Each review stores the window it was written for, so the archive labels it with
-that window rather than with today's — *"This month vs last · August 2026 – September
-2026"*. The two superseded windows (`last_month`, `past_3_months`, both whole finished
-months) stay readable; nothing offers them.
+"At most three months" is the point of the clamp: an account six weeks old is asked about
+six weeks rather than refused for having too little history. The database does the clamping
+(migration 0011), because only it knows when the logging started — which also means
+**neither review can fail the "does your history reach back far enough" gate**. The only
+gate left is having 40 logged expenses in the window.
+
+Both end *now*, which makes a review a **snapshot, not a finished document**: asking again
+tomorrow covers a day more. Each review stores the window it was written for, so the archive
+labels it with that window and its name — *"Recent months · June 2026 – September 2026"*.
+The superseded windows (`last_month`, `past_3_months`, `this_vs_last`) stay readable;
+nothing offers them.
+
+**One review a month.** Enforced in `review-start`, because it is the only thing between a
+tapped button and an unbounded bill: one per calendar month for a paying customer (which is
+what "no more than $5 a month" means with a $5 review), ten for an allowlisted account,
+where the constraint is not money but the owner's own model quota. A refunded review does
+not count against the month.
 
 Because a window can end mid-month, every per-month figure carries how many of that month's
 days are **inside** the window, and the month-over-month comparison is computed on the
@@ -268,10 +280,11 @@ below — but deploying the function without Stripe keys sells nothing, by desig
 browser, so the rule holds even with devtools open — and so it can count every row the
 account has rather than the 500 the app keeps in memory:
 
-- at least **40 logged expenses** inside the window (income and Safe transfers don't count), and
-- **history that reaches back to the start of the window** — logging that was already going
-  when the window opened. All time is exempt: it *starts* at the first entry, so it covers
-  itself by construction.
+- at least **40 logged expenses** inside the window (income and Safe transfers don't count).
+
+That is the whole gate now. Both windows start at or after the account's first entry, so
+"history that reaches back far enough" is true by construction and the old second refusal is
+gone. An account with nothing logged still fails, on having nothing to read.
 
 A window with a lot of unlogged days is a **warning, not a refusal**: a thin month is still
 the customer's call, and the review is told to say so in its own text. (Not for all time,
@@ -280,10 +293,10 @@ four months but opened two years ago is not "thin".) Eligibility needs only coun
 dates, which is lucky — the amounts are encrypted per-column and the server genuinely
 cannot read them.
 
-Asking for all time sends a **null** window start, and the database resolves it to the first
-entry (migration 0011): only it knows when that was, and a floor date guessed in the browser
-would measure coverage against decades the account did not exist for. `review-start` then
-checks the window the browser claims really does start there.
+All time sends a **null** window start and the recent review sends its full three-month
+reach; the database anchors the first and clamps the second forward to the first entry.
+`review-start` then checks that the window the browser claims never starts before the
+account did.
 
 **What happens, in order.**
 
@@ -312,6 +325,14 @@ month-over-month changes — each amount accompanied by the string the app would
 pattern), nothing outside the chosen window is sent, and no time-of-day is sent (entries are
 stamped when they are *logged*, so an hour histogram would describe phone habits while
 sounding like it described spending). The review screen says all of this before the button.
+
+**When Gemini is busy.** A demand spike answers with `503 UNAVAILABLE`, which is nobody's
+fault and usually temporary — so the function waits 1.5s, waits 4s, then tries the next
+(lighter) model in its list, and only then gives up with *"Gemini is busy right now. Tap to
+try again."* A review that ends that way **keeps its attempt**: three spikes in an afternoon
+must not retire it permanently. Classification is tested against the exact error text Google
+returns, in `npm run verify:functions`, because misreading a 503 as a bad model name would
+walk the whole list pointlessly and misreading it as fatal costs the reader an attempt.
 
 **Why the numbers can be trusted.** The model is given finished figures and told to copy
 them verbatim, and then — because instructions are not a guarantee — every money-shaped
@@ -376,7 +397,7 @@ note that anything named `VITE_*` or `NEXT_PUBLIC_*` **would**, so they do not g
 |---|---|
 | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/apikey) → **Get API key** |
 | `REVIEW_ALLOWLIST` | You write it: the emails and/or auth user ids that may have a review, comma-separated (`me@example.com,you@example.com`). Unset or empty allows **nobody**, which is what makes deploying the function safe. |
-| `GEMINI_MODEL` | *Optional.* An id to **try first**. Leave it unset and the function walks its own list — `gemini-flash-latest`, then `gemini-3.5-flash`, then `gemini-2.5-flash` — and stops at the first one your key can call, recording it in the review's `model` column so you can see which won. Set this only to override that order, e.g. to a Pro id (note: Pro ids generally need billing on the Cloud project, while Flash and Flash-Lite are the free-tier ones). Google retires ids and closes older ones to keys created after a cutoff, which is why none of them is hardcoded as the answer. |
+| `GEMINI_MODEL` | *Optional.* An id to **try first**. Leave it unset and the function walks its own list, **lightest first** — Flash-Lite, then Flash — stopping at the first one your key can call and recording it in the review's `model` column so you can see which won. Lightest first is deliberate: a review is prose over figures that are already computed, so the smallest tier is enough, and the smallest tier is the one least likely to answer *"currently experiencing high demand"*. Set this to put a bigger model first if the writing disappoints (Pro ids generally need billing on the Cloud project; Flash and Flash-Lite are the free-tier ones). |
 
 That is the whole of it. `REVIEW_PRICE_CENTS`, `APP_URL` and the Stripe secrets are unset,
 so `review-start` has no way to charge anybody and refuses every account that is not on the

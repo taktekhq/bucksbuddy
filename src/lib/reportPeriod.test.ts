@@ -5,6 +5,8 @@ import {
   eligibilityFrom,
   isKnownPeriodId,
   isReportPeriodId,
+  periodName,
+  RECENT_MONTHS,
   REPORT_PERIODS,
   reportPeriodBounds,
   reportPeriodDays,
@@ -14,60 +16,55 @@ import {
 
 // A fixed "now" — 8 Sept 2026, midday — built with the local-time constructor so
 // the calendar-month maths is deterministic in any timezone and checkable by
-// eye: last month is August, the two months before this one are July and August.
+// eye: three months back is June, so the recent review reaches 1 June.
 const NOW = new Date(2026, 8, 8, 12, 0, 0);
 
 const day = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 describe("REPORT_PERIODS", () => {
-  it("offers the comparison, the quarter and all time, in that order", () => {
+  it("offers two reviews, not a choice of window", () => {
     expect(REPORT_PERIODS.map((p) => p.id)).toEqual([
-      "this_vs_last",
       "last_3_months",
       "all_time",
     ]);
     expect(REPORT_PERIODS.map((p) => p.label)).toEqual([
-      "This month vs last",
-      "Past 3 months",
+      "Recent months",
       "All time",
     ]);
+    expect(DEFAULT_REPORT_PERIOD).toBe("last_3_months");
   });
 
-  it("opens on the comparison", () => {
-    expect(DEFAULT_REPORT_PERIOD).toBe("this_vs_last");
-    expect(isReportPeriodId(DEFAULT_REPORT_PERIOD)).toBe(true);
-  });
-
-  it("keeps every label inside 70 characters", () => {
-    for (const p of REPORT_PERIODS) expect(p.label.length).toBeLessThanOrEqual(70);
+  it("keeps every name and blurb inside 70 characters", () => {
+    for (const p of REPORT_PERIODS) {
+      expect(p.label.length).toBeLessThanOrEqual(70);
+      expect(p.blurb.length).toBeLessThanOrEqual(70);
+    }
   });
 });
 
 describe("isReportPeriodId", () => {
-  it("accepts the three on offer", () => {
-    expect(isReportPeriodId("this_vs_last")).toBe(true);
+  it("accepts the two on offer", () => {
     expect(isReportPeriodId("last_3_months")).toBe(true);
     expect(isReportPeriodId("all_time")).toBe(true);
   });
 
   it("rejects the superseded windows and anything else", () => {
-    // These are still legal on a stored row — see isKnownPeriodId — but nothing
-    // offers them now, so the picker must not treat them as choices.
+    // Still legal on a stored row — see isKnownPeriodId — but nothing offers
+    // them, so they are not choices.
+    expect(isReportPeriodId("this_vs_last")).toBe(false);
     expect(isReportPeriodId("last_month")).toBe(false);
     expect(isReportPeriodId("past_3_months")).toBe(false);
-    expect(isReportPeriodId("this_month")).toBe(false);
     expect(isReportPeriodId(null)).toBe(false);
   });
 });
 
 describe("isKnownPeriodId", () => {
-  it("accepts the three on offer and the two superseded ones", () => {
-    // A review stored before the windows changed still has to open.
+  it("accepts the two on offer and the three superseded ones", () => {
     for (const id of [
-      "this_vs_last",
       "last_3_months",
       "all_time",
+      "this_vs_last",
       "last_month",
       "past_3_months",
     ]) {
@@ -77,28 +74,38 @@ describe("isKnownPeriodId", () => {
 
   it("rejects a window this version has never heard of", () => {
     expect(isKnownPeriodId("this_month")).toBe(false);
-    expect(isKnownPeriodId("next_year")).toBe(false);
     expect(isKnownPeriodId(undefined)).toBe(false);
   });
 });
 
-describe("reportPeriodBounds", () => {
-  it("runs the comparison from the first of last month to this moment", () => {
-    const { from, to } = reportPeriodBounds("this_vs_last", NOW);
-    expect(day(from)).toBe("2026-08-01");
-    expect(from.getHours()).toBe(0);
-    // `to` is now, not the start of this month: that is what puts the current,
-    // unfinished month inside the window.
-    expect(to.getTime()).toBe(NOW.getTime());
-  });
-
-  it("runs the quarter from the first of the month two back", () => {
+describe("reportPeriodBounds — the recent review", () => {
+  it("reaches three whole months back, and runs to this moment", () => {
     const { from, to } = reportPeriodBounds("last_3_months", NOW);
-    expect(day(from)).toBe("2026-07-01");
+    expect(RECENT_MONTHS).toBe(3);
+    expect(day(from)).toBe("2026-06-01");
+    expect(from.getHours()).toBe(0);
+    // Not the start of this month: the current, unfinished month is inside the
+    // window, which is what makes the comparison worth reading.
     expect(to.getTime()).toBe(NOW.getTime());
   });
 
-  it("anchors all time on the account's first entry", () => {
+  it("starts where the logging did when the account is younger than that", () => {
+    // "At most three months": an account six weeks old is asked about six weeks,
+    // not refused for having too little history.
+    const first = new Date(2026, 7, 20, 9, 30).toISOString();
+    const { from } = reportPeriodBounds("last_3_months", NOW, first);
+    expect(from.toISOString()).toBe(first);
+  });
+
+  it("ignores a first entry older than its reach", () => {
+    const first = new Date(2024, 0, 5).toISOString();
+    const { from } = reportPeriodBounds("last_3_months", NOW, first);
+    expect(day(from)).toBe("2026-06-01");
+  });
+});
+
+describe("reportPeriodBounds — all time", () => {
+  it("anchors on the account's first entry", () => {
     const first = new Date(2024, 2, 17, 9, 30).toISOString();
     const { from, to } = reportPeriodBounds("all_time", NOW, first);
     expect(from.toISOString()).toBe(first);
@@ -106,7 +113,8 @@ describe("reportPeriodBounds", () => {
   });
 
   it("falls back to this month when there is no first entry to anchor on", () => {
-    // Under-reporting is the safe wrong answer: it cannot invent history.
+    // Under-reporting is the safe wrong answer: it cannot invent history, and
+    // the database clamps the real window anyway.
     for (const missing of [null, "not a date"]) {
       const { from } = reportPeriodBounds("all_time", NOW, missing);
       expect(day(from)).toBe("2026-09-01");
@@ -115,12 +123,9 @@ describe("reportPeriodBounds", () => {
 });
 
 describe("eligibilityFrom", () => {
-  it("sends the window's start for a dated window", () => {
-    expect(eligibilityFrom("this_vs_last", NOW)).toBe(
-      new Date(2026, 7, 1).toISOString(),
-    );
+  it("sends the recent review's full reach, for the database to clamp", () => {
     expect(eligibilityFrom("last_3_months", NOW)).toBe(
-      new Date(2026, 6, 1).toISOString(),
+      new Date(2026, 5, 1).toISOString(),
     );
   });
 
@@ -132,15 +137,14 @@ describe("eligibilityFrom", () => {
 
 describe("reportPeriodDays", () => {
   it("counts from the window's start to now", () => {
-    // 31 days of August + 7 whole days of September + the half day to midday,
-    // which rounds up.
-    expect(reportPeriodDays("this_vs_last", NOW)).toBe(39);
-    // July (31) and August (31) as well.
-    expect(reportPeriodDays("last_3_months", NOW)).toBe(70);
+    // June 30 + July 31 + August 31 + 7 days of September + the half day to
+    // midday, which rounds up.
+    expect(reportPeriodDays("last_3_months", NOW)).toBe(100);
   });
 
-  it("measures all time from the first entry", () => {
+  it("counts from the clamp when the account is younger", () => {
     const first = new Date(2026, 8, 1, 12).toISOString();
+    expect(reportPeriodDays("last_3_months", NOW, first)).toBe(7);
     expect(reportPeriodDays("all_time", NOW, first)).toBe(7);
   });
 
@@ -151,51 +155,66 @@ describe("reportPeriodDays", () => {
 });
 
 describe("reportPeriodLabel", () => {
-  it("names the months a dated window spans", () => {
-    expect(reportPeriodLabel("this_vs_last", NOW)).toBe(
-      "August 2026 – September 2026",
-    );
+  it("names the months the recent review spans", () => {
     expect(reportPeriodLabel("last_3_months", NOW)).toBe(
-      "July 2026 – September 2026",
+      "June 2026 – September 2026",
+    );
+  });
+
+  it("names the clamped span for a young account", () => {
+    const first = new Date(2026, 7, 20).toISOString();
+    expect(reportPeriodLabel("last_3_months", NOW, first)).toBe(
+      "August 2026 – September 2026",
     );
   });
 
   it("names where all time starts, once that is known", () => {
     const first = new Date(2024, 2, 17).toISOString();
-    expect(reportPeriodLabel("all_time", NOW, first)).toBe("Since March 2024");
+    expect(reportPeriodLabel("all_time", NOW, first)).toBe(
+      "March 2024 – September 2026",
+    );
   });
 
   it("says so plainly while the first entry is unknown", () => {
     expect(reportPeriodLabel("all_time", NOW)).toBe("Everything you've logged");
-    expect(reportPeriodLabel("all_time", NOW, "not a date")).toBe(
-      "Everything you've logged",
-    );
   });
 
   it("keeps every label inside 70 characters", () => {
     const first = new Date(2024, 2, 17).toISOString();
     for (const p of REPORT_PERIODS) {
       expect(reportPeriodLabel(p.id, NOW, first).length).toBeLessThanOrEqual(70);
+      expect(reportPeriodLabel(p.id, NOW).length).toBeLessThanOrEqual(70);
     }
+  });
+});
+
+describe("periodName", () => {
+  it("names the two on offer", () => {
+    expect(periodName("last_3_months")).toBe("Recent months");
+    expect(periodName("all_time")).toBe("All time");
+  });
+
+  it("still names the superseded windows, for a review stored under one", () => {
+    expect(periodName("last_month")).toBe("Last month");
+    expect(periodName("this_vs_last")).toBe("This month vs last");
+    expect(periodName("past_3_months")).toBe("Past 3 finished months");
   });
 });
 
 describe("reportWindowLabel", () => {
   it("names one month when the window is inside one", () => {
-    expect(
-      reportWindowLabel(new Date(2026, 7, 1), new Date(2026, 8, 1)),
-    ).toBe("August 2026");
+    expect(reportWindowLabel(new Date(2026, 7, 1), new Date(2026, 8, 1))).toBe(
+      "August 2026",
+    );
   });
 
   it("names both ends when it spans more", () => {
-    expect(
-      reportWindowLabel(new Date(2026, 5, 1), new Date(2026, 8, 1)),
-    ).toBe("June 2026 – August 2026");
+    expect(reportWindowLabel(new Date(2026, 5, 1), new Date(2026, 8, 1))).toBe(
+      "June 2026 – August 2026",
+    );
   });
 
   it("reads `to` as exclusive, to the millisecond", () => {
-    // A window ending at midnight on 1 September covers August, not September —
-    // and one ending mid-September covers September.
     expect(
       reportWindowLabel(new Date(2026, 7, 1), new Date(2026, 8, 1, 0, 0, 0, 0)),
     ).toBe("August 2026");

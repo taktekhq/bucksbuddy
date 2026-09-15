@@ -128,29 +128,25 @@ describe("describeEligibility — the history gate", () => {
     expect(copy.blockers[0]).toBe("40 more expenses to go.");
   });
 
-  it("tells the comparison it needs last month logged", () => {
-    const copy = describeEligibility(
-      facts({ coversPeriod: false, firstEntryAt: at(2026, 7, 9), ok: false }),
-      "this_vs_last",
+  it("no longer refuses a window for reaching back too far", () => {
+    // Both reviews start at or after the account's first entry — the recent one
+    // is clamped forward to it by the database — so "your history doesn't reach
+    // back that far" describes a state that cannot happen. An account with
+    // nothing logged still fails, on having nothing to read.
+    const young = facts({
+      coversPeriod: false,
+      firstEntryAt: at(2026, 7, 9),
+      spendCount: 60,
+      ok: true,
+    });
+    for (const id of ["last_3_months", "all_time"] as const) {
+      expect(describeEligibility(young, id).blockers).toEqual([]);
+      expect(describeEligibility(young, id).ok).toBe(true);
+    }
+    const empty = facts({ firstEntryAt: null, spendCount: 0, ok: false });
+    expect(describeEligibility(empty, "all_time").blockers).toContain(
+      "Nothing logged yet.",
     );
-    expect(copy.blockers).toEqual(["Last month isn't fully logged yet."]);
-  });
-
-  it("tells a longer window its history is too short", () => {
-    const copy = describeEligibility(
-      facts({ coversPeriod: false, firstEntryAt: at(2026, 6, 3), ok: false }),
-      "last_3_months",
-    );
-    expect(copy.blockers).toEqual([
-      "Your history doesn't reach back that far yet.",
-    ]);
-    // The comparison must not share the sentence: it names last month, which is
-    // the only month it needs.
-    const other = describeEligibility(
-      facts({ coversPeriod: false, firstEntryAt: at(2026, 6, 3), ok: false }),
-      "this_vs_last",
-    );
-    expect(other.blockers[0]).not.toBe(copy.blockers[0]);
   });
 });
 
@@ -180,7 +176,7 @@ describe("describeEligibility — warnings", () => {
     // unlogged side, so the number in it is 29 rather than 1.
     const copy = describeEligibility(
       facts({ periodDays: 30, loggedDays: 1, spendCount: 40 }),
-      "this_vs_last",
+      "last_3_months",
     );
     expect(copy.warnings[0]).toBe(
       "29 of 30 days have nothing logged.",
@@ -255,6 +251,6 @@ describe("describeEligibility — the verdict", () => {
   });
 
   it("is ok only when the server agrees and nothing is blocking", () => {
-    expect(describeEligibility(facts(), "this_vs_last").ok).toBe(true);
+    expect(describeEligibility(facts(), "last_3_months").ok).toBe(true);
   });
 });
