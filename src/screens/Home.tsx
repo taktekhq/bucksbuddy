@@ -6,6 +6,7 @@ import {
   Eye,
   EyeOff,
   Lock,
+  MessageSquarePlus,
   Settings,
   Sparkles,
   Vault,
@@ -143,6 +144,16 @@ export function Home() {
             aria-label="Spending review"
           >
             <Sparkles className="h-6 w-6" strokeWidth={1.75} />
+          </button>
+          {/* Feedback sits next to the Safe: a bug is worth reporting the
+              moment it bites, and the page it bit you on is one tap away. */}
+          <button
+            type="button"
+            onClick={() => navigate("/feedback")}
+            className="press -m-2 p-2 text-label-secondary"
+            aria-label="Send feedback"
+          >
+            <MessageSquarePlus className="h-6 w-6" strokeWidth={1.75} />
           </button>
           <button
             type="button"
