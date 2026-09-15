@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import {
   ChevronLeft,
+  ChevronRight,
   Eye,
   EyeOff,
   Lock,
   ShieldCheck,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { ExportCard } from "@/components/ExportCard";
@@ -73,6 +75,7 @@ export function Settings() {
       {/* DATA */}
       <section className="flex flex-col gap-2">
         <SectionHeader>Data</SectionHeader>
+        <ReviewLink />
         <ExportCard />
       </section>
 
@@ -86,6 +89,32 @@ export function Settings() {
         That&apos;s all, folks. 🥕
       </p>
     </main>
+  );
+}
+
+// The way in to the paid spending review. Deliberately a plain row that fetches
+// nothing: this screen renders every card it holds on every visit, and the
+// review screen does its own counting when it opens.
+function ReviewLink() {
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/review")}
+      className="press flex w-full items-center gap-3 rounded-card bg-surface px-4 py-3.5 text-left shadow-card"
+    >
+      <Sparkles className="h-5 w-5 shrink-0 text-carrot" strokeWidth={2} aria-hidden />
+      <span className="flex flex-1 flex-col">
+        <span className="text-base text-label">Spending review</span>
+        <span className="text-xs text-label-secondary">
+          Your logged months, read back to you
+        </span>
+      </span>
+      <ChevronRight
+        className="h-5 w-5 shrink-0 text-label-secondary"
+        strokeWidth={2.5}
+        aria-hidden
+      />
+    </button>
   );
 }
 

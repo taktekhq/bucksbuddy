@@ -3,11 +3,12 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { makeSupabaseMock, type Handler } from "@/test/supabaseMock";
 import {
+  encryptString,
   generateMasterKey,
   makeVerifier,
   wrapMasterKey,
 } from "@/lib/crypto";
-import { encryptGoldValues, encryptTxValues } from "@/lib/e2e";
+import { encryptGoldValues, encryptTxValues, type TxEnc } from "@/lib/e2e";
 import type { Transaction } from "@/types/db";
 
 type Res = { error: string | null };
@@ -60,6 +61,64 @@ function tx(overrides: Partial<Transaction> = {}): Transaction {
     note: null,
     created_at: new Date().toISOString(),
     ...overrides,
+  };
+}
+
+// Review fixtures. Dates go through the local-time constructor at midday so the
+// window is unambiguous whatever timezone the run sits in, and the window is
+// always passed explicitly rather than read off the clock.
+const at = (y: number, m: number, d: number) =>
+  new Date(y, m, d, 12).toISOString();
+const REVIEW_FROM = new Date(2026, 5, 1, 12); // 2026-06-01
+const REVIEW_TO = new Date(2026, 8, 1, 12); // 2026-09-01
+
+// Wrapping a key is a 600k-iteration PBKDF2, so the passphrase-tier key row is
+// minted once and shared by every test that needs a known master key.
+let vaultFixture: {
+  mk: CryptoKey;
+  row: { wrapped_key: string; wrap_type: string; verifier: string };
+} | null = null;
+async function passphraseVault() {
+  if (!vaultFixture) {
+    const mk = await generateMasterKey();
+    vaultFixture = {
+      mk,
+      row: {
+        wrapped_key: await wrapMasterKey(mk, "pw"),
+        wrap_type: "passphrase",
+        verifier: await makeVerifier(mk),
+      },
+    };
+  }
+  return vaultFixture;
+}
+
+// An unlocked passphrase-tier store whose master key the test also holds, so it
+// can mint rows the store will really decrypt. The device-stored passphrase
+// auto-unlocks it on load, which costs one PBKDF2 unwrap.
+async function setupUnlockedVault() {
+  const { mk, row } = await passphraseVault();
+  localStorage.setItem("bb-e2e-pass:u1", "pw");
+  const hook = setup({ "e2e_keys:select": () => ({ data: row }) });
+  await waitFor(() => expect(hook.result.current.loading).toBe(false), {
+    timeout: 20_000,
+  });
+  expect(hook.result.current.locked).toBe(false);
+  return { mk, ...hook };
+}
+
+// A stored row carrying encrypted money values and plaintext labels.
+function encTxRow(id: string, enc: TxEnc, occurred_at: string) {
+  return {
+    id,
+    user_id: "u1",
+    occurred_at,
+    created_at: occurred_at,
+    is_income: false,
+    category: "groceries",
+    original_currency: "USD",
+    rate_used: 89500,
+    ...enc,
   };
 }
 
@@ -132,6 +191,7 @@ describe("StoreProvider / useStore", () => {
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.userId).toBe("u1"); // the id the provider was mounted with
     expect(result.current.homeCurrency).toBe("EUR");
     expect(result.current.currencies).toEqual([{ code: "USD", rate: 1.08 }]);
     expect(result.current.transactions).toHaveLength(3);
@@ -703,4 +763,200 @@ describe("StoreProvider / useStore", () => {
     });
     for (const r of results) expect(r.error).toMatch(/Locked/);
   });
+
+  it("reads no review rows and seals nothing while locked", async () => {
+    const { row } = await passphraseVault();
+    const { result } = setup({ "e2e_keys:select": () => ({ data: row }) });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 20_000,
+    });
+    expect(result.current.locked).toBe(true);
+
+    const txReadsAtLoad = mock.calls.filter(
+      (c) => c.table === "transactions",
+    ).length;
+    let rows: Transaction[] | null = [tx()];
+    let sealed: string | null = "not-null";
+    let opened: unknown = "not-null";
+    await act(async () => {
+      rows = await result.current.reviewRange(REVIEW_FROM, REVIEW_TO);
+      sealed = await result.current.sealReview({ headline: "nope" });
+      opened = await result.current.openReview("whatever.blob");
+    });
+    // Null, not [] — an empty array would be indistinguishable from a window
+    // with nothing in it, and a review computed from that is a paid document
+    // full of zeroes.
+    expect(rows).toBeNull();
+    expect(sealed).toBeNull();
+    expect(opened).toBeNull();
+    // And it bailed before touching the database: no page was ever requested.
+    expect(mock.ranges).toEqual([]);
+    expect(mock.calls.filter((c) => c.table === "transactions")).toHaveLength(
+      txReadsAtLoad,
+    );
+  }, 30_000);
+
+  it("returns a review window as decrypted rows, and nothing for an empty one", async () => {
+    const { mk, result } = await setupUnlockedVault();
+    const souk = await encryptTxValues(mk, {
+      amount_usd_cents: 2500,
+      original_amount: 25,
+      note: "souk",
+    });
+    const rent = await encryptTxValues(mk, {
+      amount_usd_cents: 90_000,
+      original_amount: 900,
+      note: null,
+    });
+    mock = makeSupabaseMock({
+      "transactions:select": () => ({
+        data: [
+          encTxRow("r1", souk, at(2026, 6, 3)),
+          encTxRow("r2", rent, at(2026, 6, 1)),
+        ],
+        error: null,
+      }),
+    });
+
+    let rows: Transaction[] | null = [];
+    await act(async () => {
+      rows = await result.current.reviewRange(REVIEW_FROM, REVIEW_TO);
+    });
+    expect(rows.map((r) => r.amount_usd_cents)).toEqual([2500, 90_000]);
+    expect(rows.map((r) => r.original_amount)).toEqual([25, 900]);
+    expect(rows[0].note).toBe("souk");
+    expect(rows[1].note).toBeNull();
+    expect(rows[0].category).toBe("groceries"); // plaintext label kept as-is
+    // A window that fits in one page asks for exactly one page.
+    expect(mock.ranges).toEqual([{ from: 0, to: 499 }]);
+
+    // A window with nothing in it (the API answers with no rows at all) reads as
+    // an empty review rather than throwing.
+    mock = makeSupabaseMock({
+      "transactions:select": () => ({ data: null, error: null }),
+    });
+    await act(async () => {
+      rows = await result.current.reviewRange(REVIEW_FROM, REVIEW_TO);
+    });
+    expect(rows).toEqual([]);
+    expect(mock.ranges).toEqual([{ from: 0, to: 499 }]);
+  }, 30_000);
+
+  it("pages until a short page, so a long window is totalled in full", async () => {
+    const { mk, result } = await setupUnlockedVault();
+    // One encrypted value reused across the whole first page: the point here is
+    // the paging, and 500 fresh encryptions would cost far more than it proves.
+    const each = await encryptTxValues(mk, {
+      amount_usd_cents: 100,
+      original_amount: 1,
+      note: null,
+    });
+    const tail = await encryptTxValues(mk, {
+      amount_usd_cents: 4242,
+      original_amount: 42.42,
+      note: "last one",
+    });
+    const firstPage = Array.from({ length: 500 }, (_, i) =>
+      encTxRow(`p${i}`, each, at(2026, 6, 2)),
+    );
+    let page = 0;
+    mock = makeSupabaseMock({
+      "transactions:select": () => ({
+        data:
+          page++ === 0 ? firstPage : [encTxRow("tail", tail, at(2026, 6, 1))],
+        error: null,
+      }),
+    });
+
+    let rows: Transaction[] | null = [];
+    await act(async () => {
+      rows = await result.current.reviewRange(REVIEW_FROM, REVIEW_TO);
+    });
+    // Both pages were requested, and the second (short) one stopped the loop.
+    expect(mock.ranges).toEqual([
+      { from: 0, to: 499 },
+      { from: 500, to: 999 },
+    ]);
+    expect(rows).toHaveLength(501);
+    // Every row came back decrypted, in page order.
+    expect(new Set(rows.slice(0, 500).map((r) => r.amount_usd_cents))).toEqual(
+      new Set([100]),
+    );
+    expect(rows[499].id).toBe("p499");
+    expect(rows[500].amount_usd_cents).toBe(4242);
+    expect(rows[500].note).toBe("last one");
+  }, 30_000);
+
+  it("gives up on a failed page instead of treating it as the end of the window", async () => {
+    const { mk, result } = await setupUnlockedVault();
+    const each = await encryptTxValues(mk, {
+      amount_usd_cents: 100,
+      original_amount: 1,
+      note: null,
+    });
+    const firstPage = Array.from({ length: 500 }, (_, i) =>
+      encTxRow(`p${i}`, each, at(2026, 6, 2)),
+    );
+    // A full first page, then a failure. Answering [] here would look exactly
+    // like a short page — which is the whole danger: the review would be written
+    // from two thirds of the window and nothing would say so.
+    let page = 0;
+    mock = makeSupabaseMock({
+      "transactions:select": () =>
+        page++ === 0
+          ? { data: firstPage, error: null }
+          : { data: null, error: { message: "upstream timeout" } },
+    });
+
+    let rows: Transaction[] | null = [];
+    await act(async () => {
+      rows = await result.current.reviewRange(REVIEW_FROM, REVIEW_TO);
+    });
+    // Null, not the 500 rows it did manage to read.
+    expect(rows).toBeNull();
+    expect(mock.ranges).toEqual([
+      { from: 0, to: 499 },
+      { from: 500, to: 999 },
+    ]);
+  }, 30_000);
+
+  it("seals a review that openReview round-trips, and rejects a foreign body", async () => {
+    // Default tier: unlocked with the device-held key, which is all sealing needs.
+    const { result } = setup();
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 20_000,
+    });
+
+    const review = {
+      headline: "Taxis were the story of June",
+      totals: { taxi: 18_400 },
+      notes: ["four late nights"],
+    };
+    let sealed: string | null = "";
+    await act(async () => {
+      sealed = await result.current.sealReview(review);
+    });
+    const body = String(sealed);
+    expect(body).not.toContain("Taxis"); // actually encrypted
+    expect(body).toContain("."); // iv.ct envelope
+
+    let opened: unknown = null;
+    await act(async () => {
+      opened = await result.current.openReview(body);
+    });
+    expect(opened).toEqual(review);
+
+    // A body sealed under a key this device does not have (passphrase changed
+    // elsewhere), and outright junk, both come back null rather than throwing.
+    const alienKey = await generateMasterKey();
+    const alien = await encryptString(alienKey, JSON.stringify(review));
+    let fromAlien: unknown = "x";
+    let fromJunk: unknown = "x";
+    await act(async () => {
+      fromAlien = await result.current.openReview(alien);
+      fromJunk = await result.current.openReview("not-a-sealed-body");
+    });
+    expect(fromAlien).toBeNull();
+    expect(fromJunk).toBeNull();
+  }, 30_000);
 });
