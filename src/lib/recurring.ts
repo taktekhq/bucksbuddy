@@ -10,16 +10,24 @@
 // How a series is recognised — forgiving on purpose, because entries are typed
 // by hand, late, and never quite the same way twice:
 //   1. Entries are bucketed by direction + category, then by note — but notes
-//      only have to *mean* the same thing (see lib/notes: a shared word, one
-//      containing the other, or a typo apart), not read the same.
+//      only have to *mean* the same thing (see lib/notes: a shared word or a
+//      typo apart), not read the same.
+//      Who it was "with" is dropped first, so "dinner with Sara" and "lunch
+//      with Sara" don't merge on her name.
 //   2. A note can say how often it recurs — "Domain (yearly)" — and that hint
-//      is taken at its word, even for a single entry.
+//      is taken at its word, even for a single entry. "Subscription" or
+//      "membership" in the note says it recurs without saying how often: the
+//      dates decide, and monthly is assumed until they can.
 //   3. Otherwise a series needs MIN_OCCURRENCES entries whose spacing fits one
 //      cadence (weekly, every two weeks, monthly, yearly), with slack for a
 //      log that's a day or two late and for one skipped log in between.
 //      Entries within MERGE_DAYS of each other count as one occurrence, so a
 //      double log doesn't break the rhythm.
-//   4. Amounts matter most: each is compared to the price it followed. Within
+//   4. A payment that stops, stops showing: once a whole period has passed
+//      beyond its due date with nothing logged, it's gone. Logged again within
+//      that time, it carries on. A longer break splits the series — the
+//      entries after it start counting from scratch, as a new series.
+//   5. Amounts matter most: each is compared to the price it followed. Within
 //      SAME_PRICE_TOLERANCE it's the same price; a bigger jump (up to
 //      PRICE_CHANGE_TOLERANCE) reads as a price change, but only after the old
 //      price had held for two entries — so a rising subscription stays in,
@@ -68,12 +76,12 @@ export type RecurringPayment = {
   amountCents: number; // the current price, in home cents
   previousAmountCents: number | null; // the price before the last change, if any
   monthlyCents: number; // the current price, normalised to a per-month figure
-  count: number; // how many times it has been logged
-  firstAt: string; // ISO, oldest occurrence
+  count: number; // how many times it has been logged since the series (re)started
+  firstAt: string; // ISO, oldest occurrence of the live series
   lastAt: string; // ISO, newest occurrence
   nextDueAt: string; // ISO, lastAt + the cadence's nominal spacing
   overdue: boolean; // nextDueAt is already behind `now`
-  rows: Transaction[]; // every occurrence, newest first
+  rows: Transaction[]; // every entry of the live series, newest first
 };
 
 export type RecurringSummary = {
@@ -88,27 +96,66 @@ function daysBetween(a: string, b: string): number {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / DAY_MS);
 }
 
+function spec(cadence: Cadence) {
+  return CADENCES.find((c) => c.cadence === cadence)!;
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 /**
- * The cadence the gaps fit, or null when the spacing is irregular. Every gap
- * must fit the cadence's window either once or twice over (one skipped log),
- * and at least half must fit it once — otherwise "every 14 days" would read
- * as weekly-with-skips.
+ * The cadence the typical gap points at: the one whose window holds the
+ * median gap, or failing that the one it fits twice over (a series with a
+ * skipped log here and there). Null when no cadence comes close.
  */
-export function cadenceOf(gapsInDays: number[]): Cadence | null {
+export function pickCadence(gapsInDays: number[]): Cadence | null {
   if (gapsInDays.length === 0) return null;
-  for (const c of CADENCES) {
-    let once = 0;
-    let ok = true;
-    for (const g of gapsInDays) {
-      if (g >= c.min && g <= c.max) once += 1;
-      else if (g < 2 * c.min || g > 2 * c.max) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok && once * 2 >= gapsInDays.length) return c.cadence;
-  }
+  const m = median(gapsInDays);
+  for (const c of CADENCES) if (m >= c.min && m <= c.max) return c.cadence;
+  for (const c of CADENCES) if (m >= 2 * c.min && m <= 2 * c.max) return c.cadence;
   return null;
+}
+
+/**
+ * Do the gaps keep to the cadence? Every gap must fit its window once or
+ * twice over (one skipped log), and at least half must fit it once —
+ * otherwise "every 14 days" would read as weekly-with-skips.
+ */
+export function fitsCadence(cadence: Cadence, gapsInDays: number[]): boolean {
+  const c = spec(cadence);
+  let once = 0;
+  for (const g of gapsInDays) {
+    if (g >= c.min && g <= c.max) once += 1;
+    else if (g < 2 * c.min || g > 2 * c.max) return false;
+  }
+  return once * 2 >= gapsInDays.length;
+}
+
+/** The cadence the gaps fit, or null when the spacing is irregular. */
+export function cadenceOf(gapsInDays: number[]): Cadence | null {
+  const cadence = pickCadence(gapsInDays);
+  return cadence && fitsCadence(cadence, gapsInDays) ? cadence : null;
+}
+
+/**
+ * A break longer than this, in days, ends a series at that cadence: what
+ * comes after starts over as a new one. It's the longest gap a skipped log
+ * could explain.
+ */
+export function breakAfterDays(cadence: Cadence): number {
+  return 2 * spec(cadence).max;
+}
+
+/**
+ * How long, in days, a series stays alive after its last entry: one full
+ * period beyond the latest date the next entry could still be on time.
+ */
+export function aliveForDays(cadence: Cadence): number {
+  const c = spec(cadence);
+  return c.days + c.max;
 }
 
 /** A per-month figure for one occurrence at the given cadence. */
@@ -203,32 +250,49 @@ export function detectRecurring(
     for (const group of clusterByNote(bucket)) {
       // ISO timestamps are fixed-width, so lexical compare == chronological.
       const asc = [...group].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
+      const parsed = asc.map((r) => parseNote(r.note));
 
-      // Gaps between occurrences, with entries logged within MERGE_DAYS of
-      // each other folded into one occurrence.
-      const gaps: number[] = [];
-      let occurrences = 1;
-      for (let i = 1; i < asc.length; i++) {
-        const gap = daysBetween(asc[i - 1].occurred_at, asc[i].occurred_at);
-        if (gap <= MERGE_DAYS) continue;
-        gaps.push(gap);
-        occurrences += 1;
+      // Occurrences: consecutive entries within MERGE_DAYS fold into one, so
+      // a double log doesn't break the rhythm. Each keeps its rows.
+      const occurrences: { at: string; rows: Transaction[] }[] = [];
+      for (const r of asc) {
+        const prev = occurrences[occurrences.length - 1];
+        if (prev && daysBetween(prev.at, r.occurred_at) <= MERGE_DAYS) prev.rows.push(r);
+        else occurrences.push({ at: r.occurred_at, rows: [r] });
       }
+      const gaps = occurrences.slice(1).map((o, i) => daysBetween(occurrences[i].at, o.at));
 
-      // The user's own word wins: the latest hint in the series sets the
-      // cadence, and a hinted entry recurs even if it's the only one so far.
-      const hinted = asc.map((r) => parseNote(r.note)).reverse().find((p) => p.cadence);
-      const cadence = hinted?.cadence ?? (occurrences >= MIN_OCCURRENCES ? cadenceOf(gaps) : null);
+      // The user's own word wins: the latest cadence hint sets the cadence;
+      // "subscription" / "membership" says it recurs and leaves the dates to
+      // say how often (monthly until they can). Either way a hinted entry
+      // recurs even if it's the only one so far.
+      const cadenceHint = [...parsed].reverse().find((p) => p.cadence)?.cadence ?? null;
+      const recurringHint = parsed.some((p) => p.recurring);
+      const hinted = cadenceHint !== null || recurringHint;
+      const cadence = cadenceHint ?? pickCadence(gaps) ?? (recurringHint ? "monthly" : null);
       if (!cadence) continue;
 
-      const price = priceTrack(asc.map((r) => r.amount_usd_cents));
+      // A break too long for a skipped log splits the series; only what
+      // comes after the last break is the live series.
+      let start = 0;
+      gaps.forEach((g, i) => {
+        if (g > breakAfterDays(cadence)) start = i + 1;
+      });
+      const live = occurrences.slice(start);
+      const liveGaps = gaps.slice(start);
+      if (!hinted && (live.length < MIN_OCCURRENCES || !fitsCadence(cadence, liveGaps))) continue;
+
+      // Stopped: a whole period past its due date with nothing logged.
+      const last = live[live.length - 1];
+      if (daysBetween(last.at, now.toISOString()) > aliveForDays(cadence)) continue;
+
+      const liveRows = live.flatMap((o) => o.rows);
+      const price = priceTrack(liveRows.map((r) => r.amount_usd_cents));
       if (!price) continue;
 
-      const first = asc[0];
-      const last = asc[asc.length - 1];
-      const noteText = parseNote(last.note).text;
-      const nominal = CADENCES.find((c) => c.cadence === cadence)!.days;
-      const nextDue = new Date(new Date(last.occurred_at).getTime() + nominal * DAY_MS);
+      const first = liveRows[0];
+      const noteText = parseNote(liveRows[liveRows.length - 1].note).text;
+      const nextDue = new Date(new Date(last.at).getTime() + spec(cadence).days * DAY_MS);
 
       payments.push({
         key: `${bucketKey}:${normalizeNote(noteText)}`,
@@ -236,16 +300,16 @@ export function detectRecurring(
         isIncome: first.is_income,
         note: noteText || null,
         cadence,
-        fromNote: hinted !== undefined,
+        fromNote: cadenceHint !== null,
         amountCents: price.current,
         previousAmountCents: price.previous,
         monthlyCents: monthlyEquivalent(price.current, cadence),
-        count: occurrences,
+        count: live.length,
         firstAt: first.occurred_at,
-        lastAt: last.occurred_at,
+        lastAt: last.at,
         nextDueAt: nextDue.toISOString(),
         overdue: nextDue < now,
-        rows: [...asc].reverse(),
+        rows: [...liveRows].reverse(),
       });
     }
   }

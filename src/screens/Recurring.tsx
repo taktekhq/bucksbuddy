@@ -135,9 +135,9 @@ export function Recurring({ userId }: { userId: string }) {
               <p className="text-white/55">Nothin&apos; on repeat yet, Doc.</p>
               <p className="max-w-xs text-xs text-white/40">
                 Log the same entry twice on a regular schedule — weekly, every
-                two weeks, monthly or yearly — and it shows up here. Or write
-                &quot;(yearly)&quot; or &quot;(monthly)&quot; in the note and it
-                counts right away.
+                two weeks, monthly or yearly — and it shows up here. Or put
+                &quot;subscription&quot;, &quot;membership&quot; or
+                &quot;(yearly)&quot; in the note and it counts right away.
               </p>
             </div>
           ) : (
@@ -148,11 +148,6 @@ export function Recurring({ userId }: { userId: string }) {
               {income.length > 0 && (
                 <Group title="Coming in" payments={income} currency={homeCurrency} />
               )}
-              <p className="px-1 text-center text-xs text-white/40">
-                Found from the entries logged so far, not set up by hand: two
-                similar entries on a steady schedule, or one whose note says how
-                often it repeats.
-              </p>
             </>
           )}
         </>

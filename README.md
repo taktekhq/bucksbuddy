@@ -93,15 +93,22 @@ app that came with 0007 is deployed.
 > `src/lib/recurring.ts` finds the series in the entries already logged, on the
 > device (so it works on end-to-end encrypted data), scoped to the signed-in user id.
 > The rules are forgiving, because entries are typed by hand: two entries in the same
-> direction + category whose notes *mean* the same thing (a shared word, one containing
-> the other, or a typo apart — `src/lib/notes.ts`), spaced weekly / every two weeks /
+> direction + category whose notes *mean* the same thing (a shared word or a typo apart —
+> `src/lib/notes.ts`), spaced weekly / every two weeks /
 > monthly / yearly with a couple of days' slack and one skipped log allowed; entries a
-> day or two apart count as one. A note can also say so outright — "Domain (yearly)"
-> counts from its first entry. Amounts are compared to the price before them: within
+> day or two apart count as one. A note can also say so outright: "Domain (yearly)"
+> counts from its first entry, and "subscription" or "membership" marks it recurring and
+> lets the dates say how often (monthly until they can). Who it was "with" is dropped
+> before notes are compared, so "dinner with Sara" and "lunch with Sara" don't merge on
+> her name. A series that stops, stops
+> showing: a whole period past its due date with nothing logged and it's gone; logged
+> again within that time it carries on, and after a longer break the new entries start
+> over as a series of their own. Amounts are compared to the price before them: within
 > 10% is the same price, a bigger jump (up to 50%) is a price change and keeps the
 > series once the old price had held for two entries; the page shows the new price with
 > the old one underneath. To keep notes from drifting, the composer offers the past
-> notes of the chosen category as chips under the note field. The page is read-only; it
+> notes of the chosen category (the exact one) as chips under the note field, and a
+> tiny info button next to the note opens the list of these cheat codes. The page is read-only; it
 > sits behind the same unlock nudge as the rest of the app when the device is locked.
 
 ### 2. Create your user (password sign-in)

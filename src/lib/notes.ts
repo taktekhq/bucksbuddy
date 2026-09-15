@@ -9,7 +9,6 @@
 // which the detector takes as the user's word on how often it recurs. The hint
 // is peeled off here so it never gets in the way of matching.
 
-import { splitCategory } from "@/lib/categories";
 import type { Transaction } from "@/types/db";
 
 export type Cadence = "weekly" | "biweekly" | "monthly" | "yearly";
@@ -23,12 +22,24 @@ const HINTS: { cadence: Cadence; re: RegExp }[] = [
   { cadence: "yearly", re: /[([]?\s*\b(yearly|annual(?:ly)?|every year|per year|a year)\b\s*[)\]]?/i },
 ];
 
+// Words that say "this one comes back" without saying how often. Read, then
+// dropped from the text, so "Claude subscription" and a later plain "Claude"
+// are the same series — the word is a cheat code, not part of the name.
+const RECURRING_WORDS = /\b(subscriptions?|memberships?)\b/i;
+
+// "Dinner with Sara", "Lunch with Sara": who it was with is not what it was.
+// Everything from "with" on is dropped before notes are compared, so the two
+// don't merge on the name — and "Netflix with Ali" every month is still Netflix.
+const WITH_SUFFIX = /\bwith\b.*$/i;
+
 export type ParsedNote = {
-  text: string; // the note with any cadence hint removed, whitespace collapsed
-  cadence: Cadence | null; // the hint, when there was one
+  // The note with the hints and "with …" removed, whitespace collapsed.
+  text: string;
+  cadence: Cadence | null; // the cadence hint, when there was one
+  recurring: boolean; // the note called itself a subscription or membership
 };
 
-/** Split a raw note into its text and the cadence hint it may carry. */
+/** Split a raw note into its text and the hints it may carry. */
 export function parseNote(raw: string | null): ParsedNote {
   let text = raw ?? "";
   let cadence: Cadence | null = null;
@@ -39,8 +50,14 @@ export function parseNote(raw: string | null): ParsedNote {
       break;
     }
   }
-  text = text.replace(/\s+/g, " ").replace(/^[\s\-–—:,.]+|[\s\-–—:,.]+$/g, "");
-  return { text, cadence };
+  const recurring = RECURRING_WORDS.test(text);
+  // The hints are read first: "Netflix with Ali (monthly)" keeps its cadence.
+  text = text
+    .replace(RECURRING_WORDS, " ")
+    .replace(WITH_SUFFIX, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-–—:,.]+|[\s\-–—:,.]+$/g, "");
+  return { text, cadence, recurring };
 }
 
 // Words that say nothing about *what* the payment is, so sharing one of them
@@ -48,7 +65,8 @@ export function parseNote(raw: string | null): ParsedNote {
 const STOPWORDS = new Set([
   "the", "and", "for", "with", "from", "this", "that", "per", "pay", "paid",
   "payment", "bill", "bills", "fee", "fees", "sub", "subs", "subscription",
-  "month", "months", "year", "years", "week", "weeks", "new", "old", "one",
+  "subscriptions", "membership", "memberships", "month", "months", "year",
+  "years", "week", "weeks", "new", "old", "one",
 ]);
 
 /** Lowercase, accents stripped, punctuation folded to spaces. */
@@ -66,50 +84,61 @@ export function noteTokens(normalized: string): string[] {
   return normalized.split(" ").filter((w) => w.length >= 3 && !STOPWORDS.has(w));
 }
 
-function bigrams(s: string): Map<string, number> {
-  const out = new Map<string, number>();
-  for (let i = 0; i < s.length - 1; i++) {
-    const b = s.slice(i, i + 2);
-    out.set(b, (out.get(b) ?? 0) + 1);
+/**
+ * Damerau–Levenshtein (optimal string alignment) distance: the edits —
+ * insert, delete, replace, or swap two neighbours — that turn `a` into `b`.
+ */
+export function editDistance(a: string, b: string): number {
+  const d: number[][] = [];
+  for (let i = 0; i <= a.length; i++) d[i] = [i];
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
   }
-  return out;
+  return d[a.length][b.length];
 }
 
-/** Sørensen–Dice similarity on character bigrams, 0..1. Catches typos. */
-export function similarity(a: string, b: string): number {
-  if (a === b) return 1;
-  if (a.length < 2 || b.length < 2) return 0;
-  const ba = bigrams(a);
-  const bb = bigrams(b);
-  let shared = 0;
-  for (const [g, n] of ba) shared += Math.min(n, bb.get(g) ?? 0);
-  return (2 * shared) / (a.length - 1 + (b.length - 1));
-}
+// One slip — a missed, extra, wrong or swapped letter — is a typo. Two is a
+// different word ("lunch" / "brunch", "spotify" / "shopify"). Only words long
+// enough to carry a typo qualify; short ones are a slip away from anything.
+export const TYPO_DISTANCE = 1;
+const TYPO_MIN_LENGTH = 4;
 
-// A transposed pair of letters ("netlfix") scores exactly 0.5 on bigrams, so
-// the bar sits there; unrelated words land well below it.
-export const SIMILARITY_THRESHOLD = 0.5;
+function isTypoOf(a: string, b: string): boolean {
+  return (
+    a.length >= TYPO_MIN_LENGTH &&
+    b.length >= TYPO_MIN_LENGTH &&
+    Math.abs(a.length - b.length) <= TYPO_DISTANCE &&
+    editDistance(a, b) <= TYPO_DISTANCE
+  );
+}
 
 /**
- * Do two normalized notes mean the same thing? Yes when they're equal, one
- * contains the other, they share a meaningful word, or they're a typo apart.
- * Two empty notes match each other; an empty note matches nothing else.
+ * Do two normalized notes mean the same thing? Yes when they're equal, they
+ * share a meaningful word, or they're a typo apart — as whole notes or in one
+ * of their words. Two empty notes match each other; an empty note matches
+ * nothing else.
  */
 export function notesMatch(a: string, b: string): boolean {
   if (a === b) return true;
   if (a === "" || b === "") return false;
-  if (a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))) return true;
   const ta = noteTokens(a);
-  const tb = new Set(noteTokens(b));
-  if (ta.some((w) => tb.has(w))) return true;
-  // Typo tolerance needs something to compare: two-letter notes share half
-  // their bigrams with almost anything.
-  return a.length >= 3 && b.length >= 3 && similarity(a, b) >= SIMILARITY_THRESHOLD;
+  const tb = noteTokens(b);
+  if (ta.some((w) => tb.includes(w))) return true;
+  if (isTypoOf(a, b)) return true;
+  return ta.some((w) => tb.some((v) => isTypoOf(w, v)));
 }
 
 /**
  * Past notes worth offering while typing a new one: the distinct notes already
- * used in this direction + base category, most recent first, narrowed to those
+ * used in this direction + category (the exact one — Fees · Subscriptions
+ * doesn't borrow from Fees · Bank), most recent first, narrowed to those
  * containing what's been typed so far. What's typed exactly is left out —
  * there's nothing to tap for.
  */
@@ -117,14 +146,13 @@ export function noteSuggestions(
   rows: Transaction[],
   opts: { isIncome: boolean; category: string; query: string; limit?: number },
 ): string[] {
-  const base = splitCategory(opts.category).base;
   const query = normalizeNote(opts.query);
   const seen = new Set<string>();
   const out: string[] = [];
   // ISO timestamps are fixed-width, so lexical compare == chronological.
   const sorted = [...rows].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
   for (const r of sorted) {
-    if (r.is_income !== opts.isIncome || splitCategory(r.category).base !== base) continue;
+    if (r.is_income !== opts.isIncome || r.category !== opts.category) continue;
     const text = (r.note ?? "").replace(/\s+/g, " ").trim();
     if (text === "") continue;
     const norm = normalizeNote(text);
