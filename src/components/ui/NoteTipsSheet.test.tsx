@@ -25,9 +25,13 @@ describe("NoteTipsSheet", () => {
     const keywords = screen.getByText("Recurring keywords").parentElement!;
     const points = [...keywords.querySelectorAll("li")].map((li) => li.textContent);
     expect(points).toEqual([
-      "“subscription” or “membership”Counts as recurring from the first entry.",
-      "“(yearly)”, “(monthly)”, “(weekly)”Sets how often it repeats.",
-      "“(ended)”Drops it off the Recurring page.",
+      "Start a recurring itemPut subscription or membership in the first entry.",
+      "Set how often it repeatsAdd (yearly), (monthly) or (weekly) to the note.",
+      "Stop a recurring itemPut (ended) on its last entry.",
+    ]);
+    // The keywords themselves read as code.
+    expect([...keywords.querySelectorAll("code")].map((c) => c.textContent)).toEqual([
+      "subscription", "membership", "(yearly)", "(monthly)", "(weekly)", "(ended)",
     ]);
     expect(sheet).not.toHaveTextContent("domain");
     expect(sheet).not.toHaveTextContent("with");

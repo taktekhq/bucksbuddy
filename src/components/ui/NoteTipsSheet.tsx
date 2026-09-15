@@ -14,7 +14,7 @@ type Tip = {
   icon: LucideIcon;
   title: string;
   body?: string;
-  // Sub-points: a subheader each, with its one line underneath.
+  // Sub-points: what to do, then how — keywords in `backticks` render as code.
   items?: { title: string; body: string }[];
 };
 
@@ -29,20 +29,33 @@ const TIPS: Tip[] = [
     title: "Recurring keywords",
     items: [
       {
-        title: "\u201Csubscription\u201D or \u201Cmembership\u201D",
-        body: "Counts as recurring from the first entry.",
+        title: "Start a recurring item",
+        body: "Put `subscription` or `membership` in the first entry.",
       },
       {
-        title: "\u201C(yearly)\u201D, \u201C(monthly)\u201D, \u201C(weekly)\u201D",
-        body: "Sets how often it repeats.",
+        title: "Set how often it repeats",
+        body: "Add `(yearly)`, `(monthly)` or `(weekly)` to the note.",
       },
       {
-        title: "\u201C(ended)\u201D",
-        body: "Drops it off the Recurring page.",
+        title: "Stop a recurring item",
+        body: "Put `(ended)` on its last entry.",
       },
     ],
   },
 ];
+
+// Render a line with its `keywords` as code: "Put `(ended)` on…" → Put <code>(ended)</code> on…
+function withKeywords(text: string) {
+  return text.split("`").map((part, i) =>
+    i % 2 === 1 ? (
+      <code key={i} className="rounded bg-grouped px-1 py-0.5 font-numeric text-[13px] text-label">
+        {part}
+      </code>
+    ) : (
+      part
+    ),
+  );
+}
 
 export function NoteTipsSheet({ open, onClose }: Props) {
   function handleDragEnd(_: unknown, info: PanInfo) {
@@ -91,11 +104,13 @@ export function NoteTipsSheet({ open, onClose }: Props) {
                       <p className="mt-0.5 text-sm text-label-secondary">{tip.body}</p>
                     )}
                     {tip.items && (
-                      <ul className="mt-2 flex flex-col gap-2 border-l-2 border-carrot-soft pl-3">
+                      <ul className="mt-2 flex flex-col gap-2.5">
                         {tip.items.map((item) => (
                           <li key={item.title}>
                             <p className="text-sm font-medium text-label">{item.title}</p>
-                            <p className="text-sm text-label-secondary">{item.body}</p>
+                            <p className="mt-0.5 text-sm leading-relaxed text-label-secondary">
+                              {withKeywords(item.body)}
+                            </p>
                           </li>
                         ))}
                       </ul>
