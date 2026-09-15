@@ -21,8 +21,7 @@ import { CADENCE_LABEL, detectRecurring, type RecurringPayment } from "@/lib/rec
 //
 // Same observatory dressing as Stats, since this is another way of looking at
 // the money from above. `userId` is the account whose rows are shown; the
-// detector filters on it and the header says so, so it's never ambiguous whose
-// payments these are.
+// detector filters on it, so the page can never mix accounts.
 const OBSERVATORY_BG =
   "linear-gradient(180deg, #23234A 0px, #1B1B38 220px, #141428 460px)";
 const OBSERVATORY_FLOOR = "#141428";
@@ -38,11 +37,6 @@ function shortDate(iso: string): string {
 /** "1 time" / "3 times". */
 function times(n: number): string {
   return `${n} ${n === 1 ? "time" : "times"}`;
-}
-
-/** The first block of a UUID, enough to recognise an account at a glance. */
-function shortId(userId: string): string {
-  return userId.split("-")[0];
 }
 
 /** Which side of the page a series belongs to. */
@@ -129,11 +123,6 @@ export function Recurring({ userId }: { userId: string }) {
           Recurring
         </h1>
       </header>
-
-      {/* Whose payments these are. */}
-      <p className="-mt-3 text-center text-xs text-white/45">
-        User <span className="font-numeric tabular-nums">{shortId(userId)}</span>
-      </p>
 
       {masked ? (
         // Masked amounts would detect nothing and list zeros — nudge to unlock.
