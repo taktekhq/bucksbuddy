@@ -162,7 +162,7 @@ describe("AddComposer (add mode)", () => {
     expect(screen.queryByRole("button", { name: "Note tips" })).not.toBeInTheDocument();
     await chooseCategory(/Gas/);
     await userEvent.click(screen.getByRole("button", { name: "Note tips" }));
-    expect(screen.getByRole("dialog", { name: "Note tips" })).toHaveTextContent(/subscription/);
+    expect(screen.getByRole("dialog", { name: "Note tips" })).toHaveTextContent(/\(monthly\)/);
     await userEvent.click(screen.getByRole("button", { name: "Got it" }));
     expect(screen.queryByRole("dialog", { name: "Note tips" })).not.toBeInTheDocument();
   });
@@ -174,8 +174,8 @@ describe("AddComposer (add mode)", () => {
 
     // Into an empty note: just the keyword.
     await userEvent.click(screen.getByRole("button", { name: "Note tips" }));
-    await userEvent.click(screen.getByRole("button", { name: "subscription" }));
-    expect(note.value).toBe("subscription");
+    await userEvent.click(screen.getByRole("button", { name: "(monthly)" }));
+    expect(note.value).toBe("(monthly)");
     expect(screen.queryByRole("dialog", { name: "Note tips" })).not.toBeInTheDocument();
 
     // After text: a space, then the keyword.

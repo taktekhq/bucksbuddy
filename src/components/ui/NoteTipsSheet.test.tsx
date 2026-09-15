@@ -25,14 +25,15 @@ describe("NoteTipsSheet", () => {
     const keywords = screen.getByText("Recurring keywords").parentElement!;
     const points = [...keywords.querySelectorAll("li")].map((li) => li.textContent);
     expect(points).toEqual([
-      "Start a recurring itemFirst note: add subscription or membership.",
-      "Set how often it repeatsAny note: add (yearly), (monthly) or (weekly).",
+      "Start a recurring itemFirst note: add (monthly), (yearly) or (weekly).",
       "Stop a recurring itemLast note: add (ended).",
     ]);
     // The keywords themselves read as code (plain, with nowhere to put them).
     expect([...keywords.querySelectorAll("code")].map((c) => c.textContent)).toEqual([
-      "subscription", "membership", "(yearly)", "(monthly)", "(weekly)", "(ended)",
+      "(monthly)", "(yearly)", "(weekly)", "(ended)",
     ]);
+    // "subscription" still works, it just isn't taught.
+    expect(sheet).not.toHaveTextContent("subscription");
     expect(within(keywords).queryByRole("button")).not.toBeInTheDocument();
     expect(sheet).not.toHaveTextContent("domain");
     expect(sheet).not.toHaveTextContent("with");
@@ -47,8 +48,8 @@ describe("NoteTipsSheet", () => {
     render(<NoteTipsSheet open onClose={() => {}} onPick={onPick} />);
     await userEvent.click(screen.getByRole("button", { name: "(yearly)" }));
     expect(onPick).toHaveBeenCalledWith("(yearly)");
-    await userEvent.click(screen.getByRole("button", { name: "subscription" }));
-    expect(onPick).toHaveBeenCalledWith("subscription");
+    await userEvent.click(screen.getByRole("button", { name: "(ended)" }));
+    expect(onPick).toHaveBeenCalledWith("(ended)");
   });
 
   it("closes from the button, the backdrop, and a downward drag", () => {

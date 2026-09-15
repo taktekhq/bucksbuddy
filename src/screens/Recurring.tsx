@@ -197,7 +197,7 @@ export function Recurring({ userId }: { userId: string }) {
               <p className="max-w-xs text-xs text-white/40">
                 {view === "yearly"
                   ? "Log a yearly renewal twice, or put “(yearly)” or a domain name in the note, and it shows up here."
-                  : "Log the same entry twice on a regular schedule — weekly, every two weeks or monthly — and it shows up here. Or put “subscription” or “membership” in the note and it counts right away."}
+                  : "Log the same entry twice on a regular schedule — weekly, every two weeks or monthly — and it shows up here. Or put “(monthly)” in the note and it counts right away."}
               </p>
             </div>
           ) : (
