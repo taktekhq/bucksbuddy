@@ -115,7 +115,8 @@ app that came with 0007 is deployed.
 > When the note vouched for the series the amounts are taken as they come. The page shows
 > the new price with the old one underneath. To keep notes from drifting, the composer offers the past
 > notes of the chosen category (the exact one) as chips under the note field, and a
-> tiny info button next to the note opens the list of these cheat codes. The page is read-only; it
+> tiny info button next to the note opens the cheat codes worth teaching: the cadence words and
+> "(ended)" ("subscription" and "membership" still work but aren't advertised). The page is read-only; it
 > sits behind the same unlock nudge as the rest of the app when the device is locked.
 
 ### 2. Create your user (password sign-in)

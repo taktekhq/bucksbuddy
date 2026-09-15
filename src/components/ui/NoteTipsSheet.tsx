@@ -8,10 +8,12 @@ type Props = {
   onPick?: (keyword: string) => void;
 };
 
-// The cheat codes a note understands (see lib/notes and lib/recurring): a
-// bottom sheet opened from the tiny info button next to the note field, so
-// the tricks are one tap away without cluttering the form. Drag down or tap
-// the backdrop to dismiss, same as the category sheet.
+// The cheat codes worth teaching (see lib/notes and lib/recurring): a bottom
+// sheet opened from the tiny info button next to the note field, so the
+// tricks are one tap away without cluttering the form. "subscription" and
+// "membership" still work — people write them anyway — but the cadence words
+// do the same and more, so only those are taught. Drag down or tap the
+// backdrop to dismiss, same as the category sheet.
 type Tip = {
   icon: LucideIcon;
   title: string;
@@ -32,11 +34,7 @@ const TIPS: Tip[] = [
     items: [
       {
         title: "Start a recurring item",
-        body: "First note: add `subscription` or `membership`.",
-      },
-      {
-        title: "Set how often it repeats",
-        body: "Any note: add `(yearly)`, `(monthly)` or `(weekly)`.",
+        body: "First note: add `(monthly)`, `(yearly)` or `(weekly)`.",
       },
       {
         title: "Stop a recurring item",
