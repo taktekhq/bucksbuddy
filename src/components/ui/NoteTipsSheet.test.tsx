@@ -22,10 +22,13 @@ describe("NoteTipsSheet", () => {
     expect(sheet).toHaveTextContent("Same note, same payment");
     expect(sheet).toHaveTextContent("“subscription” or “membership”");
     expect(sheet).toHaveTextContent("“(yearly)”, “(monthly)”, “(weekly)”");
-    expect(sheet).toHaveTextContent("A domain name");
     expect(sheet).toHaveTextContent("“(ended)”");
-    expect(sheet).toHaveTextContent("“with” someone");
-    expect(sheet).toHaveTextContent(/price change keeps a series going/);
+    expect(sheet).not.toHaveTextContent("domain");
+    expect(sheet).not.toHaveTextContent("with");
+    // Short enough to read at a glance: every line under 70 characters.
+    for (const line of sheet.querySelectorAll("li p")) {
+      expect(line.textContent!.length).toBeLessThanOrEqual(70);
+    }
   });
 
   it("closes from the button, the backdrop, and a downward drag", () => {
