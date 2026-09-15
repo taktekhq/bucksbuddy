@@ -27,6 +27,15 @@ const HINTS: { cadence: Cadence; re: RegExp }[] = [
 // are the same series — the word is a cheat code, not part of the name.
 const RECURRING_WORDS = /\b(subscriptions?|memberships?)\b/i;
 
+// A domain name renews yearly: "domain" in the note, or a hostname in it
+// ("sillyguy.com"), says so without a hint. The hostname stays — it's the
+// name — while the word "domain" is dropped like the other cheat codes.
+const DOMAIN_WORD = /\b(domains?)\b/i;
+const HOSTNAME = /\b[a-z0-9-]+\.(?:com|net|org|io|dev|ai|app|co|me|xyz|sh|lb)\b/i;
+
+// "Framer subscription (ended)": the series stops here. Read, then dropped.
+const ENDED_WORDS = /[([]?\s*\b(ended|cancel{1,2}ed|stopped|final)\b\s*[)\]]?/i;
+
 // "Dinner with Sara", "Lunch with Sara": who it was with is not what it was.
 // Everything from "with" on is dropped before notes are compared, so the two
 // don't merge on the name — and "Netflix with Ali" every month is still Netflix.
@@ -35,8 +44,10 @@ const WITH_SUFFIX = /\bwith\b.*$/i;
 export type ParsedNote = {
   // The note with the hints and "with …" removed, whitespace collapsed.
   text: string;
-  cadence: Cadence | null; // the cadence hint, when there was one
-  recurring: boolean; // the note called itself a subscription or membership
+  // The cadence the note implies: a hint word, or yearly for a domain name.
+  cadence: Cadence | null;
+  recurring: boolean; // the note says it comes back (subscription, membership, a domain)
+  ended: boolean; // the note says this was the last one
 };
 
 /** Split a raw note into its text and the hints it may carry. */
@@ -50,14 +61,18 @@ export function parseNote(raw: string | null): ParsedNote {
       break;
     }
   }
-  const recurring = RECURRING_WORDS.test(text);
+  const domain = DOMAIN_WORD.test(text) || HOSTNAME.test(text);
+  const recurring = RECURRING_WORDS.test(text) || domain;
+  const ended = ENDED_WORDS.test(text);
   // The hints are read first: "Netflix with Ali (monthly)" keeps its cadence.
   text = text
     .replace(RECURRING_WORDS, " ")
+    .replace(DOMAIN_WORD, " ")
+    .replace(ENDED_WORDS, " ")
     .replace(WITH_SUFFIX, " ")
     .replace(/\s+/g, " ")
     .replace(/^[\s\-–—:,.]+|[\s\-–—:,.]+$/g, "");
-  return { text, cadence, recurring };
+  return { text, cadence: cadence ?? (domain ? "yearly" : null), recurring, ended };
 }
 
 // Words that say nothing about *what* the payment is, so sharing one of them
@@ -120,19 +135,31 @@ function isTypoOf(a: string, b: string): boolean {
 }
 
 /**
- * Do two normalized notes mean the same thing? Yes when they're equal, they
- * share a meaningful word, or they're a typo apart — as whole notes or in one
- * of their words. Two empty notes match each other; an empty note matches
- * nothing else.
+ * Do two normalized notes mean the same thing? Yes when they're equal, when
+ * at least half their meaningful words are shared (a typo apart counts as
+ * shared — "Canva" / "Canva for family", "Netlfix" / "Netflix"), or when the
+ * whole notes are a typo apart. One shared word out of many is not enough:
+ * "Claude" and "Claude extra credits" are different things, and so are
+ * "iCloud for Sara" and "LinkedIn for Sara". Two empty notes match each
+ * other; an empty note matches nothing else.
  */
 export function notesMatch(a: string, b: string): boolean {
   if (a === b) return true;
   if (a === "" || b === "") return false;
   const ta = noteTokens(a);
   const tb = noteTokens(b);
-  if (ta.some((w) => tb.includes(w))) return true;
-  if (isTypoOf(a, b)) return true;
-  return ta.some((w) => tb.some((v) => isTypoOf(w, v)));
+  const used = new Set<number>();
+  let shared = 0;
+  for (const w of ta) {
+    const j = tb.findIndex((v, k) => !used.has(k) && (v === w || isTypoOf(w, v)));
+    if (j !== -1) {
+      used.add(j);
+      shared += 1;
+    }
+  }
+  // Jaccard ≥ ½: shared / (|a| + |b| − shared).
+  if (shared > 0 && 2 * shared >= ta.length + tb.length - shared) return true;
+  return isTypoOf(a, b);
 }
 
 /**
