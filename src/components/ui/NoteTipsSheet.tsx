@@ -4,6 +4,8 @@ import { Repeat, StickyNote, type LucideIcon } from "lucide-react";
 type Props = {
   open: boolean;
   onClose: () => void;
+  // Tapping a keyword hands it over — the composer drops it into the note.
+  onPick?: (keyword: string) => void;
 };
 
 // The cheat codes a note understands (see lib/notes and lib/recurring): a
@@ -30,7 +32,7 @@ const TIPS: Tip[] = [
     items: [
       {
         title: "Start a recurring item",
-        body: "Put `subscription` or `membership` in the first entry.",
+        body: "Add `subscription` or `membership` to the first note.",
       },
       {
         title: "Set how often it repeats",
@@ -38,26 +40,40 @@ const TIPS: Tip[] = [
       },
       {
         title: "Stop a recurring item",
-        body: "Put `(ended)` on its last entry.",
+        body: "Add `(ended)` to the last note.",
       },
     ],
   },
 ];
 
-// Render a line with its `keywords` as code: "Put `(ended)` on…" → Put <code>(ended)</code> on…
-function withKeywords(text: string) {
-  return text.split("`").map((part, i) =>
-    i % 2 === 1 ? (
-      <code key={i} className="rounded bg-grouped px-1 py-0.5 font-numeric text-[13px] text-label">
+const KEYWORD_CLASS = "rounded bg-grouped px-1 py-0.5 font-numeric text-[13px] text-label";
+
+// Render a line with its `keywords` as code — tappable when there's somewhere
+// to put them: "Add `(ended)` to…" → Add <code>(ended)</code> to…
+function withKeywords(text: string, onPick?: (keyword: string) => void) {
+  return text.split("`").map((part, i) => {
+    if (i % 2 === 0) return part;
+    if (!onPick) {
+      return (
+        <code key={i} className={KEYWORD_CLASS}>
+          {part}
+        </code>
+      );
+    }
+    return (
+      <button
+        key={i}
+        type="button"
+        onClick={() => onPick(part)}
+        className={`press ${KEYWORD_CLASS} underline decoration-label-secondary/40 decoration-dotted underline-offset-2`}
+      >
         {part}
-      </code>
-    ) : (
-      part
-    ),
-  );
+      </button>
+    );
+  });
 }
 
-export function NoteTipsSheet({ open, onClose }: Props) {
+export function NoteTipsSheet({ open, onClose, onPick }: Props) {
   function handleDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose();
   }
@@ -90,7 +106,6 @@ export function NoteTipsSheet({ open, onClose }: Props) {
             <div className="mx-auto mb-4 h-1.5 w-10 cursor-grab rounded-full bg-grouped" />
 
             <h2 className="text-base font-semibold text-label">Recurring payments</h2>
-            <p className="mt-1 text-sm text-label-secondary">A few words in a note do more.</p>
 
             <ul className="mt-4 flex flex-col gap-4">
               {TIPS.map((tip) => (
@@ -109,7 +124,7 @@ export function NoteTipsSheet({ open, onClose }: Props) {
                           <li key={item.title}>
                             <p className="text-sm font-medium text-label">{item.title}</p>
                             <p className="mt-0.5 text-sm leading-relaxed text-label-secondary">
-                              {withKeywords(item.body)}
+                              {withKeywords(item.body, onPick)}
                             </p>
                           </li>
                         ))}

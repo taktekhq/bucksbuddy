@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("framer-motion", async () => (await import("@/test/framerMock")).default);
@@ -25,14 +25,15 @@ describe("NoteTipsSheet", () => {
     const keywords = screen.getByText("Recurring keywords").parentElement!;
     const points = [...keywords.querySelectorAll("li")].map((li) => li.textContent);
     expect(points).toEqual([
-      "Start a recurring itemPut subscription or membership in the first entry.",
+      "Start a recurring itemAdd subscription or membership to the first note.",
       "Set how often it repeatsAdd (yearly), (monthly) or (weekly) to the note.",
-      "Stop a recurring itemPut (ended) on its last entry.",
+      "Stop a recurring itemAdd (ended) to the last note.",
     ]);
-    // The keywords themselves read as code.
+    // The keywords themselves read as code (plain, with nowhere to put them).
     expect([...keywords.querySelectorAll("code")].map((c) => c.textContent)).toEqual([
       "subscription", "membership", "(yearly)", "(monthly)", "(weekly)", "(ended)",
     ]);
+    expect(within(keywords).queryByRole("button")).not.toBeInTheDocument();
     expect(sheet).not.toHaveTextContent("domain");
     expect(sheet).not.toHaveTextContent("with");
     // Short enough to read at a glance: every line under 70 characters.
@@ -41,11 +42,19 @@ describe("NoteTipsSheet", () => {
     }
   });
 
+  it("hands a tapped keyword over when given somewhere to put it", async () => {
+    const onPick = vi.fn();
+    render(<NoteTipsSheet open onClose={() => {}} onPick={onPick} />);
+    await userEvent.click(screen.getByRole("button", { name: "(yearly)" }));
+    expect(onPick).toHaveBeenCalledWith("(yearly)");
+    await userEvent.click(screen.getByRole("button", { name: "subscription" }));
+    expect(onPick).toHaveBeenCalledWith("subscription");
+  });
+
   it("closes from the button, the backdrop, and a downward drag", () => {
     const onClose = vi.fn();
     const { container } = render(<NoteTipsSheet open onClose={onClose} />);
 
-    void userEvent; // the sheet is driven with fireEvent below
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
     expect(onClose).toHaveBeenCalledTimes(1);
 
