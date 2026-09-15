@@ -94,23 +94,54 @@ describe("CategorySheet", () => {
     expect(onChangeDirection).toHaveBeenCalledWith(true);
   });
 
-  it("keeps the grid scrollable without letting it start a sheet drag", () => {
+  it("leaves the gesture to the sheet when the grid has nothing to scroll", () => {
     const { container } = setup();
     const sheet = getDraggableNode(container);
-    const scroller = sheet.querySelector(".overflow-y-auto") as HTMLElement;
-    expect(scroller).toBeInTheDocument();
+    const middle = sheet.querySelector(".flex-1") as HTMLElement;
+    // Nothing to scroll, so the middle stays out of the way: no pan is allowed
+    // and framer's pointerdown gets through, which is what makes a drag
+    // anywhere on the grid pull the sheet down instead of moving the page.
+    expect(middle.className).toContain("overflow-hidden");
+    expect(middle.className).not.toContain("touch-pan-y");
 
-    // framer-motion opens a drag from a bubbling pointerdown on the sheet; the
-    // scroller stops it in the capture phase so the gesture scrolls instead.
+    const seen: string[] = [];
+    sheet.addEventListener("pointerdown", () => seen.push("sheet"));
+    fireEvent.pointerDown(screen.getByRole("button", { name: /Groceries/ }));
+    expect(seen).toEqual(["sheet"]);
+  });
+
+  it("takes the gesture back when the grid does overflow", () => {
+    const { container } = setup();
+    const sheet = getDraggableNode(container);
+    const middle = sheet.querySelector(".flex-1") as HTMLElement;
+
+    // jsdom has no layout, so stand in for a grid taller than its box.
+    Object.defineProperty(middle, "scrollHeight", { value: 900, configurable: true });
+    Object.defineProperty(middle, "clientHeight", { value: 400, configurable: true });
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(middle.className).toContain("overflow-y-auto");
+    expect(middle.className).toContain("touch-pan-y");
+    expect(middle.className).toContain("overscroll-contain");
+
+    // framer-motion opens its drag from a bubbling pointerdown, so the middle
+    // stops it in the capture phase and the gesture scrolls instead.
     const seen: string[] = [];
     sheet.addEventListener("pointerdown", () => seen.push("sheet"));
     fireEvent.pointerDown(screen.getByRole("button", { name: /Groceries/ }));
     expect(seen).toEqual([]);
 
-    // Anything outside the scroller still reaches the sheet, so drag-to-dismiss
-    // keeps working from the grabber and the In/Out toggle.
+    // The grabber and the In/Out toggle are outside it, so they still drag.
     fireEvent.pointerDown(screen.getByRole("button", { name: "Out" }));
     expect(seen).toEqual(["sheet"]);
+  });
+
+  it("does not let the page behind scroll while the sheet is open", () => {
+    const { container } = setup();
+    const overlay = container.querySelector(".bg-black\\/30") as HTMLElement;
+    expect(overlay.className).toContain("touch-none");
   });
 
   it("closes when the backdrop is clicked", () => {
