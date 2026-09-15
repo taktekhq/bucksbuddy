@@ -69,7 +69,7 @@ export function CategorySheet({
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[85dvh] max-w-md touch-none flex-col rounded-t-[28px] bg-surface px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-2 shadow-card"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[calc(100dvh-var(--safe-top))] max-w-md touch-none flex-col rounded-t-[28px] bg-surface px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-2 shadow-card"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -93,8 +93,10 @@ export function CategorySheet({
               </SheetScroller>
             ) : (
               <>
-                {/* Categories on top (variable height, scrolls when the grid is
-                    taller than the capped sheet). */}
+                {/* Categories on top (variable height). The sheet is capped at
+                    the viewport minus the status bar, so the grid only scrolls
+                    on a screen too short to show it whole — on everything else
+                    it sits at its natural height and the cap never bites. */}
                 <SheetScroller>
                   <CategoryGrid
                     categories={categoriesFor(isIncome)}
