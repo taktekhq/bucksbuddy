@@ -62,11 +62,16 @@ export function coverageRatio(facts: ReportFacts): number {
 }
 
 /**
- * The two hard gates the owner set — logging that reaches back to the start of
- * the window, and at least 40 expenses — plus the soft one ("ideally not many
- * unlogged days"), which is deliberately a warning: a thin month is still the
- * customer's call, and the review says so in its own text rather than being
+ * One hard gate — at least 40 logged expenses — and one soft one ("ideally not
+ * many unlogged days"), which is deliberately a warning: a thin month is still
+ * the customer's call, and the review says so in its own text rather than being
  * refused at the door.
+ *
+ * The old second gate is gone, because neither review can fail it. Both windows
+ * start at or after the account's first entry (the recent one is clamped forward
+ * to it — see migration 0011), so "does your history reach back far enough" is
+ * now true by construction. What is left is the empty account, which fails on
+ * having nothing to read.
  *
  * Every sentence here is at most 70 characters. The counters above them already
  * show the numbers, so the words only have to name what is missing.
@@ -85,25 +90,13 @@ export function describeEligibility(
     const left = threshold - facts.spendCount;
     blockers.push(`${left} more ${left === 1 ? "expense" : "expenses"} to go.`);
   }
-  if (facts.firstEntryAt === null) {
-    blockers.push("Nothing logged yet.");
-  } else if (periodId !== "all_time" && !facts.coversPeriod) {
-    // "All time" starts AT the first entry, so it covers itself by construction
-    // and this gate can only ever be a false refusal for it — including against a
-    // database still running the pre-0011 function, which reads a null start as
-    // the epoch and would call every all-time window uncovered.
-    blockers.push(
-      periodId === "this_vs_last"
-        ? "Last month isn't fully logged yet."
-        : "Your history doesn't reach back that far yet.",
-    );
-  }
+  if (facts.firstEntryAt === null) blockers.push("Nothing logged yet.");
 
   const coverage = coverageRatio(facts);
   // Not for all time, where the denominator is the account's whole life: someone
   // who logged diligently for four months but opened two years ago sits near
-  // 17%, and warning them about it on the one window whose point is the long
-  // view would be noise. The counters still show the real ratio.
+  // 17%, and warning them about it on the review whose point is the long view
+  // would be noise. The counters still show the real ratio.
   if (periodId !== "all_time" && facts.loggedDays > 0 && coverage < LOW_COVERAGE) {
     // Phrased from the unlogged side: this only fires under half coverage, so the
     // count is always plural and the sentence needs no singular form.

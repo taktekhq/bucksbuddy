@@ -45,10 +45,11 @@ function set(handlers: Record<string, Handler> = {}) {
 // constructor so the expectations hold in any timezone, like the app's own
 // local-calendar bucketing.
 const NOW = new Date(2026, 8, 13, 12, 0, 0);
-const AUG_1 = new Date(2026, 7, 1).toISOString();
-const JUL_1 = new Date(2026, 6, 1).toISOString();
-// Two of the three windows end at the moment they are asked for, so `to` is NOW
-// rather than the first of this month.
+// Three whole months back — the recent review's full reach, before the database
+// clamps it forward to the account's first entry.
+const JUN_1_REACH = new Date(2026, 5, 1).toISOString();
+// Both reviews end at the moment they are asked for, so `to` is NOW rather than
+// the first of this month.
 const TO_NOW = NOW.toISOString();
 const JUN_1 = new Date(2026, 5, 1).toISOString();
 const SEP_1 = new Date(2026, 8, 1).toISOString();
@@ -150,7 +151,7 @@ describe("invoke() error surfacing", () => {
           })),
         ),
     });
-    const { url, error } = await startReview("this_vs_last", "USD", null, NOW);
+    const { url, error } = await startReview("last_3_months", "USD", null, NOW);
     expect(url).toBeNull();
     expect(error).toBe(
       "You need 40 expenses in the period to buy a review.",
@@ -166,7 +167,7 @@ describe("invoke() error surfacing", () => {
           }),
         ),
     });
-    const { error } = await startReview("this_vs_last", "USD", null, NOW);
+    const { error } = await startReview("last_3_months", "USD", null, NOW);
     expect(error).toBe(SDK_MESSAGE);
   });
 
@@ -174,7 +175,7 @@ describe("invoke() error surfacing", () => {
     set({
       "fn:review-start": () => fnFails(withJson(async () => ({ error: 42 }))),
     });
-    expect((await startReview("this_vs_last", "USD", null, NOW)).error).toBe(
+    expect((await startReview("last_3_months", "USD", null, NOW)).error).toBe(
       SDK_MESSAGE,
     );
   });
@@ -183,7 +184,7 @@ describe("invoke() error surfacing", () => {
     set({
       "fn:review-start": () => fnFails(withJson(async () => null)),
     });
-    expect((await startReview("this_vs_last", "USD", null, NOW)).error).toBe(
+    expect((await startReview("last_3_months", "USD", null, NOW)).error).toBe(
       SDK_MESSAGE,
     );
   });
@@ -192,7 +193,7 @@ describe("invoke() error surfacing", () => {
     set({
       "fn:review-start": () => fnFails({ message: SDK_MESSAGE, context: {} }),
     });
-    expect((await startReview("this_vs_last", "USD", null, NOW)).error).toBe(
+    expect((await startReview("last_3_months", "USD", null, NOW)).error).toBe(
       SDK_MESSAGE,
     );
   });
@@ -201,32 +202,24 @@ describe("invoke() error surfacing", () => {
     set({
       "fn:review-start": () => fnFails({ message: "Failed to send a request" }),
     });
-    expect((await startReview("this_vs_last", "USD", null, NOW)).error).toBe(
+    expect((await startReview("last_3_months", "USD", null, NOW)).error).toBe(
       "Failed to send a request",
     );
   });
 });
 
 describe("fetchEligibility", () => {
-  it("asks the database about the period's own bounds and returns its counts", async () => {
+  it("asks the database about the recent review's reach, and returns its counts", async () => {
     set({ "rpc:report_eligibility": () => ({ data: facts(), error: null }) });
-    const { facts: got, error } = await fetchEligibility("this_vs_last", NOW);
+    const { facts: got, error } = await fetchEligibility("last_3_months", NOW);
     expect(error).toBeNull();
     expect(got?.spendCount).toBe(120);
     expect(got?.ok).toBe(true);
-    // From the first of last month to this moment: the current month is inside
-    // the window, which is the whole point of the comparison.
+    // Three whole months back to this moment. The start is a ceiling, not a
+    // promise: the function clamps it forward if the account is younger, which
+    // is what makes the review "at most three months" rather than a refusal.
     expect(mock.supabase.rpc).toHaveBeenCalledWith("report_eligibility", {
-      p_from: AUG_1,
-      p_to: TO_NOW,
-    });
-  });
-
-  it("reaches back two more months for the quarter", async () => {
-    set({ "rpc:report_eligibility": () => ({ data: facts(), error: null }) });
-    await fetchEligibility("last_3_months", NOW);
-    expect(mock.supabase.rpc).toHaveBeenCalledWith("report_eligibility", {
-      p_from: JUL_1,
+      p_from: JUN_1_REACH,
       p_to: TO_NOW,
     });
   });
@@ -248,14 +241,14 @@ describe("fetchEligibility", () => {
         error: { message: 'function public.report_eligibility does not exist' },
       }),
     });
-    const { facts: got, error } = await fetchEligibility("this_vs_last", NOW);
+    const { facts: got, error } = await fetchEligibility("last_3_months", NOW);
     expect(got).toBeNull();
     expect(error).toBe("function public.report_eligibility does not exist");
   });
 
   it("reads no facts as null rather than as a failure", async () => {
     set({ "rpc:report_eligibility": () => ({ data: null, error: null }) });
-    expect(await fetchEligibility("this_vs_last", NOW)).toEqual({
+    expect(await fetchEligibility("last_3_months", NOW)).toEqual({
       facts: null,
       error: null,
     });
@@ -268,7 +261,7 @@ describe("fetchEligibility", () => {
     const partial: Partial<ReportFacts> = facts({ spendCount: 12, ok: false });
     delete partial.minSpendEntries;
     set({ "rpc:report_eligibility": () => ({ data: partial, error: null }) });
-    const { facts: got, error } = await fetchEligibility("this_vs_last", NOW);
+    const { facts: got, error } = await fetchEligibility("last_3_months", NOW);
     expect(error).toBeNull();
     expect(got?.minSpendEntries).toBe(MIN_SPEND_ENTRIES);
     expect(got?.minSpendEntries).toBe(40);
@@ -286,7 +279,7 @@ describe("fetchEligibility", () => {
         error: null,
       }),
     });
-    const { facts: got, error } = await fetchEligibility("this_vs_last", NOW);
+    const { facts: got, error } = await fetchEligibility("last_3_months", NOW);
     expect(error).toBeNull();
     expect(got?.minSpendEntries).toBe(60);
     expect(got?.spendCount).toBe(50);
@@ -364,7 +357,7 @@ describe("startReview", () => {
       {
         body: {
           period_id: "last_3_months",
-          period_from: JUL_1,
+          period_from: JUN_1_REACH,
           period_to: TO_NOW,
           home_currency: "LBP",
         },
@@ -379,7 +372,7 @@ describe("startReview", () => {
           withJson(async () => ({ error: "That period is not finished yet." })),
         ),
     });
-    expect(await startReview("this_vs_last", "USD", null, NOW)).toEqual({
+    expect(await startReview("last_3_months", "USD", null, NOW)).toEqual({
       reviewId: null,
       url: null,
       free: false,
@@ -391,7 +384,7 @@ describe("startReview", () => {
     set({
       "fn:review-start": () => ({ data: { review_id: "rev-1" }, error: null }),
     });
-    expect(await startReview("this_vs_last", "USD", null, NOW)).toEqual({
+    expect(await startReview("last_3_months", "USD", null, NOW)).toEqual({
       reviewId: "rev-1",
       url: null,
       free: false,
@@ -408,7 +401,7 @@ describe("startReview", () => {
     });
     // An allowlisted account: the row is already paid at a price of zero, so
     // there is no url to go to and nothing to wait for.
-    expect(await startReview("this_vs_last", "USD", null, NOW)).toEqual({
+    expect(await startReview("last_3_months", "USD", null, NOW)).toEqual({
       reviewId: "rev-free",
       url: null,
       free: true,
@@ -418,7 +411,7 @@ describe("startReview", () => {
 
   it("returns nothing usable when the function answers with no data", async () => {
     set({ "fn:review-start": () => ({ data: null, error: null }) });
-    expect(await startReview("this_vs_last", "USD", null, NOW)).toEqual({
+    expect(await startReview("last_3_months", "USD", null, NOW)).toEqual({
       reviewId: null,
       url: null,
       free: false,

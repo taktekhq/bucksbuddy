@@ -1,17 +1,19 @@
--- New review windows, two of which include the current, unfinished month.
+-- The two reviews, both of which include the current, unfinished month.
 --
 -- Until now a review covered whole FINISHED calendar months only: 'last_month'
--- and 'past_3_months' (the three months ending with last month). The three
--- windows on offer now are:
+-- and 'past_3_months' (the three months ending with last month). What is on
+-- offer now is two reviews rather than a choice of window:
 --
---   this_vs_last   — last month and this one, so the two can be compared
---   last_3_months  — this month and the two before it
+--   last_3_months  — the 3 months before this one against this one, or as much
+--                    of them as the account has
 --   all_time       — everything, anchored at the account's first entry
 --
--- Two of them end at the moment they are asked for, which makes a review a
--- snapshot rather than a finished document. That is the point: the question
--- "how am I doing this month" cannot be answered by a window that stops at the
--- 1st.
+-- ('this_vs_last' is listed below as well: it was briefly on offer, and a review
+-- stored under it still has to open.)
+--
+-- Both end at the moment they are asked for, which makes a review a snapshot
+-- rather than a finished document. That is the point: the question "how am I
+-- doing this month" cannot be answered by a window that stops at the 1st.
 --
 -- Note for the window constraint 0009 already has: an all-time window can be
 -- shorter than a day (an account whose first entry is today), and
@@ -38,11 +40,21 @@ alter table public.spending_reviews
   );
 
 -- ===== report_eligibility =====
--- Same signature, same rule, one addition: a NULL `p_from` now means "from the
--- account's first entry", which is what 'all_time' needs. Without it the client
--- would have to guess a floor date, and every count that divides by the window
--- (days in the period, unlogged days) would be measured against decades of
--- prehistory the account did not exist for.
+-- Same signature, same rule, two additions, both about where a window starts:
+--
+--   * A NULL `p_from` means "from the account's first entry", which is what
+--     'all_time' needs. Without it the client would have to guess a floor date,
+--     and every count that divides by the window (days in the period, unlogged
+--     days) would be measured against decades of prehistory the account did not
+--     exist for.
+--   * A `p_from` EARLIER than the first entry is clamped forward to it. That is
+--     what makes the recent review "at most three months": an account two months
+--     old asks about three and is answered about two, instead of being told its
+--     history does not reach back far enough. It also means the coverage figures
+--     are never diluted by weeks before the account existed.
+--
+-- Both leave `coversPeriod` true by construction, so the only gate either review
+-- can fail is the count of logged expenses.
 --
 -- Everything else is unchanged from 0009, including the accepted limit that day
 -- offsets are fixed 24-hour blocks while the app buckets by local calendar day
@@ -61,11 +73,15 @@ as $$
     from public.transactions t
     where t.user_id = auth.uid()
   ),
-  -- The window's real start. NULL p_from anchors on the first entry; an account
-  -- with no entries at all collapses to an empty window, which fails the gate on
-  -- the count anyway.
+  -- The window's real start: never earlier than the first entry, and the first
+  -- entry itself when no start was given. An account with no entries at all
+  -- collapses to an empty window, which fails the gate on the count anyway.
   anchor as (
-    select coalesce(p_from, (select at from first_entry), p_to) as from_at
+    select case
+             when (select at from first_entry) is null then p_to
+             when p_from is null then (select at from first_entry)
+             else greatest(p_from, (select at from first_entry))
+           end as from_at
   ),
   -- Whole days only, floored rather than rounded. Two of the windows end at the
   -- moment they are asked for, so the span is fractional: rounding could claim a

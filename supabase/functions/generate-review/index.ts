@@ -95,29 +95,42 @@ const MAX_ATTEMPTS = 3;
 // record the winner in the row's `model` column — the working id becomes a fact
 // in the data instead of a thing to rediscover. Newest first, and a "-latest"
 // alias first of all, since that one survives a rename.
+// Lightest first, deliberately. A review is prose over figures that have
+// already been computed — the hard part was the arithmetic, and that is done —
+// so the smallest tier is enough, and the smallest tier is also the one least
+// likely to answer "currently experiencing high demand". Quality is protected by
+// the guard below rather than by model size: a review that misquotes a figure is
+// thrown away whichever model wrote it. Set GEMINI_MODEL to put a bigger one
+// first if the writing disappoints.
 const MODEL_CANDIDATES = [
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash-lite",
+  "gemini-2.5-flash-lite",
   "gemini-flash-latest",
   "gemini-3.5-flash",
   "gemini-2.5-flash",
 ];
 
-/** The ids to try, configured one first. */
+// The id that last answered, kept between requests: the walk below costs one
+// failed request per id that does not exist, and there is no reason to pay that
+// on every review once something has worked.
+let lastGoodModel: string | null = null;
+
+/** The ids to try: configured first, then whatever worked last, then the list. */
 function modelCandidates(): string[] {
   const configured = Deno.env.get("GEMINI_MODEL");
-  const ids = configured ? [configured, ...MODEL_CANDIDATES] : MODEL_CANDIDATES;
+  const ids = [
+    ...(configured ? [configured] : []),
+    ...(lastGoodModel ? [lastGoodModel] : []),
+    ...MODEL_CANDIDATES,
+  ];
   return [...new Set(ids)];
 }
 
-/**
- * Is this "that model isn't callable with this key", rather than a real failure?
- * Only a name problem is worth trying the next id for — a rate limit, a bad key
- * or a safety block would fail identically on every one of them.
- */
-function isModelUnavailable(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  return /not\s*found|no longer available|not available|unsupported model|does not exist|unexpected model name/i
-    .test(message);
-}
+/** Waits between tries of the same model, in ms. Two waits, then move on. */
+const BUSY_BACKOFF_MS = [1_500, 4_000];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Finish reasons that mean no usable review came back. */
 const BAD_FINISH: Record<string, string> = {
@@ -201,8 +214,37 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
-// --- the window check, and the numbers guarantee ---
+// --- the window check, what is worth retrying, and the numbers guarantee ---
 // #region verifiable — lifted out and exercised by scripts/verify-edge-functions.mjs
+
+/**
+ * Is this "that model isn't callable with this key", rather than a real failure?
+ * Only a name problem is worth trying the next id for — a rate limit, a bad key
+ * or a safety block would fail identically on every one of them.
+ */
+function isModelUnavailable(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /not\s*found|no longer available|unsupported model|does not exist|unexpected model name/i
+    .test(message);
+}
+
+/** What the reader is told when every model is busy. Also the sentinel below. */
+const BUSY_MESSAGE = "Gemini is busy right now. Tap to try again.";
+
+/**
+ * Is this "come back in a moment", rather than anything about this request?
+ *
+ * Google answers a demand spike with 503 UNAVAILABLE and "currently
+ * experiencing high demand" — its own advice is that spikes are temporary. So it
+ * is worth waiting once, and then worth trying a different model, before giving
+ * up: a lighter tier is usually the one with capacity left.
+ */
+function isOverloaded(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\b503\b|unavailable|overloaded|high demand|try again later|resource.?exhausted|\b429\b/i
+    .test(message);
+}
+
 
 /**
  * Does `claimed` — a `YYYY-MM-DD` the device wrote from its OWN calendar — name
@@ -435,6 +477,9 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
   let reviewId: string | null = null;
+  // The attempt count before this request claimed one, so a failure that was
+  // nobody's fault can hand it back.
+  let claimedFrom: number | null = null;
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -521,6 +566,7 @@ Deno.serve(async (req) => {
     // claim on this generation. Without the `attempts` predicate, N concurrent
     // requests for the same paid review would all read the same count, all pass
     // the cap above, and all call the model — one payment, unlimited spend.
+    claimedFrom = review.attempts;
     const { data: claimed, error: claimErr } = await admin
       .from("spending_reviews")
       .update({ attempts: review.attempts + 1 })
@@ -595,20 +641,44 @@ Deno.serve(async (req) => {
       return { review: parseReview(parsed), raw };
     }
 
-    /** Ask, walking down the candidate ids until one is callable. */
+    /**
+     * Ask, walking the candidate ids. Two reasons to move on: the id is not one
+     * this key can call, or it is busy. A busy model is waited out first —
+     * twice, briefly — because a spike passing is the likeliest outcome; only
+     * then does it try the next id, which is a lighter tier with more headroom.
+     * Anything else (a bad key, a safety block) fails the same way on every
+     * model, so it is raised immediately.
+     */
     async function ask(): Promise<{ review: Review; raw: string }> {
       const tries = chosen === null ? modelCandidates() : [chosen];
+      let busy = false;
       let last: unknown = null;
       for (const candidate of tries) {
-        try {
-          const out = await askModel(candidate);
-          chosen = candidate;
-          return out;
-        } catch (err) {
-          if (!isModelUnavailable(err)) throw err;
-          last = err;
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const out = await askModel(candidate);
+            chosen = candidate;
+            lastGoodModel = candidate;
+            return out;
+          } catch (err) {
+            last = err;
+            if (isOverloaded(err)) {
+              busy = true;
+              if (attempt < BUSY_BACKOFF_MS.length) {
+                console.error(`generate-review: ${candidate} is busy, waiting`);
+                await sleep(BUSY_BACKOFF_MS[attempt]);
+                continue;
+              }
+              break;
+            }
+            if (isModelUnavailable(err)) break;
+            throw err;
+          }
         }
       }
+      // Busy everywhere is a different answer from "no such model": it is worth
+      // tapping again, and it must not cost the reader an attempt.
+      if (busy) throw new Error(BUSY_MESSAGE);
       throw new Error(
         `No Gemini model this key can call — tried ${tries.join(", ")}. Set the GEMINI_MODEL secret to a current id. (${
           last instanceof Error ? last.message : String(last)
@@ -682,11 +752,27 @@ Deno.serve(async (req) => {
     // What the archive shows. An SDK failure carries Google's whole serialised
     // error body, and `error` is a plaintext column this app renders as a
     // review's subtitle — so the row gets a sentence and the raw text stays in
-    // the function logs, where it is actually useful.
+    // the function logs, where it is actually useful. The device is told the
+    // same sentence, for the same reason.
     console.error("generate-review failed:", message);
     const stored = message.length > 160 || /[{}]/.test(message)
       ? "The review couldn't be written. Tap to try again."
       : message;
+
+    // Every model was busy. Capacity is not the reader's fault and nothing was
+    // generated, so give the attempt back and leave the row untouched: three
+    // demand spikes in an afternoon must not retire a review permanently.
+    if (message === BUSY_MESSAGE) {
+      if (reviewId && claimedFrom !== null) {
+        await admin
+          .from("spending_reviews")
+          .update({ attempts: claimedFrom })
+          .eq("id", reviewId)
+          .eq("attempts", claimedFrom + 1);
+      }
+      return json({ error: BUSY_MESSAGE }, 503);
+    }
+
     if (reviewId) {
       // Record why, and give up for good once the attempts are gone so the
       // owner can see the refund is owed.
@@ -704,6 +790,6 @@ Deno.serve(async (req) => {
         .eq("id", reviewId)
         .neq("status", "refunded");
     }
-    return json({ error: message }, 502);
+    return json({ error: stored }, 502);
   }
 });

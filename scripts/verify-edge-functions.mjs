@@ -141,6 +141,45 @@ async function verifyWindowCheck() {
   check("an unparseable instant is refused", namesDay("2026-08-01", "not a date"), false);
 }
 
+// ---------------------------------------------------------------- retry ----
+async function verifyRetryClassification() {
+  console.log("\ngenerate-review — what is worth retrying");
+  const { isOverloaded, isModelUnavailable } = await loadRegion(
+    "supabase/functions/generate-review/index.ts",
+    ["isOverloaded", "isModelUnavailable"],
+  );
+
+  // The real thing, verbatim from a failed generation on 2026-09-15. Getting
+  // this wrong is not academic: classed as a name problem it would walk the
+  // whole candidate list pointlessly, and classed as neither it gives up on the
+  // first spike and spends one of the review's three attempts.
+  const REAL_503 = String.raw`{"error":{"code":503,"message":"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","status":"UNAVAILABLE"}}`;
+  check("the 503 Google actually sent reads as busy", isOverloaded(REAL_503), true);
+  check("…and not as a bad model name", isModelUnavailable(REAL_503), false);
+
+  check("an overloaded 503 reads as busy",
+    isOverloaded(new Error("got status: 503 Service Unavailable. The model is overloaded.")), true);
+  check("a rate limit reads as busy",
+    isOverloaded(new Error("429 RESOURCE_EXHAUSTED: quota exceeded")), true);
+
+  // A retired or misspelled id: walk to the next candidate, do not wait.
+  const RETIRED = String.raw`{"error":{"code":404,"message":"This model models/gemini-2.5-pro is no longer available to new users.","status":"NOT_FOUND"}}`;
+  check("a retired model reads as a name problem", isModelUnavailable(RETIRED), true);
+  check("…and not as busy", isOverloaded(RETIRED), false);
+  check("an unknown model name reads as a name problem",
+    isModelUnavailable(new Error("Unexpected model name format: gemini-nope")), true);
+
+  // Neither: the same failure on every model, so raise it at once.
+  for (const [what, message] of [
+    ["a bad key", "API key not valid. Please pass a valid API key."],
+    ["a safety block", "Candidate was blocked due to SAFETY"],
+    ["a malformed request", "400 INVALID_ARGUMENT: request contains an invalid argument"],
+  ]) {
+    check(`${what} is neither busy nor a name problem`,
+      isOverloaded(new Error(message)) || isModelUnavailable(new Error(message)), false);
+  }
+}
+
 // --------------------------------------------------------------- numbers ----
 async function verifyNumberGuard() {
   console.log("\ngenerate-review — the no-invented-amounts guard");
@@ -248,6 +287,7 @@ async function verifyNumberGuard() {
 
 await verifyWebhookSignatures();
 await verifyWindowCheck();
+await verifyRetryClassification();
 await verifyNumberGuard();
 
 console.log(`\n${passed} checks passed, ${failures.length} failed`);

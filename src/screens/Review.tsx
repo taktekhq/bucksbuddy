@@ -9,10 +9,10 @@ import { useStore } from "@/lib/store";
 import posthog from "@/lib/posthog";
 import { buildDigest } from "@/lib/reportDigest";
 import {
-  DEFAULT_REPORT_PERIOD,
   REPORT_PERIODS,
   reportPeriodLabel,
   reportWindowLabel,
+  type ReportPeriod,
   periodName,
   isKnownPeriodId,
   type ReportPeriodId,
@@ -96,8 +96,12 @@ export function Review() {
   // amounts it was written from.
   const gate = e2eMode === "passphrase" ? passphrase : null;
 
-  const [periodId, setPeriodId] = useState<ReportPeriodId>(DEFAULT_REPORT_PERIOD);
-  const [facts, setFacts] = useState<ReportFacts | null>(null);
+  // Where the account stands for each of the two reviews. They have different
+  // windows, so they have different counts: 40 expenses all time is not 40 in
+  // the last three months.
+  const [standing, setStanding] = useState<
+    Record<ReportPeriodId, ReportFacts | null>
+  >({ last_3_months: null, all_time: null });
   // When this account's logging started, as the last eligibility answer reported
   // it. Only "all time" needs it, and only the database knows it.
   const [firstEntryAt, setFirstEntryAt] = useState<string | null>(null);
@@ -217,29 +221,46 @@ export function Review() {
     // it would re-enter generation, so it is pinned to mount regardless.
   }, []);
 
-  // The picker moves, so the counts have to follow it.
+  // Both standings, once, on mount. Nothing moves any more — there is no picker
+  // — so there is nothing to re-count.
   useEffect(() => {
     let live = true;
     void (async () => {
-      const { facts: f, error: e } = await fetchEligibility(periodId);
+      const answers = await Promise.all(
+        REPORT_PERIODS.map(async (p) => ({
+          id: p.id,
+          ...(await fetchEligibility(p.id)),
+        })),
+      );
       if (!live) return;
-      setFacts(f);
-      setFirstEntryAt(f?.firstEntryAt ?? null);
-      setFactsError(e);
-      posthog.capture("review_gate_seen", {
-        period: periodId,
-        eligible: f?.ok ?? null,
-        expenses_logged: f?.spendCount ?? null,
-        days_logged: f?.loggedDays ?? null,
-        days_in_period: f?.periodDays ?? null,
-      });
+      const next: Record<ReportPeriodId, ReportFacts | null> = {
+        last_3_months: null,
+        all_time: null,
+      };
+      for (const a of answers) {
+        next[a.id] = a.facts;
+        posthog.capture("review_gate_seen", {
+          period: a.id,
+          eligible: a.facts?.ok ?? null,
+          expenses_logged: a.facts?.spendCount ?? null,
+          days_logged: a.facts?.loggedDays ?? null,
+          days_in_period: a.facts?.periodDays ?? null,
+        });
+      }
+      setStanding(next);
+      // One anchor for both: the account's first entry is a property of the
+      // account, and every answer carries the same one.
+      setFirstEntryAt(answers.find((a) => a.facts !== null)?.facts?.firstEntryAt ?? null);
+      // Either answer failing means the same thing — the function is missing or
+      // the database refused — so the first message is the one worth showing.
+      setFactsError(answers.find((a) => a.error !== null)?.error ?? null);
     })();
     return () => {
       live = false;
     };
-  }, [periodId]);
+  }, []);
 
-  const buy = useCallback(async () => {
+  const buy = useCallback(async (periodId: ReportPeriodId) => {
     setError(null);
     setBusy("Starting your review…");
     const { reviewId, url, free, error: startError } = await startReview(
@@ -279,7 +300,7 @@ export function Review() {
     // A plain navigation to Stripe's hosted page: no third-party script runs in
     // the app, and no Content-Security-Policy entry is needed for it.
     window.location.href = url;
-  }, [periodId, homeCurrency, firstEntryAt, refreshRows, write]);
+  }, [homeCurrency, firstEntryAt, refreshRows, write]);
 
   const show = useCallback(
     async (row: SpendingReviewRow) => {
@@ -347,14 +368,36 @@ export function Review() {
       )}
 
       {busy === null && (
-        <Offer
-          periodId={periodId}
-          onPeriod={setPeriodId}
-          facts={facts}
-          firstEntryAt={firstEntryAt}
-          factsError={factsError}
-          onBuy={buy}
-        />
+        <section className="flex flex-col gap-2">
+          <SectionHeader className="text-review-muted">
+            A review of your spending
+          </SectionHeader>
+          {factsError !== null && (
+            <Card>
+              <p className="text-sm text-expense">
+                Reviews aren&apos;t set up yet.
+              </p>
+              <p className="break-words text-xs text-review-muted">
+                {factsError}
+              </p>
+            </Card>
+          )}
+          {/* Two reviews, not a choice of window: picking a span was a decision
+              nobody could make well. Each carries its own standing, because
+              40 expenses all time is not 40 in the last three months. */}
+          {REPORT_PERIODS.map((period) => (
+            <Offer
+              key={period.id}
+              period={period}
+              facts={standing[period.id]}
+              firstEntryAt={firstEntryAt}
+              onBuy={buy}
+            />
+          ))}
+          <p className="px-2 text-center text-xs leading-relaxed text-review-muted">
+            One review a month. Totals only — your notes stay here.
+          </p>
+        </section>
       )}
 
       <Archive
@@ -447,109 +490,54 @@ function Card({ children }: { children: ReactNode }) {
   );
 }
 
-// The offer: what it covers, where this account stands, what leaves the device,
-// and the one button. Every line of copy here is at most 70 characters — the
+// One review's card: its name, what it reads, where this account stands against
+// the bar, and its own button. Every line of copy is at most 70 characters — the
 // counters carry the detail, so the words only have to name things.
 function Offer({
-  periodId,
-  onPeriod,
+  period,
   facts,
   firstEntryAt,
-  factsError,
   onBuy,
 }: {
-  periodId: ReportPeriodId;
-  onPeriod: (id: ReportPeriodId) => void;
+  period: ReportPeriod;
   facts: ReportFacts | null;
-  /** When logging started, for the "all time" row. Null until it is known. */
+  /** When logging started, for the window line. Null until it is known. */
   firstEntryAt: string | null;
-  factsError: string | null;
-  onBuy: () => void;
+  onBuy: (id: ReportPeriodId) => void;
 }) {
-  const copy = facts ? describeEligibility(facts, periodId) : null;
+  const copy = facts ? describeEligibility(facts, period.id) : null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <SectionHeader className="text-review-muted">
-        A review of your spending
-      </SectionHeader>
-      <div className="overflow-hidden rounded-card bg-review-card ring-1 ring-inset ring-white/10">
-        <p className="px-4 pt-4 text-[15px] text-review-text">
-          Your own numbers, read back to you.
+    <div className="flex flex-col gap-3 rounded-card bg-review-card p-4 ring-1 ring-inset ring-white/10">
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-base font-semibold text-review-text">
+          {period.label}
+        </h3>
+        <p className="text-xs text-review-muted">{period.blurb}</p>
+        <p className="text-xs text-review-muted">
+          {reportPeriodLabel(period.id, undefined, firstEntryAt)}
         </p>
-
-        <div
-          role="radiogroup"
-          aria-label="What the review covers"
-          className="mt-4 divide-y divide-white/10 border-y border-white/10"
-        >
-          {REPORT_PERIODS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="radio"
-              aria-checked={option.id === periodId}
-              onClick={() => onPeriod(option.id)}
-              className="press flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-            >
-              <span className="flex flex-col">
-                <span className="text-base text-review-text">
-                  {option.label}
-                </span>
-                <span className="text-xs text-review-muted">
-                  {reportPeriodLabel(option.id, undefined, firstEntryAt)}
-                </span>
-              </span>
-              {option.id === periodId && (
-                <Check
-                  className="h-5 w-5 shrink-0 text-carrot"
-                  strokeWidth={2.5}
-                />
-              )}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-3 p-4">
-          {factsError !== null && (
-            <div className="flex flex-col gap-1">
-              <p className="text-sm text-expense">Reviews aren&apos;t set up yet.</p>
-              <p className="break-words text-xs text-review-muted">{factsError}</p>
-            </div>
-          )}
-          {facts !== null && copy !== null && (
-            <Standing facts={facts} copy={copy} />
-          )}
-
-          <button
-            type="button"
-            disabled={copy === null || !copy.ok}
-            onClick={onBuy}
-            className="press rounded-pill bg-carrot py-3.5 text-lg font-semibold text-surface shadow-carrot transition disabled:bg-white/10 disabled:text-review-muted disabled:shadow-none"
-          >
-            {copy === null
-              ? "Can't check your history"
-              : !copy.ok
-                ? "Not enough logged yet"
-                : REVIEW_BILLING === "off"
-                  ? "Write my review"
-                  : `Unlock a review · ${reviewPriceLabel()}`}
-          </button>
-
-          {/* Two short lines rather than a paragraph of small print: the same
-              four facts — what leaves, what never does, what happens to the
-              result, what it costs — and neither line over 70 characters. */}
-          <div className="flex flex-col gap-0.5 text-center text-xs leading-relaxed text-review-muted">
-            <p>Totals only — Gemini writes it, your notes stay here.</p>
-            <p>
-              {REVIEW_BILLING === "off"
-                ? "Encrypted with your key. Free while it's being tried out."
-                : "Encrypted with your key. One-time, per review."}
-            </p>
-          </div>
-        </div>
       </div>
-    </section>
+
+      {facts !== null && copy !== null && (
+        <Standing facts={facts} copy={copy} />
+      )}
+
+      <button
+        type="button"
+        disabled={copy === null || !copy.ok}
+        onClick={() => onBuy(period.id)}
+        className="press rounded-pill bg-carrot py-3 text-base font-semibold text-surface shadow-carrot transition disabled:bg-white/10 disabled:text-review-muted disabled:shadow-none"
+      >
+        {copy === null
+          ? "Can't check your history"
+          : !copy.ok
+            ? "Not enough logged yet"
+            : REVIEW_BILLING === "off"
+              ? "Write it"
+              : `Unlock it · ${reviewPriceLabel()}`}
+      </button>
+    </div>
   );
 }
 
