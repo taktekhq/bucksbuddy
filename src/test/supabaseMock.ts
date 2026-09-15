@@ -14,6 +14,9 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
   // Paged reads (store.reviewRange) call .range() once per page, so a handler
   // can answer differently per call by counting.
   const ranges: { from: number; to: number }[] = [];
+  // Sort keys, in the order they were asked for. A paged read needs a tiebreaker
+  // or its pages can overlap, so a test has to be able to see one.
+  const orders: { column: string; ascending: boolean }[] = [];
 
   function from(table: string) {
     let op = "select";
@@ -39,7 +42,10 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
       neq: () => builder,
       gte: () => builder,
       lt: () => builder,
-      order: () => builder,
+      order: (column: string, opts?: { ascending?: boolean }) => {
+        orders.push({ column, ascending: opts?.ascending !== false });
+        return builder;
+      },
       limit: () => builder,
       range: (from: number, to: number) => {
         ranges.push({ from, to });
@@ -91,5 +97,10 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
     }),
   };
 
-  return { supabase: { from: vi.fn(from), auth, rpc, functions }, calls, ranges };
+  return {
+    supabase: { from: vi.fn(from), auth, rpc, functions },
+    calls,
+    ranges,
+    orders,
+  };
 }

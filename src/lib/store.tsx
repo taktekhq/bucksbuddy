@@ -575,6 +575,13 @@ export function StoreProvider({
         .gte("occurred_at", from.toISOString())
         .lt("occurred_at", to.toISOString())
         .order("occurred_at", { ascending: false })
+        // `id` breaks the tie. Entries logged in the same second — and a page
+        // boundary landing inside a group of them — would otherwise be ordered
+        // arbitrarily per query, so one row could come back on two pages and
+        // another on none. The totals would be wrong and nothing downstream
+        // could tell: the guard only checks the model quoted the digest, not
+        // that the digest counted every row.
+        .order("id", { ascending: false })
         .range(page * REVIEW_PAGE, page * REVIEW_PAGE + REVIEW_PAGE - 1);
       // A failed page must not read as the end of the window: that would silently
       // truncate the totals a review is about to be written from.

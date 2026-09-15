@@ -204,6 +204,22 @@ async function verifyNumberGuard() {
   check("two decimals without a symbol are still held strictly",
     clean("It came to 562.00 in all."), false);
 
+  console.log("  a month-over-month decrease:");
+  // The digest holds a decrease as a negative percentage; a truthful sentence
+  // about it can only ever quote the unsigned figure, because the token matcher
+  // starts at the first digit.
+  const down = { changePct: -53.3, last: { cents: 22000, display: "$220.00" } };
+  const downAmounts = new Set();
+  const downNumbers = new Set();
+  collectAmounts(down, downAmounts);
+  collectNumbers(down, downNumbers);
+  check("a decrease quoted without its minus passes",
+    unsupportedAmounts("Food spending fell 53.3% from June to August.", downAmounts, downNumbers).length === 0, true);
+  check("the signed form passes too",
+    unsupportedAmounts("Food is down -53.3% on the window.", downAmounts, downNumbers).length === 0, true);
+  check("an invented percentage is still caught",
+    unsupportedAmounts("Food spending fell 61.4%.", downAmounts, downNumbers).length === 0, false);
+
   console.log("  other currencies:");
   const lbp = new Set();
   const lbpNumbers = new Set();

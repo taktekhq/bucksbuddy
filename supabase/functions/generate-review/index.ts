@@ -32,7 +32,45 @@
 //                    whichever one answered in the review's `model` column. Set
 //                    this only to override that order.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GoogleGenAI } from "https://esm.sh/@google/genai@2.22.0";
+
+// The Gemini SDK is imported LAZILY, inside the handler and before this request
+// spends anything. A static import that fails to resolve takes the whole
+// function down at boot with a platform error and no explanation; loaded this
+// way, a resolution failure costs no attempt and lands in the row as a sentence,
+// with the detail in the function logs. Deno caches the module after the first
+// successful load, so this is a one-off, not a per-request cost.
+//
+// Only the surface this function uses is typed, because the module is now
+// untyped at the import site.
+type Turn = { role: "user" | "model"; parts: { text: string }[] };
+type GenAI = {
+  models: {
+    generateContent: (req: {
+      model: string;
+      contents: Turn[];
+      config: Record<string, unknown>;
+    }) => Promise<{
+      text?: string;
+      candidates?: { finishReason?: string }[];
+    }>;
+  };
+};
+type GenAICtor = new (opts: { apiKey: string }) => GenAI;
+
+let cachedCtor: GenAICtor | null = null;
+
+async function genAIClient(apiKey: string): Promise<GenAI> {
+  if (!cachedCtor) {
+    try {
+      const mod = await import("https://esm.sh/@google/genai@2.22.0");
+      cachedCtor = (mod as { GoogleGenAI: GenAICtor }).GoogleGenAI;
+    } catch (err) {
+      console.error("generate-review: could not load @google/genai:", err);
+      throw new Error("Couldn't load the Gemini client on the server.");
+    }
+  }
+  return new cachedCtor({ apiKey });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,7 +259,16 @@ function collectAmounts(value: unknown, into: Set<string>): void {
  */
 function collectNumbers(value: unknown, into: Set<string>): void {
   if (typeof value === "number" || typeof value === "string") {
-    into.add(normalize(String(value)));
+    const text = normalize(String(value));
+    into.add(text);
+    // Also without the sign. The digest holds a decrease as `changePct: -53.3`,
+    // and a review describing it truthfully writes "fell 53.3%" — the token
+    // matcher starts at the first digit and can never capture the minus, so
+    // pooling only the signed form flagged every honest sentence about spending
+    // going down. The unsigned form is the same figure the device computed, and
+    // this is the loose pool for ambiguous bare numbers; the strict pool of
+    // formatted amounts is untouched.
+    if (text.startsWith("-")) into.add(text.slice(1));
   } else if (Array.isArray(value)) for (const v of value) collectNumbers(v, into);
   else if (value && typeof value === "object") {
     for (const v of Object.values(value)) collectNumbers(v, into);
@@ -460,6 +507,10 @@ Deno.serve(async (req) => {
       return json({ error: "That digest is for a different period." }, 400);
     }
 
+    // Load the client before the attempt is claimed: if the module cannot be
+    // resolved, nothing has been spent and the row says why.
+    const ai = await genAIClient(apiKey);
+
     // Spend the attempt as a COMPARE-AND-SWAP, not a read-then-write: it is the
     // claim on this generation. Without the `attempts` predicate, N concurrent
     // requests for the same paid review would all read the same count, all pass
@@ -476,7 +527,6 @@ Deno.serve(async (req) => {
     }
 
     // --- write it ---
-    const ai = new GoogleGenAI({ apiKey });
     const amounts = new Set<string>();
     collectAmounts(digest, amounts);
     const numbers = new Set<string>();
@@ -484,7 +534,7 @@ Deno.serve(async (req) => {
 
     // Gemini takes the conversation as `contents`; the model's own turn has the
     // role "model". The corrective re-ask below appends to this.
-    const contents: { role: "user" | "model"; parts: { text: string }[] }[] = [
+    const contents: Turn[] = [
       {
         role: "user",
         parts: [
@@ -623,6 +673,14 @@ Deno.serve(async (req) => {
     return json({ review: written }, 200);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    // What the archive shows. An SDK failure carries Google's whole serialised
+    // error body, and `error` is a plaintext column this app renders as a
+    // review's subtitle — so the row gets a sentence and the raw text stays in
+    // the function logs, where it is actually useful.
+    console.error("generate-review failed:", message);
+    const stored = message.length > 160 || /[{}]/.test(message)
+      ? "The review couldn't be written. Tap to try again."
+      : message;
     if (reviewId) {
       // Record why, and give up for good once the attempts are gone so the
       // owner can see the refund is owed.
@@ -634,7 +692,7 @@ Deno.serve(async (req) => {
       await admin
         .from("spending_reviews")
         .update({
-          error: message,
+          error: stored,
           ...((row?.attempts ?? 0) >= MAX_ATTEMPTS ? { status: "failed" } : {}),
         })
         .eq("id", reviewId)
