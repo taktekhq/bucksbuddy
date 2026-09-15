@@ -172,6 +172,13 @@ describe("Home", () => {
     expect(screen.queryByRole("button", { name: "Cancel edit" })).not.toBeInTheDocument();
   });
 
+  it("navigates to the recurring-payments page from Recurring", async () => {
+    storeValue = makeStoreValue({ transactions: [tx()] });
+    render(<Home />);
+    await userEvent.click(screen.getByRole("button", { name: "Recurring" }));
+    expect(navigate).toHaveBeenCalledWith("/recurring");
+  });
+
   it("nudges to Show all when there's history but nothing today", () => {
     storeValue = makeStoreValue({
       transactions: [tx({ occurred_at: "2020-01-01T10:00:00.000Z" })],

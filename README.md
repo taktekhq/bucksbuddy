@@ -86,6 +86,17 @@ app that came with 0007 is deployed.
 > `parent/sub` in the existing `category` field — no schema change, existing rows
 > untouched.
 
+> **Recurring payments (proof of concept):** **Recurring**, next to *Show all* on
+> Home, opens `#/recurring` — the subscriptions, rent, salary and other entries that
+> keep coming back for the signed-in user, with what they add up to per month and
+> when each is next due. Nothing is set up by hand and there is no schema change:
+> `src/lib/recurring.ts` finds the series in the entries already logged, on the
+> device (so it works on end-to-end encrypted data), scoped to the signed-in user id.
+> A series is three or more entries with the same direction, category and note,
+> spaced weekly / every two weeks / monthly / yearly, with every amount within 15%
+> of the median. The page is read-only; it sits behind the same unlock nudge as the
+> rest of the app when the device is locked.
+
 ### 2. Create your user (password sign-in)
 
 - **Authentication → Users → Add user → Create new user.**
@@ -181,10 +192,11 @@ Sign-in is email + password (no email link), so you stay inside the app the whol
 index.html              app entry
 src/main.tsx            mount + register service worker
 src/App.tsx             auth gate + hash router
-src/screens/            Login, Home, Add, Settings
+src/screens/            Landing, Home, History, Recurring, Stats, Safe, Settings, …
 src/components/          AddComposer + ui/* building blocks, history rows/stacks, CurrencySettings, ExportCard
 src/lib/                supabase client, store (in-memory cache), router, useSession,
-                        crypto + e2e (encryption vault), currency/money/dates/csv/categories
+                        crypto + e2e (encryption vault), currency/money/dates/csv/categories,
+                        stats + recurring (pure aggregations over the decrypted rows)
 src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0006_public_stats.sql, 0007_currencies.sql, 0008_drop_legacy.sql

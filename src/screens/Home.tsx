@@ -267,18 +267,28 @@ export function Home() {
         )}
       </section>
 
-      {/* History — today's entries inline; everything else in the drawer. */}
+      {/* History — today's entries inline; everything else in the drawer, and
+          the entries that keep coming back on the Recurring page. */}
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <SectionHeader>History</SectionHeader>
           {transactions.length > 0 && (
-            <button
-              type="button"
-              onClick={() => navigate("/history")}
-              className="press px-2 text-sm font-semibold text-carrot"
-            >
-              Show all
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => navigate("/recurring")}
+                className="press px-2 text-sm font-semibold text-carrot"
+              >
+                Recurring
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/history")}
+                className="press px-2 text-sm font-semibold text-carrot"
+              >
+                Show all
+              </button>
+            </div>
           )}
         </div>
         {loading && transactions.length === 0 ? (

@@ -33,6 +33,11 @@ describe("router", () => {
     expect(renderHook(() => useRoute()).result.current).toBe("/history");
   });
 
+  it("recognizes the /recurring route", () => {
+    act(() => navigate("/recurring"));
+    expect(renderHook(() => useRoute()).result.current).toBe("/recurring");
+  });
+
   it("recognizes the /stats route", () => {
     act(() => navigate("/stats"));
     expect(renderHook(() => useRoute()).result.current).toBe("/stats");

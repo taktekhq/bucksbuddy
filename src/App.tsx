@@ -7,6 +7,7 @@ import { Legal } from "@/screens/Legal";
 import { Contact } from "@/screens/Contact";
 import { Home } from "@/screens/Home";
 import { History } from "@/screens/History";
+import { Recurring } from "@/screens/Recurring";
 import { Stats } from "@/screens/Stats";
 import { Receipts } from "@/screens/Receipts";
 import { Settings } from "@/screens/Settings";
@@ -83,6 +84,8 @@ export default function App() {
           <Safe />
         ) : route === "/history" ? (
           <History />
+        ) : route === "/recurring" ? (
+          <Recurring userId={session.user.id} />
         ) : route === "/stats/treats" ? (
           <Receipts kind="treats" />
         ) : route === "/stats/weekend" ? (
