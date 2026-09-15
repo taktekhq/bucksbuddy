@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { buildDigest, type ReportWindow } from "@/lib/reportDigest";
+import {
+  buildDigest,
+  daySpendSeries,
+  type ReportWindow,
+} from "@/lib/reportDigest";
 import type { Transaction } from "@/types/db";
 
 // Fixtures are built through the local-time Date constructor (and noon, away
@@ -83,7 +87,7 @@ function numbersIn(value: unknown): number[] {
 
 describe("buildDigest — the period it declares", () => {
   it("names the window it was sold for, not today's", () => {
-    expect(MAIN.version).toBe(1);
+    expect(MAIN.version).toBe(2);
     expect(MAIN.period).toEqual({
       id: "past_3_months",
       // Named as well as dated: two of the windows on offer end today, so their
@@ -437,6 +441,9 @@ describe("buildDigest — categories", () => {
 
   it("shares each category against total spending and averages its entries", () => {
     expect(MAIN.categories[0]).toEqual({
+      // The stored id rides along: the review screen draws each row with the
+      // category's own icon, and a label is a display string it cannot look up.
+      id: "rent",
       label: "Rent",
       spent: { cents: 60000, display: "$600.00" },
       count: 1,
@@ -444,6 +451,7 @@ describe("buildDigest — categories", () => {
       averageEntry: { cents: 60000, display: "$600.00" },
     });
     expect(MAIN.categories[1]).toEqual({
+      id: "groceries",
       label: "Groceries",
       spent: { cents: 22000, display: "$220.00" },
       count: 4,
@@ -550,26 +558,25 @@ describe("buildDigest — charges that repeat", () => {
   });
 });
 
-describe("buildDigest — first month against last", () => {
-  it("compares each category and names the direction", () => {
+describe("buildDigest — the first whole month against the last whole one", () => {
+  it("compares each category on its total and names the direction", () => {
     expect(
       MAIN.monthOverMonth.map((c) => [
         c.category,
         c.first.cents,
         c.last.cents,
-        c.changePctPerDay,
+        c.changePct,
         c.direction,
       ]),
     ).toEqual([
-      // Sorted by what was spent in the last month. The percentage is the change
-      // in SPEND PER DAY, not in the totals — June has 30 days and August 31, so
-      // an unchanged total is a slightly lower daily rate, and that is the point:
-      // the last month of a window that ends today is usually part-way through.
-      ["Rent", 0, 60000, null, "new"], //           absent in June
-      ["Groceries", 15000, 7000, -54.8, "down"], // 500/day -> 226/day
-      ["Food", 2500, 2500, -2.4, "down"], //        83/day -> 81/day
-      ["Coffee", 800, 1600, 92.6, "up"], //         27/day -> 52/day
-      ["Fees", 4800, 0, -100, "down"], //           absent in August
+      // Sorted by what was spent in the last of the two months. All three of
+      // this window's months are whole, so the comparison is June against
+      // August on their totals.
+      ["Rent", 0, 60000, null, "new"], //             absent in June
+      ["Groceries", 15000, 7000, -53.3, "down"],
+      ["Food", 2500, 2500, 0, "flat"],
+      ["Coffee", 800, 1600, 100, "up"],
+      ["Fees", 4800, 0, -100, "down"], //             absent in August
       ["Transport", 6000, 0, -100, "down"],
       ["Gym", 6000, 0, -100, "down"],
     ]);
@@ -577,27 +584,63 @@ describe("buildDigest — first month against last", () => {
     expect(MAIN.monthOverMonth[1].first.display).toBe("$150.00");
   });
 
-  it("compares a part-month on its rate, not on its smaller total", () => {
-    // The case the whole change exists for: on the 15th, spending at exactly
-    // last month's rate must not read as a halving.
+  it("names which two months those are, and how long each is", () => {
+    // They are not necessarily the window's own ends, so each entry says.
+    const [first] = MAIN.monthOverMonth;
+    expect(first.firstMonth).toBe("June 2026");
+    expect(first.lastMonth).toBe("August 2026");
+    expect(first.firstDays).toBe(30);
+    expect(first.lastDays).toBe(31);
+  });
+
+  it("leaves a month that is still running out of it entirely", () => {
+    // The trap this exists for. Scaling a part-month to a daily rate does not
+    // save the comparison — it invents movement: rent logged once a month is
+    // $600 in a thirty-day month and $600 in a sixteen-day one, which as a rate
+    // reads as "up 87.5%" when nothing changed at all.
     const digest = buildDigest(
       [
-        out("groceries", 31000, at(2026, 7, 4)), // all August, $10.00/day
-        out("groceries", 15000, at(2026, 8, 3)), // 15 days of September, $10.00/day
+        out("rent", 60000, at(2026, 6, 1)), //  July, whole
+        out("rent", 60000, at(2026, 7, 1)), //  August, whole
+        out("rent", 60000, at(2026, 8, 1)), //  September, half over
       ],
-      win(new Date(2026, 7, 1), new Date(2026, 8, 15, 14, 30), "this_vs_last"),
+      win(new Date(2026, 6, 1), new Date(2026, 8, 16, 14, 30), "last_3_months"),
       "USD",
     );
-    const [groceries] = digest.monthOverMonth;
-    expect(groceries.first.cents).toBe(31000);
-    expect(groceries.last.cents).toBe(15000);
-    // The totals halved; the rate did not move, so neither does the verdict.
-    expect(groceries.firstDays).toBe(31);
-    expect(groceries.lastDays).toBe(15);
-    expect(groceries.firstPerDay).toEqual({ cents: 1000, display: "$10.00" });
-    expect(groceries.lastPerDay).toEqual({ cents: 1000, display: "$10.00" });
-    expect(groceries.changePctPerDay).toBe(0);
-    expect(groceries.direction).toBe("flat");
+    const [rent] = digest.monthOverMonth;
+    expect(rent.firstMonth).toBe("July 2026");
+    expect(rent.lastMonth).toBe("August 2026");
+    expect(rent.first.cents).toBe(60000);
+    expect(rent.last.cents).toBe(60000);
+    // An unchanged charge reads as unchanged.
+    expect(rent.changePct).toBe(0);
+    expect(rent.direction).toBe("flat");
+  });
+
+  it("has nothing to compare when only one month of the window is finished", () => {
+    const digest = buildDigest(
+      [
+        out("groceries", 31000, at(2026, 7, 4)),
+        out("groceries", 15000, at(2026, 8, 3)),
+      ],
+      win(new Date(2026, 7, 1), new Date(2026, 8, 15, 14, 30), "last_3_months"),
+      "USD",
+    );
+    // August is whole, September is not — so there is no comparable pair, and
+    // saying nothing is the only honest answer.
+    expect(digest.months).toHaveLength(2);
+    expect(digest.monthOverMonth).toEqual([]);
+  });
+
+  it("has nothing to compare when the window's first month is a stub either", () => {
+    // An all-time window starts on the day logging did, so its first month is
+    // usually partial too.
+    const digest = buildDigest(
+      [out("groceries", 5000, at(2026, 7, 20)), out("coffee", 400, at(2026, 8, 3))],
+      win(new Date(2026, 7, 15), new Date(2026, 8, 10), "all_time"),
+      "USD",
+    );
+    expect(digest.monthOverMonth).toEqual([]);
   });
 
   it("has nothing to compare in a one-month window", () => {
@@ -610,6 +653,105 @@ describe("buildDigest — first month against last", () => {
     expect(digest.months).toHaveLength(1);
     expect(digest.monthOverMonth).toEqual([]);
     expect(digest.totals.spent.cents).toBe(2900);
+  });
+});
+
+describe("buildDigest — saving", () => {
+  it("totals the Safe on its own terms, outside spending and income", () => {
+    // The fixture moves $100 in and takes $40 back out. Neither figure appears
+    // anywhere else in the digest: a Safe transfer is not spending and coming
+    // back out of it is not income.
+    expect(MAIN.saving).toEqual({
+      intoSafe: { cents: 10000, display: "$100.00" },
+      outOfSafe: { cents: 4000, display: "$40.00" },
+      netIntoSafe: { cents: 6000, display: "$60.00" },
+      savedSharePct: 2, // 6000 of 300000 logged income
+      leftOverSharePct: 64.6, // (300000 - 106200) / 300000
+    });
+    // And the proof they are outside: spending and income are unchanged by them.
+    expect(MAIN.totals.spent.cents).toBe(106200);
+    expect(MAIN.totals.income.cents).toBe(300000);
+  });
+
+  it("reports a raided Safe as a negative net", () => {
+    const window = win(new Date(2026, 5, 1), new Date(2026, 6, 1));
+    const digest = buildDigest(
+      [
+        row({ category: "safe", amount_usd_cents: 2000, occurred_at: at(2026, 5, 2) }),
+        moneyIn("safe", 9000, at(2026, 5, 3)),
+      ],
+      window,
+      "USD",
+    );
+    expect(digest.saving.netIntoSafe).toEqual({
+      cents: -7000,
+      display: "-$70.00",
+    });
+  });
+
+  it("refuses a share of an income it does not have", () => {
+    // Zero would read as "saved none of what came in", which is a claim about a
+    // denominator that does not exist. Null says so, and the model is told a
+    // null share is not zero.
+    const window = win(new Date(2026, 5, 1), new Date(2026, 6, 1));
+    const digest = buildDigest(
+      [out("groceries", 5000, at(2026, 5, 2))],
+      window,
+      "USD",
+    );
+    expect(digest.saving.savedSharePct).toBeNull();
+    expect(digest.saving.leftOverSharePct).toBeNull();
+  });
+});
+
+describe("daySpendSeries", () => {
+  it("gives one point per local day, oldest first, quiet days zero-filled", () => {
+    const series = daySpendSeries(
+      [
+        out("groceries", 5000, at(2026, 5, 2)),
+        out("coffee", 800, at(2026, 5, 2)),
+        out("gym", 3000, at(2026, 5, 4)),
+      ],
+      win(new Date(2026, 5, 1), new Date(2026, 5, 5)),
+    );
+    expect(series).toEqual([
+      { date: "2026-06-01", cents: 0 },
+      { date: "2026-06-02", cents: 5800 },
+      { date: "2026-06-03", cents: 0 },
+      { date: "2026-06-04", cents: 3000 },
+    ]);
+  });
+
+  it("counts only spending — not income, and not the Safe", () => {
+    const series = daySpendSeries(
+      [
+        moneyIn("salary", 300000, at(2026, 5, 1)),
+        row({ category: "safe", amount_usd_cents: 10000, occurred_at: at(2026, 5, 1) }),
+        out("groceries", 5000, at(2026, 5, 1)),
+      ],
+      win(new Date(2026, 5, 1), new Date(2026, 5, 2)),
+    );
+    expect(series).toEqual([{ date: "2026-06-01", cents: 5000 }]);
+  });
+
+  it("ignores rows outside the window on either side", () => {
+    const series = daySpendSeries(
+      [
+        out("groceries", 5000, at(2026, 4, 31)),
+        out("groceries", 700, at(2026, 5, 1)),
+        out("groceries", 9000, at(2026, 5, 3)),
+      ],
+      win(new Date(2026, 5, 1), new Date(2026, 5, 3)),
+    );
+    expect(series).toEqual([
+      { date: "2026-06-01", cents: 700 },
+      { date: "2026-06-02", cents: 0 },
+    ]);
+  });
+
+  it("is empty for a window with no days in it", () => {
+    const day = new Date(2026, 5, 1);
+    expect(daySpendSeries([], win(day, day))).toEqual([]);
   });
 });
 
@@ -664,7 +806,10 @@ describe("buildDigest — the guarantees it makes", () => {
 
     // Nothing anywhere in the digest is NaN or Infinity.
     const numbers = numbersIn(digest);
-    expect(numbers.length).toBe(40); // 12 totals/coverage + 7 weekdays × 4
+    // 12 totals/coverage + 7 weekdays × 4 + the 3 saving figures. The two
+    // saving SHARES are null over an empty window rather than zero — there is
+    // no income to take a share of — so they are not counted here.
+    expect(numbers.length).toBe(43);
     for (const n of numbers) expect(Number.isFinite(n)).toBe(true);
   });
 

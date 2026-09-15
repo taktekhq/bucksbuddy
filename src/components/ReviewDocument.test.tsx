@@ -1,278 +1,218 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-
 import { ReviewDocument } from "@/components/ReviewDocument";
-import type { ReviewSection, SpendingReview } from "@/types/db";
+import type { ReviewFindings, ReviewProse } from "@/types/db";
 
-function section(overrides: Partial<ReviewSection> = {}): ReviewSection {
-  return {
-    heading: "Where it went",
-    body: "Groceries took the biggest share of the quarter.",
-    figures: [],
-    ...overrides,
-  };
-}
+const findings = (over: Partial<ReviewFindings> = {}): ReviewFindings => ({
+  version: 2,
+  headline: "Steady months, with delivery climbing",
+  standing: "steady",
+  findings: [
+    {
+      kind: "improve",
+      basis: "logged",
+      title: "Delivery is the line to hold down",
+      detail: "It carries about a fifth of what you spent.",
+      evidence: [{ label: "Delivery", value: "$210.00" }],
+      category: "Food · Delivery",
+    },
+  ],
+  blindSpots: ["Nearly half the days have nothing logged."],
+  ...over,
+});
 
-function review(overrides: Partial<SpendingReview> = {}): SpendingReview {
-  return {
-    title: "Three months, mostly groceries",
-    summary: "Spending climbed through June and settled back by August.",
-    sections: [section()],
-    notables: [],
-    caveats: [],
-    ...overrides,
-  };
-}
+const finding = (over: Partial<ReviewFindings["findings"][0]> = {}) => ({
+  kind: "good",
+  basis: "logged",
+  title: "Groceries held flat",
+  detail: "The daily rate barely moved across the window.",
+  evidence: [],
+  category: null,
+  ...over,
+});
 
-/** The card wrapping one section — its <h4> heading's parent element. */
-function card(heading: string): HTMLElement {
-  return screen.getByRole("heading", { name: heading, level: 4 })
-    .parentElement as HTMLElement;
-}
-
-/** The <dd> printed next to the <dt> carrying `label`, inside one section card. */
-function figureValue(container: HTMLElement, label: string): string | null {
-  const term = Array.from(container.querySelectorAll("dt")).find(
-    (dt) => dt.textContent === label,
-  );
-  return term?.nextElementSibling?.textContent ?? null;
-}
-
-const DISCLAIMER = /Not financial advice\./;
-
-describe("ReviewDocument", () => {
-  it("renders the subtitle, title and summary", () => {
-    render(
-      <ReviewDocument
-        review={review()}
-        subtitle="Jun 1 – Aug 31, 2026 · USD"
-      />,
-    );
-
-    expect(screen.getByText("Jun 1 – Aug 31, 2026 · USD")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Three months, mostly groceries", level: 3 }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Spending climbed through June and settled back by August."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Your review", level: 2 })).toBeInTheDocument();
+describe("ReviewDocument — the auditor's findings", () => {
+  it("leads with the verdict, the window and the direction of travel", () => {
+    render(<ReviewDocument review={findings()} subtitle="Recent months · June 2026" />);
+    screen.getByText("Recent months · June 2026");
+    screen.getByText("Steady months, with delivery climbing");
+    screen.getByText("Steady");
   });
 
-  it("renders every section's heading and body", () => {
+  it("renders a finding's claim, its reasoning and its evidence", () => {
+    render(<ReviewDocument review={findings()} subtitle="x" />);
+    screen.getByText("Delivery is the line to hold down");
+    screen.getByText("It carries about a fifth of what you spent.");
+    screen.getByText("Delivery");
+    screen.getByText("$210.00");
+  });
+
+  it("names each finding's kind for a screen reader, not by colour alone", () => {
     render(
       <ReviewDocument
-        review={review({
-          sections: [
-            section({ heading: "Where it went", body: "Groceries led the quarter." }),
-            section({ heading: "The rhythm", body: "You log in bursts, then go quiet." }),
-            section({ heading: "What changed", body: "August was your calmest month." }),
-          ],
+        review={findings({
+          findings: [finding(), finding({ kind: "improve" }), finding({ kind: "swap" })],
         })}
-        subtitle="Summer 2026"
+        subtitle="x"
       />,
     );
+    screen.getByText("Working:");
+    screen.getByText("Worth a look:");
+    screen.getByText("Could cost less:");
+  });
 
-    for (const [heading, body] of [
-      ["Where it went", "Groceries led the quarter."],
-      ["The rhythm", "You log in bursts, then go quiet."],
-      ["What changed", "August was your calmest month."],
+  it("reads good news first, then what to hold down, then what could cost less", () => {
+    render(
+      <ReviewDocument
+        review={findings({
+          findings: [
+            finding({ kind: "swap", title: "Third" }),
+            finding({ kind: "improve", title: "Second" }),
+            finding({ kind: "good", title: "First" }),
+          ],
+        })}
+        subtitle="x"
+      />,
+    );
+    const shown = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((h) => h.textContent);
+    expect(shown).toEqual(["First", "Second", "Third"]);
+  });
+
+  it("renders a kind it has never met rather than dropping the finding", () => {
+    // A newer function wrote this review and the installed app is a version
+    // behind. The finding is already paid for; it renders unmarked.
+    render(
+      <ReviewDocument
+        review={findings({ findings: [finding({ kind: "goal", title: "Ahead of target" })] })}
+        subtitle="x"
+      />,
+    );
+    screen.getByText("Ahead of target");
+    screen.getByText("Finding:");
+  });
+
+  it("sorts a kind it has never met after the three it knows", () => {
+    // Not dropped, and not promoted above the ranked three either.
+    render(
+      <ReviewDocument
+        review={findings({
+          findings: [
+            finding({ kind: "goal", title: "From the future" }),
+            finding({ kind: "improve", title: "Second" }),
+            finding({ kind: "good", title: "First" }),
+          ],
+        })}
+        subtitle="x"
+      />,
+    );
+    const shown = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((h) => h.textContent);
+    expect(shown).toEqual(["First", "Second", "From the future"]);
+  });
+
+  it("prints a standing it has never met as itself", () => {
+    render(<ReviewDocument review={findings({ standing: "accelerating" })} subtitle="x" />);
+    screen.getByText("accelerating");
+  });
+
+  it("names every standing it does know", () => {
+    for (const [value, shown] of [
+      ["improving", "Improving"],
+      ["slipping", "Slipping"],
+      ["unclear", "Not enough to say"],
     ]) {
-      expect(screen.getByRole("heading", { name: heading, level: 4 })).toBeInTheDocument();
-      expect(screen.getByText(body)).toBeInTheDocument();
+      const { unmount } = render(
+        <ReviewDocument review={findings({ standing: value })} subtitle="x" />,
+      );
+      screen.getByText(shown);
+      unmount();
     }
-    expect(screen.getAllByRole("heading", { level: 4 })).toHaveLength(3);
   });
 
-  it("splits a body on newlines into separate paragraphs and drops blank lines", () => {
-    render(
-      <ReviewDocument
-        review={review({
-          sections: [
-            section({
-              heading: "The rhythm",
-              // A blank line between the two paragraphs, and a trailing newline:
-              // both must vanish rather than leaving empty <p> elements behind.
-              body: "Rent landed on the first.\n\nGroceries followed all week.\n",
-            }),
-          ],
-        })}
-        subtitle="Summer 2026"
-      />,
-    );
-
-    const paragraphs = Array.from(card("The rhythm").querySelectorAll("p"));
-    expect(paragraphs.map((p) => p.textContent)).toEqual([
-      "Rent landed on the first.",
-      "Groceries followed all week.",
-    ]);
-  });
-
-  it("keeps a body with no newline as a single paragraph", () => {
-    render(
-      <ReviewDocument
-        review={review({
-          sections: [section({ heading: "Where it went", body: "One line, one paragraph." })],
-        })}
-        subtitle="Summer 2026"
-      />,
-    );
-
-    const paragraphs = Array.from(card("Where it went").querySelectorAll("p"));
-    expect(paragraphs).toHaveLength(1);
-    expect(paragraphs[0]).toHaveTextContent("One line, one paragraph.");
-  });
-
-  it("renders figures as label/value pairs", () => {
-    render(
-      <ReviewDocument
-        review={review({
-          sections: [
-            section({
-              heading: "Where it went",
-              figures: [
-                { label: "Total spent", value: "$4,210.00" },
-                { label: "Busiest month", value: "July" },
-                { label: "Days logged", value: "62" },
-              ],
-            }),
-          ],
-        })}
-        subtitle="Summer 2026"
-      />,
-    );
-
-    const where = card("Where it went");
-    expect(where.querySelectorAll("dl")).toHaveLength(1);
-    expect(where.querySelectorAll("dt")).toHaveLength(3);
-    expect(figureValue(where, "Total spent")).toBe("$4,210.00");
-    expect(figureValue(where, "Busiest month")).toBe("July");
-    expect(figureValue(where, "Days logged")).toBe("62");
-  });
-
-  it("renders no figure list for a section with an empty figures array", () => {
-    render(
-      <ReviewDocument
-        review={review({
-          sections: [
-            section({ heading: "Where it went", figures: [{ label: "Total", value: "$10.00" }] }),
-            section({ heading: "The rhythm", figures: [] }),
-          ],
-        })}
-        subtitle="Summer 2026"
-      />,
-    );
-
-    expect(card("Where it went").querySelectorAll("dl")).toHaveLength(1);
-    expect(card("The rhythm").querySelectorAll("dl")).toHaveLength(0);
-    expect(screen.getAllByRole("definition")).toHaveLength(1);
-  });
-
-  it("prints a figure's value verbatim, without reformatting the money", () => {
-    render(
-      <ReviewDocument
-        review={review({
-          sections: [
-            section({
-              heading: "Where it went",
-              figures: [
-                { label: "Raw", value: "1234.5" },
-                { label: "Lira", value: "LL 1.000.000" },
-              ],
-            }),
-          ],
-        })}
-        subtitle="Summer 2026"
-      />,
-    );
-
-    const where = card("Where it went");
-    expect(figureValue(where, "Raw")).toBe("1234.5");
-    expect(figureValue(where, "Lira")).toBe("LL 1.000.000");
-    // The device already formatted these; the component must not touch them.
-    expect(screen.queryByText("$1,234.50")).not.toBeInTheDocument();
-    expect(screen.queryByText("$1,000,000.00")).not.toBeInTheDocument();
-  });
-
-  it("renders the notables list when there are notables", () => {
-    render(
-      <ReviewDocument
-        review={review({
-          notables: ["Three coffee runs in one day.", "No groceries at all in the last week."],
-        })}
-        subtitle="Summer 2026"
-      />,
-    );
-
-    expect(
-      screen.getByRole("heading", { name: "Worth noticing", level: 2 }),
-    ).toBeInTheDocument();
-    const items = screen.getAllByRole("listitem");
-    expect(items.map((li) => li.textContent)).toEqual([
-      "Three coffee runs in one day.",
-      "No groceries at all in the last week.",
-    ]);
-  });
-
-  it("omits the notables section when there are none", () => {
-    render(<ReviewDocument review={review({ notables: [] })} subtitle="Summer 2026" />);
-
-    expect(
-      screen.queryByRole("heading", { name: "Worth noticing" }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
-  });
-
-  it("renders the caveats list when there are caveats", () => {
-    render(
-      <ReviewDocument
-        review={review({
-          caveats: ["Cash spending you never logged.", "Anything before June 1, 2026."],
-        })}
-        subtitle="Summer 2026"
-      />,
-    );
-
-    expect(
-      screen.getByRole("heading", { name: "What this review couldn't see", level: 2 }),
-    ).toBeInTheDocument();
-    const items = screen.getAllByRole("listitem");
-    expect(items.map((li) => li.textContent)).toEqual([
-      "Cash spending you never logged.",
-      "Anything before June 1, 2026.",
-    ]);
-  });
-
-  it("omits the caveats section when there are none", () => {
-    render(<ReviewDocument review={review({ caveats: [] })} subtitle="Summer 2026" />);
-
-    expect(
-      screen.queryByRole("heading", { name: /couldn't see/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("always shows the not-financial-advice line", () => {
-    const { unmount } = render(
-      <ReviewDocument
-        review={review({
-          sections: [section({ figures: [{ label: "Total", value: "$1.00" }] })],
-          notables: ["Something odd."],
-          caveats: ["Cash is invisible."],
-        })}
-        subtitle="Summer 2026"
-      />,
-    );
-    expect(screen.getByText(DISCLAIMER)).toBeInTheDocument();
+  it("shows the blind spots, and leaves them out when there are none", () => {
+    const { unmount } = render(<ReviewDocument review={findings()} subtitle="x" />);
+    screen.getByText("Nearly half the days have nothing logged.");
     unmount();
+    render(<ReviewDocument review={findings({ blindSpots: [] })} subtitle="x" />);
+    expect(screen.queryByText("Nearly half the days have nothing logged.")).toBeNull();
+  });
 
-    // And on the barest possible review — no sections, notables or caveats.
+  it("leaves out the evidence pills when a finding carries none", () => {
+    render(<ReviewDocument review={findings({ findings: [finding()] })} subtitle="x" />);
+    expect(screen.queryByRole("definition")).toBeNull();
+  });
+
+  it("says what this is and is not, every time", () => {
+    render(<ReviewDocument review={findings()} subtitle="x" />);
+    screen.getByText("Reads what you logged. Not financial advice.");
+  });
+});
+
+// A review bought before the redesign is the reader's, and it opens as it was
+// written. Nothing generates this shape now.
+const prose = (over: Partial<ReviewProse> = {}): ReviewProse => ({
+  version: 1,
+  title: "Three months of takeaway",
+  summary: "Spending held steady; food is the story.",
+  sections: [
+    {
+      heading: "Where it went",
+      body: "Food led every month.\n\nCoffee was second.",
+      figures: [{ label: "Food", value: "$412.00" }],
+    },
+  ],
+  notables: ["Coffee twice a day in July"],
+  caveats: ["August has 6 unlogged days"],
+  ...over,
+});
+
+describe("ReviewDocument — the superseded prose shape", () => {
+  it("still renders every field it was written with", () => {
+    render(<ReviewDocument review={prose()} subtitle="Past 3 months · June 2026" />);
+    screen.getByText("Past 3 months · June 2026");
+    screen.getByText("Three months of takeaway");
+    screen.getByText("Spending held steady; food is the story.");
+    screen.getByText("Where it went");
+    screen.getByText("Food led every month.");
+    screen.getByText("Coffee was second.");
+    screen.getByText("Food");
+    screen.getByText("$412.00");
+    screen.getByText("Coffee twice a day in July");
+    screen.getByText("August has 6 unlogged days");
+  });
+
+  it("drops the blank lines between paragraphs rather than rendering them", () => {
+    render(<ReviewDocument review={prose()} subtitle="x" />);
+    const paragraphs = screen
+      .getByText("Food led every month.")
+      .parentElement!.querySelectorAll("p");
+    expect([...paragraphs].map((p) => p.textContent)).toEqual([
+      "Food led every month.",
+      "Coffee was second.",
+    ]);
+  });
+
+  it("leaves out the sections it has none of", () => {
     render(
       <ReviewDocument
-        review={review({ sections: [], notables: [], caveats: [] })}
-        subtitle="Summer 2026"
+        review={prose({ sections: [], notables: [], caveats: [] })}
+        subtitle="x"
       />,
     );
-    expect(screen.getByText(DISCLAIMER)).toBeInTheDocument();
-    expect(screen.queryAllByRole("heading", { level: 4 })).toHaveLength(0);
+    expect(screen.queryByText("Worth noticing")).toBeNull();
+    expect(screen.queryByText("What this review couldn't see")).toBeNull();
+  });
+
+  it("leaves out a section's figure tiles when it has none", () => {
+    render(
+      <ReviewDocument
+        review={prose({ sections: [{ heading: "h", body: "b", figures: [] }] })}
+        subtitle="x"
+      />,
+    );
+    expect(screen.queryByRole("definition")).toBeNull();
   });
 });

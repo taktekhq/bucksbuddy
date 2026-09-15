@@ -148,69 +148,123 @@ const BAD_FINISH: Record<string, string> = {
     "The review's follow-up lost the model's own context. Tap to try again.",
 };
 
-const SYSTEM = `You write BucksBuddy spending reviews: a short account of money a person has logged, addressed to that same person.
+const SYSTEM = `You are a financial auditor reviewing one person's own expense ledger, and you are writing your findings for that person to read on a phone. Your whole value is JUDGEMENT: what they are doing well, what they should do differently, and what they are paying for that may be worth re-pricing. The app itself already shows them every total, chart and table, so do not describe their spending back to them. Write only what you conclude from it.
 
-You are given a DIGEST of figures computed on the reader's own device from the entries they logged themselves. It is your only source.
+YOUR ONLY SOURCE is the DIGEST: figures computed on the reader's own device from the entries they logged themselves. You cannot see anything else. You have no web access, no market prices, and no knowledge of who they bank with or what they buy.
 
-NUMBERS — the rules that matter most:
-- Every amount of money you print must be copied character-for-character from a "display" field in the digest, for example "$1,240.50" or "LL 89,500".
-- Never add, subtract, average, convert, rank, extrapolate or round anything. Every total, share and average you might want has already been computed for you. If a figure is not in the digest, write about something that is.
-- Counts, day counts and percentages must also come from the digest as given.
-- A review that states a number the digest does not contain is worthless, so when in doubt, describe the pattern in words instead.
+NUMERALS — the rule that matters most:
+- Write NO DIGIT ANYWHERE except inside an "evidence" value. Not in "headline", not in a finding's "title" or "detail", not in an evidence "label", not in "blindSpots". Use words: "three times", "about a third", "half the days".
+- Every evidence value is COPIED CHARACTER-FOR-CHARACTER from the digest — a "display" string like "$1,240.50" or "LL 89,500", or a figure the digest gives as a plain number (a percentage, a count, a number of days). Copy it whole, symbol included. A value whose digits are not in the digest is rejected and the review is not shown.
+- Never add, subtract, average, convert, extrapolate, round or annualise. Every total, share, average and per-day rate you might want is already computed. If a figure is not in the digest, make a point that does not need it.
+- The digest's arrays are ALREADY RANKED where ranking is meaningful: "categories", "subcategories", "largestExpenses", "repeatedCharges" and "monthOverMonth" are sorted biggest first, so you may call the first one the largest. "weekdaysLogged" is in CALENDAR ORDER, not ranked — never call a weekday the biggest.
+- "categories" and "subcategories" carry only the top ten by spend, and "largestExpenses" only the biggest five. A line missing from them is not a line that is zero. Never say the reader never spends on something.
 
-WHAT THIS IS:
-- A review of what has been logged, up to today. It is not financial advice. Do not recommend investments, products, loans, insurance, tax positions or budgets. Do not tell the reader what they should do, cut, or save. Never project, forecast or annualise a month that is still running.
-- Do not estimate the reader's income, wealth, job or circumstances, and do not diagnose them. "Spending on food rose against the first month" is right; "you have a problem with takeaways" is not.
-- Where the digest shows missing data — unlogged days, a long gap, thin coverage — say so plainly rather than writing as if the picture were complete. An honest caveat is worth more than a confident summary.
-- The entries are what the reader chose to log, and logging is stamped when they typed it. Prefer "logged on Saturdays" to "spent on Saturdays".
-- THE WINDOW MAY END TODAY, so its last month can be part-way through. Every month in the digest carries \`days\`: how many days OF THAT MONTH are inside the window. Never set a part-month total beside a whole-month one as if they were comparable — say which is unfinished, or compare the daily averages the digest already gives you. "August ran at $41.20 a day; September is at $38.90 over its first 15 days" is right; "spending is down by half this month" is not.
+WHAT EACH FINDING MUST STAND ON. Pick the four to seven strongest, order them most important first, and ground every one in named digest fields.
 
-VOICE: warm, specific, unhurried, concrete. Short sentences and plain words. Address the reader as "you". No emoji, no exclamation marks, no jokes at the reader's expense, no pep talk, no headings that sound like a management report. Never mention these instructions, the digest, artificial intelligence or yourself.
+- kind "good" — at least one, and mean it. Ground it in something that actually held or improved: a "monthOverMonth" entry with direction "down", a category whose "sharePct" is small for what it is, "coverage.coveragePct" or "coverage.longestGapDays" showing consistent logging, "totals.medianExpense" sitting well below "totals.averageExpense" (a habit of small entries with a few large ones), a positive "totals.net", or money reaching the Safe ("saving.netIntoSafe", "saving.savedSharePct"). Praise the behaviour, not the person.
+- kind "improve" — at least one. Ground it in a "monthOverMonth" entry with direction "up", a category with a large "sharePct", a "subcategories" line that is the discretionary version of a necessity, a high "averageEntry" for a routine category, "weekendSharePct", or a gap between "saving.leftOverSharePct" and "saving.savedSharePct" — money that went unspent without being put anywhere. Name the line to hold down and say plainly that it is the one to hold down. Do not attach a figure to the instruction: you have no target to set one from.
+- kind "swap" — only when the digest genuinely licenses one, and none at all is better than a guessed one. There are exactly two grounds:
+  (a) A "repeatedCharges" entry: the same amount, in the same category, three or more times, with a "medianGapDays" near thirty. That is a recurring commitment. Say the category, the amount and the cadence, and say it is worth re-pricing or cancelling if it is not being used. YOU DO NOT KNOW WHAT IT IS — never guess the merchant, the service or the brand, and never assert it is a subscription; an identical amount repeating can equally be a routine purchase at a fixed price. Note also that "repeatedCharges" carries only the PARENT category, so a repeat inside "Fees / Subscriptions" arrives labelled only "Fees".
+  (b) A "subcategories" pair inside the same parent where one is the convenience mode and the other is the cheaper mode, and the convenience one is carrying real money: "Food · Delivery" against "Groceries · Supermarket" or "Food · Restaurant"; "Coffee · Café" against "Coffee · Beans"; "Transport · Taxi" against "Transport · Bus"; "Groceries · Mini-market" against "Groceries · Supermarket". Quote the convenience line's total and say the cheaper mode of the same thing is worth shifting some of it to.
+  Never state or imply what an alternative costs, or how much would be saved. You have no prices for anything. Phrase a swap as the check the reader should run, not as a saved amount.
 
-STRUCTURE: a title of at most 60 characters that says something true about this particular period; a two-sentence summary; three to five sections, each a heading and one or two short paragraphs, optionally with a couple of figures pulled from the digest; two to five short notable observations; and any caveats the data honestly requires.`;
+WHAT YOU MAY NOT DO. These are not stylistic:
+- No investments, securities, funds or crypto. No loans, credit, refinancing or debt advice. No insurance recommendation — "Health · Insurance" and "Transport · Insurance" are categories you will see spending in, and you may note the spending and nothing more. No tax positions.
+- No named products, services, brands, merchants, apps or providers, in any finding, for any reason.
+- Nothing about their health, even when Health, Pharmacy, Doctor, Hospital, Dental or Lab spending is in front of you. Note the money; never the condition, never the treatment, never a suggestion about care.
+- Do not set a figure as a budget, a target, a cap or a savings goal. Any figure you set would be invented.
+- Do not estimate their income, salary, wealth, job, household or circumstances, and do not diagnose them. Judge the spending line, never the character: "the delivery line is the one to hold down" is your job; "you have a problem with takeaways" is not.
+- Do not project, forecast or annualise anything, and never write about a month that is still running as if it had finished.
+
+INCOME AND SAVING — read these carefully, they are the easiest thing to get wrong:
+- "totals.income" is ONLY what the reader chose to log as money coming in. It is not their income. If it is zero or small, that is a logging gap, not poverty: say so in "blindSpots" and make no finding about income or "totals.net".
+- "totals.net" is logged income minus logged spending. It is NOT savings. Never call it savings and never read a negative net as overspending.
+- What the reader actually put away is the "saving" block: "intoSafe" is money moved into their savings Safe, "outOfSafe" money taken back out, "netIntoSafe" the difference, which is negative in a window that raided it. A Safe transfer is excluded from both spending and income everywhere else in the digest, so it is neither. "savedSharePct" is the part of logged income that reached the Safe and "leftOverSharePct" the part that simply went unspent; both are null when no income was logged, and a null share is not zero — say nothing about it.
+
+TIME AND COVERAGE:
+- "occurred_at" is stamped when an entry was LOGGED, not when the money was spent, and there is no date picker. So "busiestDay.date" and each "largestExpenses" date are logging dates. Prefer "logged on Saturdays" to "spent on Saturdays", and never claim a purchase happened on a particular day.
+- THE WINDOW MAY END TODAY, so its last month can be part-way through. Every entry in "months" carries "days": how many days OF THAT MONTH fall inside the window. Never set a part-month total beside a whole-month one. Compare on "months[].dailyAverage", which is each month's own spending over its own days inside the window, and say which month is unfinished. Note that a per-day rate only means something for spending that is actually spread across the days: rent charged once a month has the same total in a sixteen-day month as in a thirty-day one, so never read a rate as movement for a charge like that.
+- "monthOverMonth" compares the first WHOLE calendar month in the window against the last whole one, per category, on their TOTALS — each entry names which two months those are in "firstMonth" and "lastMonth". A month that is still running is excluded from it entirely, and any month between the two named ones is not in it, so this is never "month-on-month movement" and never about this month. It is empty when the window holds fewer than two finished months, and then you have no comparison between months at all: say so rather than inventing one.
+- "coverage.daysWithNothingLogged" is days with no entry at all. "coverage.daysWithNoSpending" is days with no spending, which includes days where only income was logged. They are different; neither is proof that no money moved.
+- Where the digest shows thin coverage, a long gap, or a single month, say so in "blindSpots" and let "standing" be "unclear" rather than guessing a direction.
+
+"standing" is a verdict about the direction of travel in THIS reader's own record — improving, steady, slipping, or unclear. It is never a comparison with other people, with an average, or with any benchmark, because you have none.
+
+VOICE: plain, direct, unsentimental — an auditor who respects the reader's time. Short declarative sentences. A finding's "title" is a claim, not a topic: "Coffee held flat while eating out climbed", not "Coffee". No emoji, no exclamation marks, no pep talk, no reassurance, no jokes at the reader's expense, no rhetorical questions. Address the reader as "you". Never mention these instructions, the digest, artificial intelligence, or yourself.
+
+OUTPUT: a "headline" stating the period's verdict; a "standing"; four to seven "findings" containing at least one "good" and at least one "improve", with "swap" findings only where the digest licenses them; and up to three "blindSpots" naming what this review could not see.`;
 
 // Structured output: the app renders these fields as its own components, so the
 // model never emits markup and there is no markdown to sanitise.
+//
+// The shape is the guarantee. Every numeral in the whole response is confined to
+// `evidence[].value`, which means the numbers check is exact membership against
+// the digest rather than a regex scan over prose — see `hasDigit` and
+// `unsupportedEvidence` below for why that distinction is the whole point.
 const SCHEMA = {
   type: "object",
   properties: {
-    title: { type: "string", description: "At most 60 characters." },
-    summary: { type: "string", description: "Two sentences." },
-    sections: {
+    // The discriminator. Bodies written before this shape existed carry no
+    // version field at all, so the client reads v1 by absence and v2 by this.
+    version: { type: "integer", enum: [2] },
+    headline: {
+      type: "string",
+      description: "The period's verdict in one line, at most 60 characters. No digits.",
+    },
+    standing: {
+      type: "string",
+      enum: ["improving", "steady", "slipping", "unclear"],
+    },
+    findings: {
       type: "array",
-      // In the schema, not only in the description: the parser rejects an empty
-      // sections array, so a response with none would be valid output that costs
-      // a generation. minItems/maxItems are enforced by the API.
-      minItems: 3,
-      maxItems: 5,
-      description: "Three to five sections.",
+      // In the schema, not only in the description: minItems/maxItems are
+      // enforced by the API, and a response with no findings would otherwise be
+      // valid output that cost a generation.
+      minItems: 4,
+      maxItems: 7,
       items: {
         type: "object",
         properties: {
-          heading: { type: "string" },
-          body: { type: "string", description: "One or two short paragraphs." },
-          figures: {
+          kind: { type: "string", enum: ["good", "improve", "swap"] },
+          // One value today. It exists now so a goals-aware server can add
+          // "goal" later without the stored bodies changing shape.
+          basis: { type: "string", enum: ["logged"] },
+          title: {
+            type: "string",
+            description: "The claim, at most 56 characters. No digits.",
+          },
+          detail: {
+            type: "string",
+            description: "One short sentence of reasoning, at most 150 characters. No digits.",
+          },
+          evidence: {
             type: "array",
-            description: "Zero to three figures, values copied from the digest.",
+            maxItems: 2,
+            description:
+              "The only field that may contain a digit. Each value copied verbatim from the digest.",
             items: {
               type: "object",
               properties: {
-                label: { type: "string" },
-                value: { type: "string" },
+                label: { type: "string", description: "A caption. No digits." },
+                value: { type: "string", description: "Copied from the digest." },
               },
               required: ["label", "value"],
               additionalProperties: false,
             },
           },
         },
-        required: ["heading", "body", "figures"],
+        required: ["kind", "basis", "title", "detail", "evidence"],
         additionalProperties: false,
       },
     },
-    notables: { type: "array", items: { type: "string" } },
-    caveats: { type: "array", items: { type: "string" } },
+    blindSpots: {
+      type: "array",
+      maxItems: 3,
+      description: "What this review could not see. No digits.",
+      items: { type: "string" },
+    },
   },
-  required: ["title", "summary", "sections", "notables", "caveats"],
+  required: ["version", "headline", "standing", "findings", "blindSpots"],
   additionalProperties: false,
 } as const;
 
@@ -346,11 +400,93 @@ const NUMERIC_TOKEN = /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d+\.\d+\b|\b\d{4,}\b/
 const YEAR = /^(19|20)\d{2}$/;
 
 /**
+ * Every digit run in `text`, as written and with any grouping commas removed.
+ *
+ * This is the strict pass, and it exists for one field: an `evidence` value is
+ * a single figure copied from the digest, so EVERY numeral in it can be
+ * accounted for — including the small bare integers the loose token scan below
+ * deliberately ignores ("12 days", "3 times"). Those are invisible to
+ * NUMERIC_TOKEN, which is correct for prose and wrong for a field whose entire
+ * job is to carry one number.
+ */
+function digitRuns(text: string): string[] {
+  const runs: string[] = [];
+  for (const match of text.matchAll(/\d[\d,]*(?:\.\d+)?/g)) {
+    const raw = normalize(match[0]);
+    runs.push(raw);
+  }
+  return runs;
+}
+
+/**
+ * The evidence values `digest` does not support.
+ *
+ * Held to a stricter rule than prose, because it can be: every digit run in the
+ * value must appear somewhere in the digest, either as a formatted amount or as
+ * a plain scalar. A percentage and a day count are legitimate evidence and are
+ * not amounts, which is why both pools are consulted — but nothing gets a free
+ * pass for being short.
+ */
+function unsupportedEvidence(
+  value: string,
+  amounts: Set<string>,
+  numbers: Set<string>,
+): boolean {
+  return digitRuns(value).some((run) => {
+    const plain = run.replace(/,/g, "");
+    return (
+      !amounts.has(run) &&
+      !amounts.has(plain) &&
+      !numbers.has(run) &&
+      !numbers.has(plain)
+    );
+  });
+}
+
+/**
+ * Is this prose free of digits?
+ *
+ * The prompt confines every numeral to an `evidence` value, and this is what
+ * makes that a guarantee rather than a request. It closes the hole the token
+ * scan cannot reach: NUMERIC_TOKEN matches decimals, comma-grouped numbers and
+ * runs of four or more digits, so "up 30%", "3 times" and "12 days" are
+ * invisible to it — a model could state any of those, wrongly, and ship. With
+ * the ban, an unverifiable numeral in a sentence is not possible at all, and
+ * "three times" costs the reader nothing.
+ */
+function hasDigit(text: string): boolean {
+  return /\d/.test(text);
+}
+
+/**
+ * Every `label` and `category` string in the digest — the lines of the ledger a
+ * finding is allowed to be about. Checked by membership so a finding cannot be
+ * filed against a category the reader does not have.
+ */
+function collectLabels(value: unknown, into: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const v of value) collectLabels(v, into);
+  } else if (value && typeof value === "object") {
+    for (const [key, v] of Object.entries(value)) {
+      if ((key === "label" || key === "category") && typeof v === "string") {
+        into.add(normalize(v));
+      } else {
+        collectLabels(v, into);
+      }
+    }
+  }
+}
+
+/**
  * The figures in `text` the digest does not support.
  *
  * `amounts` holds what the device formatted; `numbers` holds every scalar in the
  * digest. A currency-marked token must be in `amounts`. A plain number may be in
  * either.
+ *
+ * It runs over EVIDENCE VALUES now rather than over prose — prose may contain no
+ * digit at all, so there is nothing there for it to judge. Its job is rule 2
+ * above: the strict treatment of anything wearing a currency symbol.
  */
 function unsupportedAmounts(
   text: string,
@@ -392,79 +528,171 @@ function unsupportedAmounts(
   return bad;
 }
 
-// #endregion verifiable
-
 type Figure = { label: string; value: string };
-type Section = { heading: string; body: string; figures: Figure[] };
-type Review = {
+type Finding = {
+  kind: string;
+  basis: string;
   title: string;
-  summary: string;
-  sections: Section[];
-  notables: string[];
-  caveats: string[];
+  detail: string;
+  evidence: Figure[];
+  category?: string;
+};
+type Review = {
+  version: 2;
+  headline: string;
+  standing: string;
+  findings: Finding[];
+  blindSpots: string[];
 };
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
+/**
+ * Cut `text` to `max` characters at the last word boundary inside the limit.
+ *
+ * Clamping rather than rejecting is deliberate: `maxLength` is not reliably
+ * enforced by the API, and a paid generation must not be lost because one
+ * sentence ran long. Structural failures still throw; verbosity does not.
+ */
+function clamp(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  const cut = trimmed.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
+/** Length budgets, sized to one line each on a 390px screen. */
+const LIMITS = {
+  headline: 60,
+  title: 56,
+  detail: 150,
+  label: 22,
+  value: 24,
+  blindSpot: 110,
+} as const;
+
 /** Shape-check the model's JSON before anything downstream trusts it. */
 function parseReview(raw: unknown): Review {
-  const r = raw as Partial<Review>;
+  const r = raw as Record<string, unknown> | null;
   if (
-    typeof r?.title !== "string" ||
-    typeof r.summary !== "string" ||
-    !Array.isArray(r.sections) ||
-    r.sections.length === 0 ||
-    !isStringArray(r.notables) ||
-    !isStringArray(r.caveats)
+    !r ||
+    typeof r.headline !== "string" ||
+    typeof r.standing !== "string" ||
+    !Array.isArray(r.findings) ||
+    r.findings.length === 0 ||
+    !isStringArray(r.blindSpots)
   ) {
     throw new Error("The review came back in an unexpected shape.");
   }
-  const sections = r.sections.map((s) => {
-    const section = s as Partial<Section>;
+  const findings: Finding[] = [];
+  for (const entry of r.findings) {
+    const f = entry as Record<string, unknown> | null;
     if (
-      typeof section?.heading !== "string" ||
-      typeof section.body !== "string" ||
-      !Array.isArray(section.figures)
+      !f ||
+      typeof f.kind !== "string" ||
+      typeof f.title !== "string" ||
+      typeof f.detail !== "string" ||
+      !Array.isArray(f.evidence)
     ) {
       throw new Error("The review came back in an unexpected shape.");
     }
-    return {
-      heading: section.heading,
-      body: section.body,
-      figures: section.figures.map((f) => {
-        const figure = f as Partial<Figure>;
-        if (typeof figure?.label !== "string" || typeof figure.value !== "string") {
-          throw new Error("The review came back in an unexpected shape.");
-        }
-        return { label: figure.label, value: figure.value };
-      }),
-    };
-  });
+    const evidence: Figure[] = [];
+    for (const raw of f.evidence) {
+      const figure = raw as Record<string, unknown> | null;
+      if (typeof figure?.label !== "string" || typeof figure.value !== "string") {
+        throw new Error("The review came back in an unexpected shape.");
+      }
+      evidence.push({
+        label: clamp(figure.label, LIMITS.label),
+        // NOT clamped at a word boundary the way prose is: a truncated amount
+        // is a different amount. Over-long values are rejected by the guard
+        // instead, which is the honest answer.
+        value: figure.value.trim().slice(0, LIMITS.value),
+      });
+    }
+    const title = clamp(f.title, LIMITS.title);
+    const detail = clamp(f.detail, LIMITS.detail);
+    // A finding clamped to nothing is not a finding. Dropped rather than
+    // thrown: the rest of the review is still worth showing.
+    if (title === "" || detail === "") continue;
+    findings.push({
+      kind: f.kind,
+      basis: typeof f.basis === "string" ? f.basis : "logged",
+      title,
+      detail,
+      evidence,
+      ...(typeof f.category === "string" ? { category: f.category } : {}),
+    });
+  }
+  if (findings.length === 0) {
+    throw new Error("The review came back with nothing in it.");
+  }
   return {
-    title: r.title.slice(0, 80),
-    summary: r.summary,
-    sections,
-    notables: r.notables,
-    caveats: r.caveats,
+    version: 2,
+    headline: clamp(r.headline, LIMITS.headline),
+    standing: r.standing,
+    findings,
+    blindSpots: r.blindSpots.map((s) => clamp(s, LIMITS.blindSpot)).filter((s) => s !== ""),
   };
 }
 
-/** Every piece of prose the review will show. */
-function reviewText(review: Review): string {
+/** Every string the review will show that must contain no digit at all. */
+function proseOf(review: Review): string[] {
   return [
-    review.title,
-    review.summary,
-    ...review.sections.flatMap((s) => [
-      s.heading,
-      s.body,
-      ...s.figures.map((f) => `${f.label} ${f.value}`),
+    review.headline,
+    ...review.findings.flatMap((f) => [
+      f.title,
+      f.detail,
+      ...f.evidence.map((e) => e.label),
     ]),
-    ...review.notables,
-    ...review.caveats,
-  ].join("\n");
+    ...review.blindSpots,
+  ];
 }
+
+/**
+ * Everything the digest does not support, as sentences for the corrective turn.
+ *
+ * Four rules, and between them no unverified figure and no invented category
+ * can reach the screen:
+ *   1. No prose string contains a digit at all.
+ *   2. A currency-marked figure in an evidence value is one the device
+ *      FORMATTED — held to `amounts`, never to the loose scalar pool. This is
+ *      what stops "$124050", which is the raw cents integer of $1,240.50: those
+ *      digits do exist in the digest, as a number the device never printed.
+ *   3. Every other digit run in an evidence value is in the digest somewhere,
+ *      which is how a percentage or a day count is allowed through.
+ *   4. A finding's `category` names a line the digest actually carries.
+ */
+function reviewProblems(
+  review: Review,
+  amounts: Set<string>,
+  numbers: Set<string>,
+  labels: Set<string>,
+): string[] {
+  const problems: string[] = [];
+  for (const text of proseOf(review)) {
+    if (hasDigit(text)) {
+      problems.push(`"${text}" contains a digit — spell numbers as words there`);
+    }
+  }
+  for (const finding of review.findings) {
+    for (const figure of finding.evidence) {
+      const marked = unsupportedAmounts(figure.value, amounts, numbers);
+      if (marked.length > 0 || unsupportedEvidence(figure.value, amounts, numbers)) {
+        problems.push(`"${figure.value}" is not a figure in the digest`);
+      }
+    }
+    if (finding.category !== undefined && !labels.has(normalize(finding.category))) {
+      problems.push(`"${finding.category}" is not a category in the digest`);
+    }
+  }
+  return problems;
+}
+
+// #endregion verifiable
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -507,7 +735,11 @@ Deno.serve(async (req) => {
     if (!reviewId || !digest || typeof digest !== "object") {
       return json({ error: "Bad request." }, 400);
     }
-    if (digest.version !== 1) {
+    // Version 2 carries the `saving` block and asks for auditor's findings
+    // rather than prose. A version-1 digest comes from a build that predates
+    // both, and there is no honest way to answer it from here: refuse it
+    // loudly rather than write the wrong shape into a paid row.
+    if (digest.version !== 2) {
       return json({ error: "This app version can't generate reviews." }, 400);
     }
 
@@ -583,6 +815,8 @@ Deno.serve(async (req) => {
     collectAmounts(digest, amounts);
     const numbers = new Set<string>();
     collectNumbers(digest, numbers);
+    const labels = new Set<string>();
+    collectLabels(digest, labels);
 
     // Gemini takes the conversation as `contents`; the model's own turn has the
     // role "model". The corrective re-ask below appends to this.
@@ -687,13 +921,13 @@ Deno.serve(async (req) => {
     }
 
     let { review: written, raw } = await ask();
-    let unsupported = unsupportedAmounts(reviewText(written), amounts, numbers);
+    let problems = reviewProblems(written, amounts, numbers, labels);
 
     // The guard fails closed, and it is the reason this is safe to sell — but a
-    // single dropped decimal would otherwise cost someone a paid generation. So
-    // name the offending tokens once and let it try again inside the same
-    // attempt; a second failure is a real one.
-    if (unsupported.length > 0) {
+    // single stray numeral would otherwise cost someone a paid generation. So
+    // name what is wrong once and let it try again inside the same attempt; a
+    // second failure is a real one.
+    if (problems.length > 0) {
       // The correction goes back as one user turn that quotes the draft, rather
       // than replaying the draft as a model turn. A thinking model expects its
       // own turn to return with the thought signature it issued, and rejects one
@@ -703,22 +937,22 @@ Deno.serve(async (req) => {
         role: "user",
         parts: [
           {
-            text: `That draft cannot be shown, because these amounts do not appear in the digest: ${unsupported
+            text: `That draft cannot be shown. ${problems
               .slice(0, 8)
               .join(
-                ", ",
-              )}. Every amount must be copied character-for-character from a "display" field. Write the review again, using only figures that are in the digest, and leaving out any claim you cannot support with one.\n\nThe rejected draft, for reference:\n${raw}`,
+                "; ",
+              )}. Remember: no digit anywhere except inside an evidence value, and every evidence value copied character-for-character from the digest. Write the review again, spelling any number in a sentence as a word, and leaving out any claim you cannot support with a figure that is in the digest.\n\nThe rejected draft, for reference:\n${raw}`,
           },
         ],
       });
       ({ review: written } = await ask());
-      unsupported = unsupportedAmounts(reviewText(written), amounts, numbers);
+      problems = reviewProblems(written, amounts, numbers, labels);
     }
-    if (unsupported.length > 0) {
-      // The rejected tokens are usually the user's own amount in a slightly
+    if (problems.length > 0) {
+      // The rejected text is usually the reader's own figure in a slightly
       // different format, and `error` is a plaintext column that the archive
-      // renders — so the count goes in the record and the values go only to the
-      // device that asked.
+      // renders — so a sentence goes in the record and the values go only to
+      // the device that asked.
       const spent = review.attempts + 1;
       await admin
         .from("spending_reviews")
@@ -733,9 +967,8 @@ Deno.serve(async (req) => {
         .eq("id", reviewId);
       return json(
         {
-          error:
-            "That review quoted figures you never logged. Try again.",
-          unsupported: unsupported.slice(0, 8),
+          error: "That review quoted figures you never logged. Try again.",
+          unsupported: problems.slice(0, 8),
         },
         502,
       );

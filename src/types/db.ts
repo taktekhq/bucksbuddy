@@ -137,15 +137,88 @@ export type SpendingReviewRow = {
 // The written review itself, as the generating function returns it and as it is
 // stored (encrypted) in `body_enc`. Rendered field by field — never as markup.
 export type ReviewFigure = { label: string; value: string };
+
+// --- v2: an auditor's findings ---
+//
+// A review is a list of short findings, not an essay. The model's only real
+// value is judgement — what is going right, what to hold down, what is worth
+// re-pricing — and prose buried that under paragraphs nobody reads. The numbers
+// are the device's job and are charted beside this by ReviewBreakdown.
+//
+// THE DIGITS ALL LIVE IN ONE PLACE, and that is a safety property rather than a
+// style: `evidence[].value` is the only field allowed to contain a numeral, and
+// each one must be a character-for-character copy of a `display` string from the
+// digest. That turns the numbers guarantee from a regex scan over prose — which
+// could never see "up 30%" or "three times" — into exact set membership. The
+// generating function rejects a draft with a digit anywhere else.
+export type ReviewFindingKind = "good" | "improve" | "swap";
+
+export type ReviewFinding = {
+  /**
+   * Which bucket: `good`, `improve` or `swap`. Typed as a plain string on
+   * purpose — the PWA auto-updates but an installed copy can still be a version
+   * behind the server, so a kind this build has never heard of must render in a
+   * neutral bucket rather than make the whole review unopenable.
+   */
+  kind: string;
+  /**
+   * What the judgement stands on. `"logged"` is all there is today; the field
+   * exists now so that a goals-aware server can emit `"goal"` later without a
+   * migration — a review body is one opaque encrypted string, so the only
+   * compatibility surface is this validator.
+   */
+  basis: string;
+  /** The claim, one line. Contains no digits. */
+  title: string;
+  /** One or two short sentences of reasoning. Contains no digits. */
+  detail: string;
+  /** Zero to two figures, each copied verbatim from the digest. */
+  evidence: ReviewFigure[];
+  /**
+   * Which line of the ledger this is about — a category, subcategory or month
+   * label copied from the digest — or null for a finding about the whole
+   * window.
+   */
+  category: string | null;
+};
+
+export type ReviewFindings = {
+  version: 2;
+  /** One line: the period's verdict. */
+  headline: string;
+  /**
+   * The direction of travel in this reader's OWN record. Never a comparison
+   * with anyone else — there is no benchmark in the digest to make one from.
+   * A plain string for the same forward-compatibility reason as `kind`.
+   */
+  standing: string;
+  findings: ReviewFinding[];
+  /** What this review could not see. */
+  blindSpots: string[];
+};
+
+// --- v1: the prose reviews already stored ---
+//
+// Superseded, and still opened: a review bought before the redesign is the
+// reader's, and it renders as it was written. Nothing generates this shape now.
 export type ReviewSection = {
   heading: string;
   body: string;
   figures: ReviewFigure[];
 };
-export type SpendingReview = {
+export type ReviewProse = {
+  version: 1;
   title: string;
   summary: string;
   sections: ReviewSection[];
   notables: string[];
   caveats: string[];
 };
+
+/**
+ * Either shape. Discriminated on `version`, which v1 rows do not carry on disk
+ * — `asSpendingReview` puts it there on the way in, from which fields are
+ * present. Nothing writes the discriminant back: the only time a review is
+ * stored is right after it is generated, and that is always the current shape.
+ */
+export type SpendingReview = ReviewFindings | ReviewProse;

@@ -18,7 +18,15 @@ import {
 } from "@/lib/reportPeriod";
 import type { SpendingDigest } from "@/lib/reportDigest";
 import { MIN_SPEND_ENTRIES, type ReportFacts } from "@/lib/reportEligibility";
-import type { SpendingReview, SpendingReviewRow } from "@/types/db";
+import type {
+  ReviewFinding,
+  ReviewFindings,
+  ReviewFigure,
+  ReviewProse,
+  ReviewSection,
+  SpendingReview,
+  SpendingReviewRow,
+} from "@/types/db";
 
 // Whether this build advertises a price. It governs COPY ONLY — the server is
 // the sole authority on whether a review is free, charged, or refused (see the
@@ -199,15 +207,106 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
+/** One `{ label, value }` pair, or null if it is not one. */
+function asFigure(value: unknown): ReviewFigure | null {
+  const f = value as Partial<ReviewFigure> | null;
+  if (typeof f?.label !== "string" || typeof f.value !== "string") return null;
+  return { label: f.label, value: f.value };
+}
+
+/** A list of them, or null if any entry is not one. */
+function asFigures(value: unknown): ReviewFigure[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: ReviewFigure[] = [];
+  for (const raw of value) {
+    const figure = asFigure(raw);
+    if (figure === null) return null;
+    out.push(figure);
+  }
+  return out;
+}
+
+/**
+ * One finding, or null if it is structurally not one.
+ *
+ * FORWARD-TOLERANT ON PURPOSE. `kind` and `basis` are taken as whatever strings
+ * they are, and unknown properties are ignored rather than refused, because an
+ * installed copy of this app can be a version behind the function that wrote
+ * the review it is opening — the service worker updates on its own schedule
+ * (registerType: "autoUpdate"). A finding whose kind this build does not
+ * recognise renders in a neutral bucket; refusing it would put "that review
+ * couldn't be opened on this device" on screen for a review that is perfectly
+ * fine and already paid for. Only a missing or wrong-typed required field is
+ * fatal.
+ */
+function asFinding(value: unknown): ReviewFinding | null {
+  const f = value as Record<string, unknown> | null;
+  if (
+    !f ||
+    typeof f.kind !== "string" ||
+    typeof f.title !== "string" ||
+    typeof f.detail !== "string"
+  ) {
+    return null;
+  }
+  const evidence = asFigures(f.evidence);
+  if (evidence === null) return null;
+  return {
+    kind: f.kind,
+    // Absent on nothing today, and the field exists for a server this build has
+    // not met yet — so a missing one is a default, not a failure.
+    basis: typeof f.basis === "string" ? f.basis : "logged",
+    title: f.title,
+    detail: f.detail,
+    evidence,
+    category: typeof f.category === "string" ? f.category : null,
+  };
+}
+
 /**
  * Validate a review, whether it came from the edge function or out of the
- * database and through decryption. Anything unexpected reads as "not a review"
- * rather than rendering half a screen of undefined.
+ * database and through decryption. Anything structurally unexpected reads as
+ * "not a review" rather than rendering half a screen of undefined.
+ *
+ * TWO shapes are accepted, and which one this is comes from the fields rather
+ * than from a stored version number: reviews written before the redesign are
+ * prose and carry no version at all, so a `findings` array is what says this is
+ * the current shape. The discriminant is added here; it is never stored.
  */
 export function asSpendingReview(value: unknown): SpendingReview | null {
-  const r = value as Partial<SpendingReview> | null;
+  const r = value as Record<string, unknown> | null;
+  if (!r || typeof r !== "object") return null;
+  return "findings" in r ? asFindings(r) : asProse(r);
+}
+
+function asFindings(r: Record<string, unknown>): ReviewFindings | null {
   if (
-    typeof r?.title !== "string" ||
+    typeof r.headline !== "string" ||
+    !Array.isArray(r.findings) ||
+    !isStringArray(r.blindSpots)
+  ) {
+    return null;
+  }
+  const findings: ReviewFinding[] = [];
+  for (const raw of r.findings) {
+    const finding = asFinding(raw);
+    if (finding === null) return null;
+    findings.push(finding);
+  }
+  return {
+    version: 2,
+    headline: r.headline,
+    // A verdict this build does not recognise is still a verdict; only a
+    // non-string is a shape failure, and an absent one is "no direction".
+    standing: typeof r.standing === "string" ? r.standing : "unclear",
+    findings,
+    blindSpots: r.blindSpots,
+  };
+}
+
+function asProse(r: Record<string, unknown>): ReviewProse | null {
+  if (
+    typeof r.title !== "string" ||
     typeof r.summary !== "string" ||
     !Array.isArray(r.sections) ||
     !isStringArray(r.notables) ||
@@ -215,29 +314,18 @@ export function asSpendingReview(value: unknown): SpendingReview | null {
   ) {
     return null;
   }
-  const sections = [];
-  for (const section of r.sections) {
-    if (
-      typeof section?.heading !== "string" ||
-      typeof section.body !== "string" ||
-      !Array.isArray(section.figures)
-    ) {
+  const sections: ReviewSection[] = [];
+  for (const raw of r.sections) {
+    const section = raw as Record<string, unknown> | null;
+    if (typeof section?.heading !== "string" || typeof section.body !== "string") {
       return null;
     }
-    const figures = [];
-    for (const figure of section.figures) {
-      if (typeof figure?.label !== "string" || typeof figure.value !== "string") {
-        return null;
-      }
-      figures.push({ label: figure.label, value: figure.value });
-    }
-    sections.push({
-      heading: section.heading,
-      body: section.body,
-      figures,
-    });
+    const figures = asFigures(section.figures);
+    if (figures === null) return null;
+    sections.push({ heading: section.heading, body: section.body, figures });
   }
   return {
+    version: 1,
     title: r.title,
     summary: r.summary,
     sections,

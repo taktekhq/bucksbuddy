@@ -48,10 +48,15 @@ vi.mock("@/lib/reviews", () => ({
     row.price_cents === 0
       ? "Free"
       : formatCents(row.price_cents, row.price_currency.toUpperCase()),
-  asSpendingReview: (value: unknown) =>
-    typeof (value as { title?: unknown } | null)?.title === "string"
-      ? (value as SpendingReview)
-      : null,
+  // Both shapes: a findings body written now, and a prose body bought before
+  // the redesign. Anything else is "not a review".
+  asSpendingReview: (value: unknown) => {
+    const r = value as { headline?: unknown; title?: unknown } | null;
+    if (typeof r?.headline === "string" || typeof r?.title === "string") {
+      return value as SpendingReview;
+    }
+    return null;
+  },
 }));
 
 const posthogMock = vi.hoisted(() => ({ capture: vi.fn() }));
@@ -132,21 +137,24 @@ function tx(overrides: Partial<Transaction> = {}): Transaction {
   };
 }
 
-function review(overrides: Partial<SpendingReview> = {}): SpendingReview {
+function review(overrides: Record<string, unknown> = {}): SpendingReview {
   return {
-    title: "Three quiet months",
-    summary: "Groceries did most of the damage.",
-    sections: [
+    version: 2,
+    headline: "Three quiet months",
+    standing: "steady",
+    findings: [
       {
-        heading: "Where it went",
-        body: "Two trips to the market.",
-        figures: [{ label: "Spent", value: "$30.00" }],
+        kind: "improve",
+        basis: "logged",
+        title: "Groceries did most of the damage",
+        detail: "Two trips to the market carried the window.",
+        evidence: [{ label: "Spent", value: "$30.00" }],
+        category: "Groceries",
       },
     ],
-    notables: ["Nothing logged on weekends."],
-    caveats: ["Cash you never logged isn't here."],
+    blindSpots: ["Cash you never logged isn't here."],
     ...overrides,
-  };
+  } as SpendingReview;
 }
 
 function deferred<T>() {
@@ -188,7 +196,10 @@ beforeEach(() => {
   // the screen refuses to spend a paid generation on it.
   reviewRange.mockResolvedValue([tx()]);
   sealReview.mockResolvedValue("sealed-body");
-  openReview.mockResolvedValue(null);
+  // A stored body opens by default — the scope's newest written review is now
+  // opened without being asked for, so "unreadable" is the exception, not the
+  // baseline. The tests that care set their own.
+  openReview.mockResolvedValue(review());
   reviewsMock.listReviews.mockResolvedValue({ reviews: [], error: null });
   reviewsMock.fetchReview.mockResolvedValue(null);
   // Both reviews ask, so both have to answer.
@@ -213,19 +224,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// Each review has its own card and its own button, so a test has to say which.
-// The label changes with what is known: the price when the sale is on, why not
-// when it isn't, and "can't check" when eligibility is unreadable.
-const ACTION = /Write it|Unlock it|Not enough logged yet|Can't check your history/;
+// One offer at a time now, for whichever scope the picker is on — the page
+// leads with the figures and the charts, and the offer sits under them. Its
+// label changes with what is known: the price when the sale is on, why not when
+// it isn't, and "can't check" when eligibility is unreadable.
+const ACTION = /Ask the auditor|Not enough logged yet|Can't check your history/;
 
-/** The card for one review, found by its heading. */
-function card(name: RegExp | string) {
-  return screen.getByRole("heading", { name }).closest("div")!.parentElement!;
+/** The one "ask the auditor" button, whatever it currently says. */
+function buyButton() {
+  return screen.getByRole("button", { name: ACTION });
 }
 
-/** The button inside one review's card. Defaults to the recent review. */
-function buyButton(name: RegExp | string = "Recent months") {
-  return within(card(name)).getByRole("button", { name: ACTION });
+/** Switch the page between its two reviews. */
+async function pickScope(name: "Recent months" | "All time") {
+  await userEvent.click(screen.getByRole("tab", { name }));
+}
+
+/** Wait for the offer to settle after the eligibility round trip. */
+async function waitForOffer() {
+  await waitFor(() => buyButton());
 }
 
 /**
@@ -268,45 +285,135 @@ describe("Review — the offer", () => {
     expect(navigate).toHaveBeenCalledWith("/");
   });
 
-  it("offers two reviews, each with its own standing", async () => {
+  it("leads with the figures, and puts the offer under them", async () => {
+    // The order of this screen IS the design. It used to open with the offer
+    // and the buttons, which put the chrome above the thing the chrome is for.
     render(<Review />);
-    // Before the counts arrive there is nothing to judge, so both buttons are
-    // out, and there is no window to choose: the offer is two products.
-    expect(buyButton("Recent months")).toBeDisabled();
-    expect(buyButton("All time")).toBeDisabled();
-    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    const headings = await screen.findAllByRole("heading", { level: 2 });
+    const order = headings.map((h) => h.textContent);
+    expect(order.indexOf("Where it went")).toBeLessThan(
+      order.indexOf("The auditor"),
+    );
+  });
 
-    expect(await screen.findAllByText("120 / 40")).toHaveLength(2);
-    // Each card asked about its own window, and each shows what came back.
+  it("draws the breakdown from the entries on this device, with no review bought", async () => {
+    // The charts owe nothing to the model: they are computed here, over rows
+    // only this device can decrypt, whether or not a review has ever been
+    // written. This is the whole split of labour on the screen.
+    reviewRange.mockResolvedValue([
+      tx({ id: "a", amount_usd_cents: 1500 }),
+      tx({ id: "b", amount_usd_cents: 2500, category: "coffee" }),
+    ]);
+    render(<Review />);
+    // Twice over: the hero total and the month chart's own label.
+    expect((await screen.findAllByText("$40.00")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Where it went")).toBeInTheDocument();
+    expect(reviewsMock.generateReview).not.toHaveBeenCalled();
+  });
+
+  it("says so while the entries are still being read, and when they cannot be", async () => {
+    const entries = deferred<Transaction[] | null>();
+    reviewRange.mockReturnValue(entries.promise);
+    render(<Review />);
+    expect(screen.getByRole("status")).toHaveTextContent("Adding up your entries…");
+    await act(async () => {
+      entries.resolve(null);
+      await flush();
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Couldn't read your entries on this device.",
+    );
+  });
+
+  it("reads the whole account once, and slices it locally for both scopes", async () => {
+    // "Recent" is a slice of "all time", so asking twice would decrypt most of
+    // the account twice.
+    render(<Review />);
+    await waitForOffer();
+    expect(reviewRange).toHaveBeenCalledTimes(1);
+    expect(reviewRange.mock.calls[0][0].getTime()).toBe(0);
+    await pickScope("All time");
+    expect(reviewRange).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers two reviews as a switch, never as a choice of window", async () => {
+    render(<Review />);
+    // Before the counts arrive there is nothing to judge, so the button is out.
+    expect(buyButton()).toBeDisabled();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["Recent months", "All time"]);
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+
+    await waitFor(() => expect(buyButton()).toBeEnabled());
+    // Each scope asked about its own window: forty expenses all time is not
+    // forty in the last three months.
     expect(reviewsMock.fetchEligibility).toHaveBeenCalledWith("last_3_months");
     expect(reviewsMock.fetchEligibility).toHaveBeenCalledWith("all_time");
-    expect(screen.getAllByText("80 / 92")).toHaveLength(2);
-    // 80 logged days of 92 — the bar reads the same number the copy does.
-    expect(screen.getAllByRole("progressbar")[0]).toHaveAttribute(
-      "aria-valuenow",
-      "87",
+    // Billing is off in this build, so the button advertises no price.
+    expect(buyButton()).toHaveTextContent("Ask the auditor");
+    expect(screen.getByText(/One a month/)).toBeInTheDocument();
+
+    await pickScope("All time");
+    expect(screen.getAllByRole("tab")[1]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("opens a scope's newest review once, and then leaves the screen alone", async () => {
+    // Switching away and back must not re-assert the newest review over
+    // whatever the reader has since opened from the archive.
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [
+        row({ id: "recent", status: "ready", body_enc: "cipher" }),
+        row({ id: "older", status: "ready", body_enc: "older" }),
+      ],
+      error: null,
+    });
+    openReview.mockImplementation(async (body) =>
+      review({ headline: body === "cipher" ? "This time" : "Last time" }),
     );
-    for (const name of ["Recent months", "All time"]) {
-      expect(buyButton(name)).toBeEnabled();
-      // Billing is off in this build, so no button advertises a price.
-      expect(buyButton(name)).toHaveTextContent("Write it");
-    }
-    expect(
-      screen.getByText(/One review a month/),
-    ).toBeInTheDocument();
+    render(<Review />);
+    expect(await screen.findByText("This time")).toBeInTheDocument();
+    await userEvent.click(
+      await screen.findByRole("button", { name: /tap to read/ }),
+    );
+    expect(await screen.findByText("Last time")).toBeInTheDocument();
+
+    await pickScope("All time");
+    await pickScope("Recent months");
+    // Still the one the reader chose.
+    expect(screen.getByText("Last time")).toBeInTheDocument();
+  });
+
+  it("finds the account's first entry itself when eligibility cannot say", async () => {
+    // The eligibility answer is the authority on when logging started, but the
+    // rows carry the same fact — so an unreadable answer does not cost the
+    // breakdown its anchor.
+    reviewsMock.fetchEligibility.mockResolvedValue({ facts: null, error: "down" });
+    reviewRange.mockResolvedValue([
+      tx({ id: "newer", occurred_at: new Date(2026, 7, 20, 12).toISOString() }),
+      tx({ id: "oldest", occurred_at: new Date(2026, 6, 2, 12).toISOString() }),
+    ]);
+    render(<Review />);
+    await pickScope("All time");
+    // Anchored on July, the older of the two, not on the first row it saw.
+    expect(await screen.findByText(/All time · July 2026/)).toBeInTheDocument();
+  });
+
+  it("hides the counters once the bar is cleared", async () => {
+    // They are a gate, not a fixture: the moment they are satisfied the button
+    // says everything left to say.
+    render(<Review />);
+    await waitFor(() => expect(buyButton()).toBeEnabled());
+    expect(screen.queryByText("120 / 40")).not.toBeInTheDocument();
   });
 
   it("advertises the price once billing is on", async () => {
     sellForMoney();
     render(<Review />);
-    await screen.findAllByText("120 / 40");
-    expect(buyButton()).toHaveTextContent("Unlock it · $5.00");
-    expect(
-      screen.queryByText(/Free while it's being tried out/),
-    ).not.toBeInTheDocument();
+    await waitFor(() => expect(buyButton()).toBeEnabled());
+    expect(buyButton()).toHaveTextContent("Ask the auditor · $5.00");
   });
 
-  it("renders the blockers and warnings and refuses the sale", async () => {
+  it("renders the blocker and refuses the sale", async () => {
     reviewsMock.fetchEligibility.mockResolvedValue({
       facts: facts({
         ok: false,
@@ -318,22 +425,10 @@ describe("Review — the offer", () => {
       error: null,
     });
     render(<Review />);
-    const recent = within(card("Recent months"));
-    expect(await recent.findByText("28 more expenses to go.")).toBeInTheDocument();
-    // No second blocker: both windows start at or after the first entry, so the
-    // "history doesn't reach back" refusal cannot happen any more.
-    // The coverage warning counts from the unlogged side: 92 − 4 = 88. It is on
-    // the recent review only — all time is exempt, because its denominator is
-    // the account's whole life.
-    expect(
-      recent.getByText("88 of 92 days have nothing logged."),
-    ).toBeInTheDocument();
-    expect(
-      within(card("All time")).queryByText("88 of 92 days have nothing logged."),
-    ).not.toBeInTheDocument();
-    expect(recent.getByText("9 days in a row are empty.")).toBeInTheDocument();
-    expect(buyButton("Recent months")).toBeDisabled();
-    expect(buyButton("All time")).toBeDisabled();
+    expect(await screen.findByText("28 more expenses to go.")).toBeInTheDocument();
+    expect(screen.getByText("12 / 40")).toBeInTheDocument();
+    expect(buyButton()).toBeDisabled();
+    expect(buyButton()).toHaveTextContent("Not enough logged yet");
   });
 
   it("surfaces an eligibility error and keeps the button out of reach", async () => {
@@ -345,25 +440,9 @@ describe("Review — the offer", () => {
     expect(
       await screen.findByText(/function "report_eligibility" does not exist/),
     ).toBeInTheDocument();
-    // …and it says what that means, rather than handing over a raw error.
-    expect(screen.getByText(/Reviews aren't set up yet/)).toBeInTheDocument();
     // The button must not advertise a purchase it cannot make.
     expect(buyButton()).toHaveTextContent("Can't check your history");
-    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(buyButton()).toBeDisabled();
-  });
-
-  it("names each review's own window under its name", async () => {
-    render(<Review />);
-    await screen.findAllByText("120 / 40");
-    // The recent review reaches three months back; all time names where the
-    // logging started, which only the eligibility answer knows.
-    expect(
-      within(card("Recent months")).getByText(/2026/),
-    ).toBeInTheDocument();
-    expect(
-      within(card("All time")).getByText(/January 2026/),
-    ).toBeInTheDocument();
   });
 
   it("drops an eligibility answer that arrives after the screen closes", async () => {
@@ -388,7 +467,7 @@ describe("Review — buying", () => {
   it("writes the review on the first tap, asking for no new passphrase", async () => {
     reviewsMock.fetchReview.mockResolvedValue(row());
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     await userEvent.click(buyButton());
 
     expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
@@ -414,7 +493,7 @@ describe("Review — buying", () => {
   it("says so when a free review can't be read back", async () => {
     reviewsMock.fetchReview.mockResolvedValue(null);
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     await userEvent.click(buyButton());
 
     expect(
@@ -431,7 +510,7 @@ describe("Review — buying", () => {
       error: null,
     });
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     await userEvent.click(buyButton());
 
     expect(
@@ -443,7 +522,7 @@ describe("Review — buying", () => {
   it("goes straight to checkout when the review is sold", async () => {
     sellForMoney();
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     await userEvent.click(buyButton());
 
     await waitFor(() => expect(window.location.href).toBe(STRIPE_URL));
@@ -468,7 +547,7 @@ describe("Review — buying", () => {
       error: "Spending reviews aren't open yet — this one is still being tried out.",
     });
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     await userEvent.click(buyButton());
 
     expect(
@@ -488,7 +567,7 @@ describe("Review — buying", () => {
       error: null,
     });
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     await userEvent.click(buyButton());
 
     expect(
@@ -515,10 +594,11 @@ describe("Review — back from Stripe", () => {
     expect(replaceState).toHaveBeenCalledWith(null, "", "/?utm=mail#/review");
     expect(reviewsMock.waitForPaidReview).toHaveBeenCalledWith("rev-1");
 
-    // The digest is built from the row's own stored window, not from today.
-    const [from, to] = reviewRange.mock.calls[0];
-    expect(from.getTime()).toBe(JUN_1.getTime());
-    expect(to.getTime()).toBe(SEP_1.getTime());
+    // The digest is built from the row's OWN stored window, not from today and
+    // not from the whole-account read the breakdown does at mount. A review is
+    // the one thing on this screen that costs something, so its figures come
+    // from a read taken for it.
+    expect(reviewRange).toHaveBeenCalledWith(JUN_1, SEP_1);
     const [id, digest] = reviewsMock.generateReview.mock.calls[0];
     expect(id).toBe("rev-1");
     expect(digest.period).toMatchObject({
@@ -588,7 +668,7 @@ describe("Review — back from Stripe", () => {
     });
 
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     // The list didn't have it, so the row was asked for directly — and there is
     // no such row, so nothing else happens.
     expect(reviewsMock.fetchReview).toHaveBeenCalledWith("ghost");
@@ -645,7 +725,7 @@ describe("Review — back from Stripe", () => {
     });
 
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     await flush();
     expect(reviewsMock.generateReview).not.toHaveBeenCalled();
     expect(reviewsMock.waitForPaidReview).not.toHaveBeenCalled();
@@ -793,8 +873,8 @@ describe("Review — back from Stripe", () => {
 describe("Review — the archive", () => {
   it("stays hidden while there is nothing in it", async () => {
     render(<Review />);
-    await screen.findAllByText("120 / 40");
-    expect(screen.queryByText("Your reviews")).not.toBeInTheDocument();
+    await waitForOffer();
+    expect(screen.queryByText("Earlier reviews")).not.toBeInTheDocument();
   });
 
   it("lists every state a stored review can be in", async () => {
@@ -811,20 +891,60 @@ describe("Review — the archive", () => {
       error: null,
     });
     render(<Review />);
-    expect(await screen.findByText("Refunded · $5.00")).toBeInTheDocument();
+    // Wait for the auto-open to settle, since it is what takes a row out of the
+    // list below.
+    expect(await screen.findByRole("article")).toBeInTheDocument();
+    expect(screen.getByText("Refunded · $5.00")).toBeInTheDocument();
     expect(screen.getByText("The model gave up.")).toBeInTheDocument();
     expect(screen.getByText("Didn't complete")).toBeInTheDocument();
     expect(
       screen.getByText("Not paid — nothing was charged"),
     ).toBeInTheDocument();
     expect(screen.getByText("Paid $5.00 · tap to write it")).toBeInTheDocument();
-    expect(screen.getByText("$5.00 · tap to read")).toBeInTheDocument();
     // A free grant was never paid for, so it isn't told that it was.
     expect(screen.getByText("Free · tap to write it")).toBeInTheDocument();
-    // Seven rows, all readable without a passphrase on the list itself.
+    // Six rows in the list, not seven: row "f" is the newest one written for
+    // this scope, so it is already open above and the list is what is EARLIER
+    // than it.
+    const list = screen.getByText("Earlier reviews").parentElement!;
     expect(
-      screen.getAllByText("Recent months · June 2026 – August 2026").length,
-    ).toBe(7);
+      within(list).getAllByText("Recent months · June 2026 – August 2026").length,
+    ).toBe(6);
+    expect(screen.queryByText("$5.00 · tap to read")).not.toBeInTheDocument();
+  });
+
+  it("opens the scope's newest written review without being asked", async () => {
+    // The point of the redesign: you land on the page and the figures and the
+    // latest findings are both already there.
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [
+        row({ id: "new", status: "ready", body_enc: "cipher", period_id: "all_time" }),
+        row({ id: "old", status: "ready", body_enc: "older" }),
+      ],
+      error: null,
+    });
+    openReview.mockImplementation(async (body) =>
+      review({ headline: body === "cipher" ? "All of it" : "Just lately" }),
+    );
+    render(<Review />);
+    // The recent review is the scope on open, so its own newest one is shown —
+    // not the all-time one, which is newer.
+    expect(await screen.findByText("Just lately")).toBeInTheDocument();
+    await pickScope("All time");
+    expect(await screen.findByText("All of it")).toBeInTheDocument();
+  });
+
+  it("opens nothing for a scope that has never had a review", async () => {
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [row({ id: "old", status: "ready", body_enc: "older" })],
+      error: null,
+    });
+    render(<Review />);
+    expect(await screen.findByRole("article")).toBeInTheDocument();
+    await pickScope("All time");
+    // Back to the offer, because there is nothing written for all time yet.
+    await waitFor(() => expect(buyButton()).toBeInTheDocument());
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
   });
 
   it("opens a stored review through the account's own key", async () => {
@@ -835,15 +955,29 @@ describe("Review — the archive", () => {
       ],
       error: null,
     });
-    openReview.mockResolvedValue(review({ title: "August, read back" }));
+    openReview.mockResolvedValue(review({ headline: "August, read back" }));
     render(<Review />);
+    expect(await screen.findByText("August, read back")).toBeInTheDocument();
+    expect(openReview).toHaveBeenCalledWith("cipher");
+  });
+
+  it("opens an earlier review on a tap", async () => {
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [
+        row({ id: "new", status: "ready", body_enc: "newer" }),
+        row({ id: "old", status: "ready", body_enc: "older" }),
+      ],
+      error: null,
+    });
+    openReview.mockImplementation(async (body) =>
+      review({ headline: body === "newer" ? "This time" : "Last time" }),
+    );
+    render(<Review />);
+    expect(await screen.findByText("This time")).toBeInTheDocument();
     await userEvent.click(
       await screen.findByRole("button", { name: /tap to read/ }),
     );
-    expect(
-      await screen.findByText("August, read back"),
-    ).toBeInTheDocument();
-    expect(openReview).toHaveBeenCalledWith("cipher");
+    expect(await screen.findByText("Last time")).toBeInTheDocument();
   });
 
   it("says so when a stored review can't be opened here", async () => {
@@ -853,9 +987,7 @@ describe("Review — the archive", () => {
     });
     openReview.mockResolvedValue({ nonsense: true });
     render(<Review />);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /tap to read/ }),
-    );
+    // It opens on its own, so the failure surfaces on its own too.
     expect(
       await screen.findByText(/couldn't be opened on this device/),
     ).toBeInTheDocument();
@@ -873,7 +1005,7 @@ describe("Review — the archive", () => {
     expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
     expect(reviewsMock.generateReview).toHaveBeenCalledWith(
       "e",
-      expect.objectContaining({ version: 1 }),
+      expect.objectContaining({ version: 2 }),
     );
   });
 
@@ -946,7 +1078,7 @@ describe("Review — the archive", () => {
       await screen.findByText("Could not read your reviews."),
     ).toBeInTheDocument();
     // Nothing is claimed about the archive's contents — it simply isn't drawn.
-    expect(screen.queryByText("Your reviews")).not.toBeInTheDocument();
+    expect(screen.queryByText("Earlier reviews")).not.toBeInTheDocument();
   });
 
   it("holds the rows shut while a review is being written", async () => {
@@ -972,9 +1104,8 @@ describe("Review — the archive", () => {
       await flush();
     });
     expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /June 2026 – August 2026/ }),
-    ).toBeEnabled();
+    // The row is now the one on screen, so it has left the "earlier" list.
+    expect(screen.queryByText("Earlier reviews")).not.toBeInTheDocument();
   });
 
   it("refuses to write one that was never paid for", async () => {
@@ -1005,13 +1136,11 @@ describe("Review — the archive lock", () => {
     openReview.mockResolvedValue(review());
     render(<Review />);
 
-    expect(
-      await screen.findByRole("button", { name: /tap to read/ }),
-    ).toBeEnabled();
-    expect(screen.queryByLabelText(/passphrase/i)).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: /tap to read/ }));
+    // It simply opens: no passphrase is asked for, and the row leaves the
+    // "earlier" list because it is the one on screen.
     expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/passphrase/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Earlier reviews")).not.toBeInTheDocument();
   });
 
   it("holds the rows shut until the encryption passphrase arrives", async () => {
@@ -1023,10 +1152,12 @@ describe("Review — the archive lock", () => {
     openReview.mockResolvedValue(review());
     render(<Review />);
 
+    // Nothing opens on its own while the gate holds — not even the newest one.
     const rowButton = await screen.findByRole("button", {
       name: /tap to read/,
     });
     expect(rowButton).toBeDisabled();
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
 
     const field = screen.getByLabelText("Enter your encryption passphrase");
     await userEvent.type(field, "wrong");
@@ -1037,14 +1168,11 @@ describe("Review — the archive lock", () => {
     await userEvent.clear(field);
     await userEvent.type(field, "hunter2");
     await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
-    await waitFor(() =>
-      expect(
-        screen.queryByLabelText("Enter your encryption passphrase"),
-      ).not.toBeInTheDocument(),
-    );
-
-    await userEvent.click(screen.getByRole("button", { name: /tap to read/ }));
+    // And once it opens, the review is simply there.
     expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Enter your encryption passphrase"),
+    ).not.toBeInTheDocument();
   });
 
   it("does not stand between the account and a new review", async () => {
@@ -1054,7 +1182,7 @@ describe("Review — the archive lock", () => {
     withPassphrase("hunter2");
     reviewsMock.fetchReview.mockResolvedValue(row());
     render(<Review />);
-    await screen.findAllByText("120 / 40");
+    await waitForOffer();
     await userEvent.click(buyButton());
 
     expect(await screen.findByText("Three quiet months")).toBeInTheDocument();

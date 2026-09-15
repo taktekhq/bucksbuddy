@@ -73,20 +73,42 @@ collapsing toolbar and an overscroll bounce flash the light canvas at the edges.
 | Room | Gradient | Floor | Meaning |
 |---|---|---|---|
 | The Safe (`screens/Safe.tsx`) | `#0E4A37 → #0A3A2A → #06281E` | `#06281E` | The vault: money put away, in terminal green with gold |
-| The review (`screens/Review.tsx`) | `#2A1A3E → #1E1330 → #150D24` | `#150D24` | Reading, after hours — violet, so it is never the vault |
+| The review (`screens/Review.tsx`) | `#123A56 → #0D2C42 → #0A2233` | `#0A2233` | Reading, after hours — a calm blue, the one hue this app has not already spent |
 
-The review's own tokens, for its cards and type. Carrot stays the accent, so the
-room still reads as this app; every text pair clears WCAG AA on its ground.
+Blue is the review's on purpose: the Safe is a green vault, savings are green
+and gold, money is green and red, and the accent is carrot — so a blue room is
+the only dark room that cannot be read as a balance or a verdict.
+
+**Its floor is deliberately not near-black.** Below about L\* 10 a blue this
+saturated reads as black, and there are already two near-black rooms — the
+observatory indigo behind Stats, Receipts and Recurring (`#23234A → #141428`,
+floor L\* 7.2) and History's charcoal (`#1C1C1E`). A darker floor loses the
+room's identity over the bottom two-thirds of a scroll and lands on top of both.
+`#0A2233` sits at L\* 12.3 with the hue still visible.
 
 | Token | Value | Use | On card |
 |---|---|---|---|
-| `review-top` | `#2A1A3E` | Gradient top, status-bar tint | — |
-| `review-mid` | `#1E1330` | Gradient middle | — |
-| `review-ink` | `#150D24` | The floor behind everything | — |
-| `review-card` | `#271A3B` | Cards and rows | — |
-| `review-tile` | `#31214A` | Figure tiles — `grouped`, after dark | — |
-| `review-text` | `#F7F4FB` | Primary text | 14.9:1 |
-| `review-muted` | `#B7A8CC` | Captions, sub-labels | 7.3:1 |
+| `review-top` | `#123A56` | Gradient top, status-bar tint | — |
+| `review-mid` | `#0D2C42` | Gradient middle | — |
+| `review-ink` | `#0A2233` | Gradient end, and the floor behind everything | — |
+| `review-card` | `#10314A` | Cards and rows | — |
+| `review-tile` | `#17415E` | Figure tiles — `grouped`, after dark | — |
+| `review-text` | `#F2F7FB` | Primary text | 12.5:1 |
+| `review-muted` | `#A8C2D8` | Captions, sub-labels | 7.3:1 |
+
+- **Carrot after dark: fills and icons yes, words no.** Carrot clears the 3:1
+  floor for a graphical object on every ground in this room, so the back
+  chevron, the finding marks and the progress fills are all legal. As *text* it
+  only clears 4.5:1 on `review-ink` and `review-mid` (4.3:1 on the card), so
+  carrot words in this room use `carrot-light` (`#FF8A3D`, 5.7:1 on the card).
+- **A chart in the review room is coloured by RANK, never by category.** See
+  `lib/reviewChart.ts`: several `categoryColor()` values are byte-identical to
+  `income`, `expense` and `carrot` — groceries IS the money-in green and gas IS
+  the money-out red — and three of them fail 3:1 on the review card. On a screen
+  whose whole subject is spending, that paints the biggest grocery bar in the
+  colour that means money coming in. The five-slot ramp is assigned by rank,
+  spaced for red-green colour blindness, and every chart row also carries an
+  icon, a label and a figure, so hue is never the only carrier.
 
 - **A card in a dark room gets a hairline, not a shadow:** `ring-1 ring-inset
   ring-white/10`. `shadow-card` is elevation for white cards on the gray canvas

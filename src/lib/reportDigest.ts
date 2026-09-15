@@ -17,7 +17,12 @@
 //     named for logging for the same reason.
 
 import { dayKey } from "@/lib/dates";
-import { categoryLabel, categorySubLabel, splitCategory } from "@/lib/categories";
+import {
+  categoryLabel,
+  categorySubLabel,
+  SAFE_CATEGORY_ID,
+  splitCategory,
+} from "@/lib/categories";
 import { currencyInfo, type Currency } from "@/lib/currency";
 import { formatCents, formatSignedCents } from "@/lib/money";
 import { isSpending } from "@/lib/stats";
@@ -46,6 +51,13 @@ export type DigestMonth = {
 };
 
 export type DigestCategory = {
+  /**
+   * The stored category id — for a subcategory, its PARENT's id. The screen
+   * draws each row with the category's own icon and colour (lib/categories),
+   * and the label alone cannot be looked up: labels are display strings and a
+   * subcategory's is composed of two of them.
+   */
+  id: string;
   label: string;
   spent: DigestMoney;
   count: number;
@@ -73,32 +85,78 @@ export type DigestRepeat = {
   medianGapDays: number;
 };
 
-// First month against last, per category. Carries BOTH the totals and the daily
-// rates, because the last month of a window that ends today is usually
-// unfinished: its total is smaller for no other reason than that fewer days have
-// happened. The rate is the comparable pair, so `changePct` and `direction` are
-// computed from it, and each side's `days` travels with the figures so the
-// review can say "over its first 15 days" instead of implying a full month.
+// The first WHOLE calendar month in the window against the last whole one, per
+// category.
+//
+// "Whole" is the whole point. A window that ends today ends part-way through its
+// last month, and comparing that stub to a finished month is the single easiest
+// way to hand the reader a false fact. Normalising to a daily rate does not save
+// it either — worse, it invents movement where there is none: rent logged once a
+// month is $600 in a thirty-day month and $600 in a sixteen-day one, which reads
+// as "$20.00 a day rising to $37.50 a day, up 87.5%" when nothing changed at
+// all. A per-day rate only means something for spending that is actually spread
+// across the days.
+//
+// So partial months are excluded from this comparison entirely, and the two ends
+// name themselves rather than being inferred from the window: with fewer than
+// two whole months there is nothing here to compare and the list is empty.
 export type DigestChange = {
   category: string;
   first: DigestMoney;
   last: DigestMoney;
-  /** Days of each month inside the window — equal only if both are whole. */
+  /** Which two months these are — not necessarily the window's own ends. */
+  firstMonth: string;
+  lastMonth: string;
+  /** Days in each. Both are whole calendar months, so 28 to 31. */
   firstDays: number;
   lastDays: number;
-  /** Spending per day, which is what the two are compared on. */
-  firstPerDay: DigestMoney;
-  lastPerDay: DigestMoney;
-  /**
-   * Change in the DAILY RATE, not in the totals — so the name says which, since
-   * the model reads these keys. Null when the first month's rate is zero.
-   */
-  changePctPerDay: number | null;
+  /** Change in the month's TOTAL, which is the comparable pair once both months
+   * are whole. Null when the first month spent nothing on this category. */
+  changePct: number | null;
   direction: "up" | "down" | "flat" | "new";
 };
 
+/**
+ * What the window did with what was left over.
+ *
+ * The Safe is this app's savings jar, and a move into it is a TRANSFER, not
+ * spending — `isSpending` excludes it, and so does income, which is why none of
+ * the totals see it. But "am I saving" is half of what a review is asked to
+ * answer, so the transfers are totalled here on their own terms: `intoSafe` is
+ * money put away, `outOfSafe` money taken back out, and `netIntoSafe` the
+ * difference, which can be negative in a window that raided it.
+ *
+ * `leftOverSharePct` is income minus spending as a share of income — what the
+ * window did not spend. `savedSharePct` is the part of income that actually
+ * reached the Safe. They differ, and the gap is the point: money can go unspent
+ * without being put anywhere.
+ */
+export type DigestSaving = {
+  intoSafe: DigestMoney;
+  outOfSafe: DigestMoney;
+  /** Signed: negative in a window that took more out than it put in. */
+  netIntoSafe: DigestMoney;
+  /**
+   * Net into the Safe as a share of income — NULL when no income was logged in
+   * the window, rather than zero. Zero would read as "saved none of what came
+   * in", which is a claim about a denominator that does not exist.
+   */
+  savedSharePct: number | null;
+  /**
+   * Income minus spending over income, also null without income. Negative when
+   * spending exceeded what came in.
+   */
+  leftOverSharePct: number | null;
+};
+
 export type SpendingDigest = {
-  version: 1;
+  /**
+   * 2 — the digest carries `saving`, and the review it asks for is a set of
+   * auditor's findings rather than prose. The generating function checks this
+   * and refuses anything else, so a stale deploy says so instead of quietly
+   * writing the old shape.
+   */
+  version: 2;
   period: {
     id: ReportPeriodId | LegacyReportPeriodId;
     label: string;
@@ -128,6 +186,7 @@ export type SpendingDigest = {
     longestGapDays: number;
     busiestDay: { date: string; count: number; spent: DigestMoney } | null;
   };
+  saving: DigestSaving;
   months: DigestMonth[];
   categories: DigestCategory[];
   subcategories: DigestCategory[];
@@ -159,6 +218,11 @@ function pct(part: number, whole: number): number {
   return whole === 0 ? 0 : Math.round((part / whole) * 1000) / 10;
 }
 
+/** A share that refuses to exist without a denominator. See DigestSaving. */
+function share(part: number, whole: number): number | null {
+  return whole === 0 ? null : pct(part, whole);
+}
+
 function median(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -170,6 +234,13 @@ function median(values: number[]): number {
 
 function divide(total: number, by: number): number {
   return by === 0 ? 0 : Math.round(total / by);
+}
+
+/** Days in the calendar month a "YYYY-MM" key names. */
+export function daysInCalendarMonth(key: string): number {
+  const [year, month] = key.split("-").map(Number);
+  // Day 0 of the NEXT month is the last day of this one.
+  return new Date(year, month, 0).getDate();
 }
 
 /**
@@ -222,6 +293,37 @@ export type ReportWindow = {
   to: Date;
 };
 
+/**
+ * Spending per local calendar day across the window, oldest first, quiet days
+ * zero-filled.
+ *
+ * NOT part of the digest, and deliberately so: this is for the charts the device
+ * draws, and an all-time window is thousands of days — sending that to a model
+ * that is told to quote figures verbatim would be a payload of numbers it has no
+ * use for and could misread. It lives here rather than in lib/stats so it obeys
+ * the same window and local-day rules as everything else a review is built from
+ * (lib/stats clamps its window to a 500-row fetch cap, which is exactly what a
+ * review must not do).
+ */
+export function daySpendSeries(
+  rows: Transaction[],
+  window: ReportWindow,
+): { date: string; cents: number }[] {
+  const start = window.from.getTime();
+  const end = window.to.getTime();
+  const byDay = new Map<string, number>();
+  for (const r of rows) {
+    const at = new Date(r.occurred_at).getTime();
+    if (at < start || at >= end || !isSpending(r)) continue;
+    const key = dayKey(r.occurred_at);
+    byDay.set(key, (byDay.get(key) ?? 0) + r.amount_usd_cents);
+  }
+  return daysBetween(window.from, window.to).map((date) => ({
+    date,
+    cents: byDay.get(date) ?? 0,
+  }));
+}
+
 export function buildDigest(
   rows: Transaction[],
   window: ReportWindow,
@@ -252,13 +354,24 @@ export function buildDigest(
   // --- totals ---
   let spentCents = 0;
   let incomeCents = 0;
+  // The two halves of the savings jar, kept out of both totals above on
+  // purpose: putting money in the Safe is not spending it, and taking it back
+  // out is not earning it. See DigestSaving.
+  let intoSafeCents = 0;
+  let outOfSafeCents = 0;
   for (const r of inPeriod) {
-    if (isSpending(r)) spentCents += r.amount_usd_cents;
-    // Cash coming back out of the Safe is a transfer, not income — the same
-    // rule lib/stats applies to the Stats page.
-    else if (r.is_income && splitCategory(r.category).base !== "safe") {
-      incomeCents += r.amount_usd_cents;
+    const safe = splitCategory(r.category).base === SAFE_CATEGORY_ID;
+    if (safe) {
+      if (r.is_income) outOfSafeCents += r.amount_usd_cents;
+      else intoSafeCents += r.amount_usd_cents;
+      continue;
     }
+    // What is left is either direction, minus the Safe — which the branch above
+    // has already taken out and skipped. So money out is spending and money in
+    // is income, with no second test needed for the transfer case: lib/stats
+    // applies exactly this rule to the Stats page.
+    if (isSpending(r)) spentCents += r.amount_usd_cents;
+    else incomeCents += r.amount_usd_cents;
   }
 
   const days = daysBetween(from, to);
@@ -345,7 +458,13 @@ export function buildDigest(
 
   // --- categories and subcategories ---
   const byCategory = new Map<string, { cents: number; count: number }>();
-  const bySubcategory = new Map<string, { cents: number; count: number }>();
+  // Keyed by the composed display label, but carrying the parent id: a
+  // subcategory inherits its parent's icon and colour, and the label is two
+  // display strings joined.
+  const bySubcategory = new Map<
+    string,
+    { base: string; cents: number; count: number }
+  >();
   const byWeekday = new Map<number, { cents: number; count: number }>();
   let weekendCents = 0;
   for (const r of spending) {
@@ -358,7 +477,7 @@ export function buildDigest(
     const sub = categorySubLabel(r.category);
     if (sub !== null) {
       const label = `${categoryLabel(base)} · ${sub}`;
-      const stat = bySubcategory.get(label) ?? { cents: 0, count: 0 };
+      const stat = bySubcategory.get(label) ?? { base, cents: 0, count: 0 };
       stat.cents += r.amount_usd_cents;
       stat.count += 1;
       bySubcategory.set(label, stat);
@@ -373,12 +492,13 @@ export function buildDigest(
   }
 
   const toStats = (
-    entries: [string, { cents: number; count: number }][],
+    entries: [string, string, { cents: number; count: number }][],
   ): DigestCategory[] =>
     entries
-      .sort((a, b) => b[1].cents - a[1].cents || b[1].count - a[1].count)
+      .sort((a, b) => b[2].cents - a[2].cents || b[2].count - a[2].count)
       .slice(0, TOP_CATEGORIES)
-      .map(([label, stat]) => ({
+      .map(([id, label, stat]) => ({
+        id,
         label,
         spent: money(stat.cents),
         count: stat.count,
@@ -387,9 +507,11 @@ export function buildDigest(
       }));
 
   const categories = toStats(
-    [...byCategory].map(([id, stat]) => [categoryLabel(id), stat]),
+    [...byCategory].map(([id, stat]) => [id, categoryLabel(id), stat]),
   );
-  const subcategories = toStats([...bySubcategory]);
+  const subcategories = toStats(
+    [...bySubcategory].map(([label, stat]) => [stat.base, label, stat]),
+  );
 
   const weekdaysLogged: DigestWeekday[] = WEEKDAY_LABELS.map((label, index) => {
     const stat = byWeekday.get(index) ?? { cents: 0, count: 0 };
@@ -444,41 +566,36 @@ export function buildDigest(
     .sort((a, b) => b.count - a.count || b.amount.cents - a.amount.cents)
     .slice(0, TOP_CATEGORIES);
 
-  // --- first month against last, per category (only with 2+ months) ---
+  // --- the first whole month against the last whole one, per category ---
   //
-  // Compared on the DAILY RATE, never on the totals. The last month of a window
-  // that ends today is part-way through, so its total is smaller by arithmetic
-  // rather than by anything the reader did: on the 15th, spending at exactly
-  // last month's rate would otherwise read as "down 50%" in every category — and
-  // the model is told to copy these figures verbatim, so that would have been
-  // handed to the reader as a fact.
+  // Whole months only, and compared on their totals. See DigestChange for why
+  // a part-finished month is left out rather than scaled: scaling it invents
+  // movement in every category that is charged once a month.
   const monthOverMonth: DigestChange[] = [];
-  if (months.length > 1) {
-    const firstEntry = months[0];
-    const lastEntry = months[months.length - 1];
+  const whole = months.filter((m) => m.days === daysInCalendarMonth(m.key));
+  if (whole.length > 1) {
+    const firstEntry = whole[0];
+    const lastEntry = whole[whole.length - 1];
     const firstMonth = monthSpendCents.get(firstEntry.key)!;
     const lastMonth = monthSpendCents.get(lastEntry.key)!;
     for (const id of new Set([...firstMonth.keys(), ...lastMonth.keys()])) {
       const first = firstMonth.get(id) ?? 0;
       const last = lastMonth.get(id) ?? 0;
-      const firstPerDay = divide(first, firstEntry.days);
-      const lastPerDay = divide(last, lastEntry.days);
       monthOverMonth.push({
         category: categoryLabel(id),
         first: money(first),
         last: money(last),
+        firstMonth: firstEntry.label,
+        lastMonth: lastEntry.label,
         firstDays: firstEntry.days,
         lastDays: lastEntry.days,
-        firstPerDay: money(firstPerDay),
-        lastPerDay: money(lastPerDay),
-        changePctPerDay:
-          firstPerDay === 0 ? null : pct(lastPerDay - firstPerDay, firstPerDay),
+        changePct: first === 0 ? null : pct(last - first, first),
         direction:
-          firstPerDay === 0
+          first === 0
             ? "new"
-            : lastPerDay === firstPerDay
+            : last === first
               ? "flat"
-              : lastPerDay > firstPerDay
+              : last > first
                 ? "up"
                 : "down",
       });
@@ -489,7 +606,7 @@ export function buildDigest(
   const expenseAmounts = spending.map((r) => r.amount_usd_cents);
 
   return {
-    version: 1,
+    version: 2,
     period: {
       id: periodId,
       // Named as well as dated, because the model has to know whether it is
@@ -524,6 +641,13 @@ export function buildDigest(
       coveragePct: pct(loggedDays.size, days.length),
       longestGapDays: longestRunWithout(days, (d) => loggedDays.has(d)),
       busiestDay: busiest,
+    },
+    saving: {
+      intoSafe: money(intoSafeCents),
+      outOfSafe: money(outOfSafeCents),
+      netIntoSafe: signedMoney(intoSafeCents - outOfSafeCents),
+      savedSharePct: share(intoSafeCents - outOfSafeCents, incomeCents),
+      leftOverSharePct: share(incomeCents - spentCents, incomeCents),
     },
     months,
     categories,
