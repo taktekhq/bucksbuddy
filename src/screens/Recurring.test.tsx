@@ -107,12 +107,12 @@ describe("Recurring", () => {
     detectRecurring.mockReturnValue(summary());
   });
 
-  it("scopes the detection to the given user id and says whose it is", () => {
+  it("scopes the detection to the given user id, without showing it", () => {
     const transactions = [row("x", "2026-06-01T12:00:00.000Z", 100)];
     storeValue = makeStoreValue({ transactions });
     render(<Recurring userId={USER} />);
     expect(detectRecurring).toHaveBeenCalledWith(transactions, USER);
-    expect(screen.getByText("8f14e45f")).toBeInTheDocument();
+    expect(screen.queryByText(/8f14e45f/)).not.toBeInTheDocument();
     expect(screen.getByText("Recurring")).toBeInTheDocument();
   });
 
