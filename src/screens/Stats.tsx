@@ -41,7 +41,7 @@ export function Stats({ signedIn }: { signedIn: boolean }) {
 
   return (
     <main
-      className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))] text-white"
+      className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[var(--top-gutter)] text-white"
       style={{ background: OBSERVATORY_BG }}
     >
       {/* Fixed floor behind the content so a collapsing browser toolbar or an

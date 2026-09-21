@@ -104,7 +104,7 @@ export function Home() {
   );
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[var(--top-gutter)]">
       {/* Savings tint as a fixed, viewport-filling backdrop so the gradient
           spans the full width on desktop (instead of being clipped to the
           centered max-w-md column) and never flashes the canvas on overscroll.
