@@ -11,7 +11,7 @@ const CONTACT_EMAIL = "nizar@taktek.io";
 export function Contact() {
   // Back returns to the landing (the signed-out home).
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[var(--top-gutter)]">
       {/* Plain iOS nav: back chevron + centered title — matches Settings/Legal. */}
       <header className="relative flex items-center justify-center py-1">
         <button
