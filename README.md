@@ -28,13 +28,14 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
 - **Export:** CSV or PDF, for this month, last month, the past 3 months, or all time.
   Generated client-side from the decrypted rows, so it works on encrypted data.
 - **Spending review (in testing — free, and only for allowlisted accounts):** a chart-first
-  breakdown of everything logged, with a short set of an auditor's findings under it. The
-  charts and every figure are computed on the device and owe the model nothing; the model's
-  only job is judgement — what is working, what to hold down, what might cost less — and it
-  writes no digit outside a field checked against the device's own totals, so a review can
-  be dull but cannot invent a number. Kept in an archive, behind the same passphrase as
-  everything else. The $5 Stripe purchase it is meant to become is written and tested but
-  **not deployed**. See **Spending reviews** below.
+  breakdown of everything logged, with a short set of findings under it in the voice of
+  your dad going through it at the kitchen table. The charts and every figure are computed
+  on the device and owe the model nothing; the model's only job is judgement — what you are
+  doing right, what to keep an eye on, what could cost less — and it writes no digit outside
+  a field checked against the device's own totals, so a review can be dull but cannot invent
+  a number. Kept in an archive, behind the same passphrase as everything else. The $5 Stripe
+  purchase it is meant to become is written and tested but **not deployed**. See **Spending
+  reviews** below.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Setup (what you need to do)
@@ -250,10 +251,23 @@ this device, over rows only this device can decrypt (`src/lib/reportDigest.ts`);
 never computes anything and never sees a note. So the breakdown is exact whether or not a
 review was ever bought, and the review is judgement rather than arithmetic.
 
+**Dad, not an auditor.** The findings are written in the voice of your father going through
+your spending at the kitchen table, and the voice is load-bearing rather than decorative.
+The first version of this prompt asked for a financial auditor's findings and got exactly
+that: correct, hedged and useless — *"the delivery line may be worth reviewing"*. A parent
+looking at your books has no institutional reason to hedge, so the prompt takes the persona
+and then bans the hedging vocabulary outright (*may*, *consider*, *perhaps*, *it might be
+worth*), caps the list at five findings so the real ones aren't buried under mild ones, and
+requires each one to end in something you can actually go and do. Bluntness is not licence:
+the same prompt forbids moralising, any judgement of character rather than of a spending
+line, and everything the auditor was already barred from — investments, debt, insurance,
+tax, health, named merchants, invented targets. It cannot know what a repeating charge *is*,
+so the most useful thing it can say is *go and find out* — and it says that.
+
 One asymmetry falls out of that, and it is deliberate: the app's own **Fixed costs**
 section names subscriptions, because recurring payments are detected on the device from the
-note text you typed and that text never leaves the phone. The auditor can only say "a
-$14.99 charge repeats in Fees".
+note text you typed and that text never leaves the phone. Dad can only say "a $14.99
+charge repeats in Fees".
 
 **Two reviews, not a choice of window.** Picking a span was a decision nobody could make
 well — you cannot know in advance which one writes a better review — so the offer is two

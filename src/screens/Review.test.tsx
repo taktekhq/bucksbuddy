@@ -228,9 +228,9 @@ afterEach(() => {
 // leads with the figures and the charts, and the offer sits under them. Its
 // label changes with what is known: the price when the sale is on, why not when
 // it isn't, and "can't check" when eligibility is unreadable.
-const ACTION = /Ask the auditor|Not enough logged yet|Can't check your history/;
+const ACTION = /Show Dad|Not enough logged yet|Can't check your history/;
 
-/** The one "ask the auditor" button, whatever it currently says. */
+/** The one "show Dad" button, whatever it currently says. */
 function buyButton() {
   return screen.getByRole("button", { name: ACTION });
 }
@@ -292,7 +292,7 @@ describe("Review — the offer", () => {
     const headings = await screen.findAllByRole("heading", { level: 2 });
     const order = headings.map((h) => h.textContent);
     expect(order.indexOf("Where it went")).toBeLessThan(
-      order.indexOf("The auditor"),
+      order.indexOf("Dad"),
     );
   });
 
@@ -350,7 +350,7 @@ describe("Review — the offer", () => {
     expect(reviewsMock.fetchEligibility).toHaveBeenCalledWith("last_3_months");
     expect(reviewsMock.fetchEligibility).toHaveBeenCalledWith("all_time");
     // Billing is off in this build, so the button advertises no price.
-    expect(buyButton()).toHaveTextContent("Ask the auditor");
+    expect(buyButton()).toHaveTextContent("Show Dad");
     expect(screen.getByText(/One a month/)).toBeInTheDocument();
 
     await pickScope("All time");
@@ -410,7 +410,7 @@ describe("Review — the offer", () => {
     sellForMoney();
     render(<Review />);
     await waitFor(() => expect(buyButton()).toBeEnabled());
-    expect(buyButton()).toHaveTextContent("Ask the auditor · $5.00");
+    expect(buyButton()).toHaveTextContent("Show Dad · $5.00");
   });
 
   it("renders the blocker and refuses the sale", async () => {

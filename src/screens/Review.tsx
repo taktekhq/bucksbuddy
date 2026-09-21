@@ -45,10 +45,10 @@ import type { SpendingReview, SpendingReviewRow, Transaction } from "@/types/db"
 // The spending review, in its own calm blue room.
 //
 // THE ORDER OF THIS SCREEN IS THE DESIGN. It reads numbers first: a scope, then
-// the whole window drawn as charts and figures, then — underneath it — the one
-// short set of findings a model wrote about them, then earlier reviews. It used
-// to read the other way round, leading with the offer and the buttons, which
-// put the chrome above the thing the chrome is for.
+// the whole window drawn as charts and figures, then — underneath it — the short
+// set of things Dad made of them, then earlier reviews. It used to read the
+// other way round, leading with the offer and the buttons, which put the chrome
+// above the thing the chrome is for.
 //
 // The split of labour behind that order: everything money-shaped is computed on
 // THIS DEVICE, over rows only this device can decrypt (lib/reportDigest), and
@@ -56,6 +56,12 @@ import type { SpendingReview, SpendingReviewRow, Transaction } from "@/types/db"
 // anything and never sees a note. So the breakdown is exact whether or not a
 // review has ever been written, and the review is judgement rather than
 // arithmetic — the only part of this a language model is actually good at.
+//
+// The judgement is voiced as the reader's dad going through their spending at
+// the kitchen table, and the voice is load-bearing rather than cosmetic. Written
+// as an auditor's findings, the same figures produced the same conclusions in
+// language hedged to the point of uselessness. A father has no reason to hedge.
+// What he may and may not say is fixed in the generating function's prompt.
 //
 // Two reviews, not a choice of window: "Recent months" and "All time". The
 // scope switch at the top moves both the breakdown and which review is on
@@ -185,7 +191,7 @@ export function Review() {
         { id: row.period_id, from, to },
         row.home_currency,
       );
-      setBusy("Asking the auditor…");
+      setBusy("Showing it to Dad…");
       const { review, error: writeError } = await generateReview(row.id, digest);
       if (!review) {
         setBusy(null);
@@ -347,15 +353,15 @@ export function Review() {
   );
   // Named subscriptions, found on the device from the notes the reader typed.
   // This is the one thing on screen the model is never given: note text does
-  // not leave the phone, so the app can name a charge where the auditor can
-  // only describe one.
+  // not leave the phone, so the app can name a charge where Dad can only
+  // describe one.
   const recurring = useMemo(
     () => (entries === null ? null : detectRecurring(entries, userId, now)),
     [entries, userId, now],
   );
 
   // The newest written review for the scope on screen. Opening it is what the
-  // auditor section shows, so switching scope switches the findings under the
+  // Dad section shows, so switching scope switches the findings under the
   // charts rather than burying both in a list.
   const latest = useMemo(
     () => rows.find((r) => r.period_id === scope && r.body_enc !== null) ?? null,
@@ -511,8 +517,8 @@ export function Review() {
         <Offer facts={facts} copy={copy} factsError={factsError} onBuy={buy} />
       )}
 
-      {/* The gate stays with the archive rather than with the auditor slot: it
-          is what unlocks READING past reviews, and an account whose only rows
+      {/* The gate stays with the archive rather than with Dad's slot: it is
+          what unlocks READING past reviews, and an account whose only rows
           are refunded or unwritten still needs somewhere to enter it, or those
           rows sit disabled with nothing to explain them. */}
       <Archive
@@ -644,10 +650,10 @@ function ScopePicker({
   );
 }
 
-// What the auditor would cost, and whether this account has enough logged for
-// one. Only shown when there is no review to read for this scope: the counters
-// are a gate, not a permanent fixture, so they disappear the moment they are
-// satisfied and a review exists.
+// What showing Dad would cost, and whether this account has enough logged to be
+// worth showing him. Only rendered when there is no review to read for this
+// scope: the counters are a gate, not a permanent fixture, so they disappear the
+// moment they are satisfied and a review exists.
 function Offer({
   facts,
   copy,
@@ -661,7 +667,7 @@ function Offer({
 }) {
   return (
     <section className="flex flex-col gap-2">
-      <SectionHeader className="text-review-muted">The auditor</SectionHeader>
+      <SectionHeader className="text-review-muted">Dad</SectionHeader>
       <div className="flex flex-col gap-3 rounded-card bg-review-card p-4 ring-1 ring-inset ring-white/10">
         <div className="flex items-start gap-3">
           <Sparkles
@@ -670,8 +676,8 @@ function Offer({
             aria-hidden
           />
           <p className="text-[15px] leading-relaxed text-review-text">
-            A short read of the figures above: what is working, what is worth a
-            look, and what might cost less.
+            Show the figures above to Dad. He&apos;ll tell you what you&apos;re
+            doing right, what to keep an eye on, and what could cost less.
           </p>
         </div>
 
@@ -708,11 +714,11 @@ function Offer({
             : !copy.ok
               ? "Not enough logged yet"
               : REVIEW_BILLING === "off"
-                ? "Ask the auditor"
-                : `Ask the auditor · ${reviewPriceLabel()}`}
+                ? "Show Dad"
+                : `Show Dad · ${reviewPriceLabel()}`}
         </button>
         <p className="text-center text-xs text-review-muted">
-          One a month. Totals only — your notes stay on this phone.
+          One a month. He sees totals only — your notes stay on this phone.
         </p>
       </div>
     </section>

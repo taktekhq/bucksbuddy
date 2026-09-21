@@ -151,8 +151,8 @@ export type DigestSaving = {
 
 export type SpendingDigest = {
   /**
-   * 2 — the digest carries `saving`, and the review it asks for is a set of
-   * auditor's findings rather than prose. The generating function checks this
+   * 2 — the digest carries `saving`, and the review it asks for is a short set
+   * of findings rather than prose. The generating function checks this
    * and refuses anything else, so a stale deploy says so instead of quietly
    * writing the old shape.
    */

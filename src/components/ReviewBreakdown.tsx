@@ -22,8 +22,8 @@ import type { DigestChange, SpendingDigest } from "@/lib/reportDigest";
 // One thing here the model never sees: FIXED COSTS names them. Recurring
 // payments are detected on the device from the note text the reader typed
 // (lib/recurring), and note text never leaves the phone — it is not in the
-// digest and never will be. So the app can say "Netflix, monthly, $14.99" while
-// the auditor can only say "a $14.99 charge repeats in Fees". That asymmetry is
+// digest and never will be. So the app can say "Netflix, monthly, $14.99"
+// while Dad can only say "a $14.99 charge repeats in Fees". That asymmetry is
 // deliberate, and it is why the naming lives on this side of the screen.
 
 /** How many rows a list section shows before it stops being a breakdown. */

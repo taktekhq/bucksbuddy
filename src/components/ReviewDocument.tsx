@@ -26,12 +26,14 @@ import type {
 // arrive already formatted by the device that computed them (lib/reportDigest),
 // which is why figures print verbatim rather than going through lib/money again.
 //
-// TWO shapes render here. A review written now is a short list of an auditor's
-// findings, because that is the only part of this a model is actually good at:
-// the numbers are the device's, and they are charted above this by
+// TWO shapes render here. A review written now is a short list of what Dad made
+// of the figures, because judgement is the only part of this a model is actually
+// good at: the numbers are the device's, and they are charted above this by
 // ReviewBreakdown. A review bought before that redesign is prose, and still
 // opens as it was written — a paid document does not get rewritten under its
-// reader.
+// reader. The same is true of the voice: reviews written while this section was
+// headed "The auditor" render here unchanged, because the stored body is the
+// review and only the heading above it has moved on.
 export function ReviewDocument({
   review,
   subtitle,
@@ -59,8 +61,12 @@ const KINDS: Record<
   ReviewFindingKind,
   { icon: LucideIcon; color: string; label: string }
 > = {
-  good: { icon: CircleCheck, color: CHART_RAMP[1], label: "Working" },
-  improve: { icon: Eye, color: CHART_RAMP[4], label: "Worth a look" },
+  good: { icon: CircleCheck, color: CHART_RAMP[1], label: "Doing right" },
+  improve: { icon: Eye, color: CHART_RAMP[4], label: "Keep an eye on this" },
+  // "Could cost less", not "go and check this": the kind covers a repeating
+  // charge to go and identify AND a cheaper mode of something already being
+  // bought, and only the first of those is an errand. The instruction to go and
+  // look lives in the finding's own text, where it can be specific.
   swap: { icon: Repeat2, color: CHART_RAMP[2], label: "Could cost less" },
 };
 
@@ -77,9 +83,10 @@ function markFor(kind: string) {
   return KINDS[kind as ReviewFindingKind] ?? UNKNOWN_KIND;
 }
 
-// Working first, then what to hold down, then what might cost less — the order
-// an auditor's letter goes in, and the order the model is asked to rank within.
-// A kind from a newer server sorts last rather than being dropped.
+// What's going right first, then what to hold down, then what could cost less —
+// the order someone tells you these things in when they are on your side, and
+// the order the model is asked to rank within. A kind from a newer server sorts
+// last rather than being dropped.
 const KIND_ORDER: string[] = ["good", "improve", "swap"];
 
 /** The chip under the headline: which way this reader's own record is going. */
@@ -107,7 +114,7 @@ function Findings({
 
   return (
     <article className="flex flex-col gap-3">
-      <SectionHeader className="text-review-muted">The auditor</SectionHeader>
+      <SectionHeader className="text-review-muted">What Dad said</SectionHeader>
       <div className="flex flex-col gap-2 rounded-card bg-review-card p-4 ring-1 ring-inset ring-white/10">
         <p className="text-[11px] font-medium uppercase tracking-wide text-review-muted">
           {subtitle}
@@ -139,8 +146,12 @@ function Findings({
         </ul>
       )}
 
+      {/* The disclaimer stays in plain words, not in Dad's. He is a voice, and
+          a voice is exactly the thing that should not be trusted as advice —
+          so the line that says so is the one place on this screen that does
+          not play along. */}
       <p className="px-2 text-center text-xs text-review-muted">
-        Reads what you logged. Not financial advice.
+        Dad only sees what you logged. Not financial advice.
       </p>
     </article>
   );
