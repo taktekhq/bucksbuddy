@@ -2,12 +2,11 @@
 // them in. No dependency and no native module — the web hands the output to a
 // Blob, the Expo app writes it straight to a file.
 //
-// This is the machinery only. What gets DRAWN lives with each document:
-// lib/pdf.ts prints a statement of transactions, lib/reviewPdf.ts prints a
-// spending review. They were one file until the review needed the same
-// primitives, and a "tiny PDF writer" turned out to be a genuinely separate
-// concern from "a statement of transactions" — the page geometry, the font
-// metrics and the cross-reference table have no opinion about either.
+// This is the machinery only. What gets DRAWN lives with the document that
+// draws it — today that is lib/pdf.ts, a statement of transactions. The split
+// is worth keeping even with one caller: page geometry, Helvetica metrics and
+// a cross-reference table have no opinion about what is on the page, and
+// keeping them apart is what stopped the statement growing a second job.
 //
 // We use the two PDF "standard 14" fonts (Helvetica and Helvetica-Bold), which
 // every reader has built in, so nothing has to be embedded. That buys us

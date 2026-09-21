@@ -3,8 +3,7 @@
 //
 // The PDF machinery it is drawn with — page geometry, font metrics, the
 // content-stream operators and the cross-reference table — lives in
-// lib/pdfKit.ts, which lib/reviewPdf.ts draws the spending review with too.
-// This file is only the statement.
+// lib/pdfKit.ts. This file is only the statement.
 
 import type { Transaction } from "@/types/db";
 import {

@@ -24,7 +24,6 @@ import { currentMonthRange } from "@/lib/dates";
 import { netCents } from "@/lib/money";
 import { SAFE_CATEGORY_ID } from "@/lib/categories";
 import { FETCH_CAP } from "@/lib/stats";
-import { decryptString, encryptString } from "@/lib/crypto";
 import {
   cipherMask,
   clearStoredPassphrase,
@@ -117,8 +116,6 @@ type Store = {
   // be indistinguishable from "this window has nothing in it", and a review
   // computed from that is a paid document full of zeroes.
   reviewRange: (from: Date, to: Date) => Promise<Transaction[] | null>;
-  sealReview: (review: unknown) => Promise<string | null>;
-  openReview: (bodyEnc: string) => Promise<unknown | null>;
 };
 
 // Rows per page when reading a review's window. Matches FETCH_CAP, which this
@@ -600,23 +597,6 @@ export function StoreProvider({
     );
   }, []);
 
-  const sealReview = useCallback(async (review: unknown) => {
-    const key = masterKey.current;
-    if (!key) return null;
-    return encryptString(key, JSON.stringify(review));
-  }, []);
-
-  const openReview = useCallback(async (bodyEnc: string) => {
-    const key = masterKey.current;
-    if (!key) return null;
-    try {
-      return JSON.parse(await decryptString(key, bodyEnc));
-    } catch {
-      // Written under a passphrase this device no longer has, or corrupt.
-      return null;
-    }
-  }, []);
-
   // The carried-forward balance: net of everything we hold, all-time. Bounded by
   // the same FETCH_CAP as the rest of the store — with more than FETCH_CAP rows
   // it reflects the most recent window, exactly like the Safe total.
@@ -682,8 +662,6 @@ export function StoreProvider({
     deleteSafeGoldEntry,
     refresh: loadData,
     reviewRange,
-    sealReview,
-    openReview,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
