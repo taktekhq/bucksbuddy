@@ -2,14 +2,14 @@
 //
 // Files a GitHub issue on behalf of the signed-in user (Home → the speech
 // bubble next to the Safe → the Feedback screen). GitHub needs a token, and a
-// token in a client-side bundle is a token everyone has — so, exactly like
+// token in a client-side bundle is a token everyone has. So, exactly like
 // delete-account, the browser sends its session JWT and this function does the
 // privileged part.
 //
 // The client has already uploaded any attachments to the private `feedback`
 // bucket under `<user id>/<ticket>/` (see supabase/migrations/0009_feedback.sql
-// and src/lib/feedback.ts). This function signs those objects into the issue —
-// binaries never travel through the request body.
+// and src/lib/feedback.ts). This function signs those objects into the issue.
+// Binaries never travel through the request body.
 //
 // Deploy (Supabase Dashboard → Edge Functions → Deploy a new function → Via
 // Editor): name it exactly `feedback`, paste this file, Deploy. Keep "Verify
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
 
-    // Identify the caller from their JWT — never trust an id from the body.
+    // Identify the caller from their JWT, never an id from the body.
     const caller = createClient(url, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
         "### Account data",
         "",
         "The reporter switched on **Include my data**, so this report carries a",
-        "dump of their entries in the clear — for an end-to-end encrypted account,",
+        "dump of their entries in the clear. For an end-to-end encrypted account,",
         "that is data the server otherwise cannot read at all.",
         "",
         `[account-data.json](${dataLink})`,

@@ -14,15 +14,15 @@ import {
   valuesMasked,
 } from "@/lib/feedback";
 
-// The feedback screen — reached from the speech bubble next to the Safe on
-// Home. Writing here files a GitHub issue (via the `feedback` edge function,
-// which is the only thing holding a token), so a bug reported from a phone
-// lands in the same place as one reported by hand.
+// The feedback screen, reached from the speech bubble next to the Safe on Home.
+// Writing here files a GitHub issue (via the `feedback` edge function, which is
+// the only thing holding a token), so a bug reported from a phone lands where
+// the fixing happens.
 //
 // Three things ride along with the message:
 //   * the account email, so a reply has somewhere to go;
-//   * screenshots picked from the photo library — the fastest way to explain a
-//     layout bug, and the thing people reach for first;
+//   * screenshots picked from the photo library, the fastest way to explain a
+//     layout bug;
 //   * optionally, and only when deliberately switched on, the account's raw
 //     data. That one is off by default and says exactly what it does, because
 //     for an end-to-end encrypted account it means handing over the very thing
@@ -31,6 +31,9 @@ import {
 // It's a screen rather than a sheet for the same reason AddComposer is inline:
 // a textarea plus the iOS keyboard needs a page that can scroll, not a panel
 // pinned to the bottom of the viewport.
+//
+// The copy is kept to the bone. Every line here is read by someone who has
+// already hit a bug and just wants it reported.
 
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
@@ -67,7 +70,7 @@ export function Feedback() {
   const [sent, setSent] = useState(false);
 
   // While the device is locked the rows in memory are garbled stand-ins, so
-  // there is no real data to hand over — and anything already switched on gets
+  // there is no real data to hand over, and anything already switched on gets
   // switched back off rather than quietly shipping zeros.
   const masked = valuesMasked(locked, transactions, safeGoldEntries);
   useEffect(() => {
@@ -137,7 +140,7 @@ export function Feedback() {
 
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
-      {/* Plain iOS nav: back chevron + centered title — matches Settings/Legal. */}
+      {/* Plain iOS nav: back chevron + centered title, matching Settings/Legal. */}
       <header className="relative flex items-center justify-center py-1">
         <button
           type="button"
@@ -168,20 +171,16 @@ export function Feedback() {
           {/* WHAT HAPPENED */}
           <section className="flex flex-col gap-2">
             <SectionHeader>What&apos;s up, Doc?</SectionHeader>
-            <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
+            <div className="rounded-card bg-surface p-4 shadow-card">
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 maxLength={MAX_MESSAGE_CHARS}
                 rows={5}
                 aria-label="Your feedback"
-                placeholder="A bug, an idea, or something that just felt wrong. The more you say, the easier it is to fix."
+                placeholder="What happened?"
                 className="w-full resize-none rounded-card border border-separator bg-surface px-3.5 py-3 text-base leading-relaxed text-label outline-none ring-carrot/40 transition focus:ring-2 placeholder:text-label-secondary"
               />
-              <p className="px-1 text-xs text-label-secondary">
-                This is filed as an issue on the app&apos;s repo, so nothing gets
-                lost in an inbox.
-              </p>
             </div>
           </section>
 
@@ -214,21 +213,20 @@ export function Feedback() {
               {shots.length < MAX_SCREENSHOTS && (
                 <label className="press flex cursor-pointer items-center justify-center gap-2 rounded-pill bg-grouped py-3 text-base font-semibold text-label">
                   <ImagePlus className="h-5 w-5" strokeWidth={2} />
-                  {shots.length > 0 ? "Add another" : "Add from your photos"}
+                  {shots.length > 0 ? "Add another" : "Add from photos"}
                   <input
                     type="file"
                     accept="image/*"
                     multiple
                     onChange={pick}
-                    aria-label="Add from your photos"
+                    aria-label="Add from photos"
                     className="hidden"
                   />
                 </label>
               )}
 
               <p className="px-1 text-xs text-label-secondary">
-                Up to {MAX_SCREENSHOTS}, 5 MB each. They go with the report and
-                nowhere else.
+                Up to {MAX_SCREENSHOTS}, 5 MB each.
               </p>
               {notice && (
                 <p className="px-1 text-sm font-medium text-danger">{notice}</p>
@@ -236,7 +234,7 @@ export function Feedback() {
             </div>
           </section>
 
-          {/* RAW DATA — off unless deliberately switched on. */}
+          {/* RAW DATA: off unless deliberately switched on. */}
           <section className="flex flex-col gap-2">
             <SectionHeader>Your data</SectionHeader>
             <div
@@ -283,19 +281,16 @@ export function Feedback() {
 
               {masked ? (
                 <p className="text-sm text-label-secondary">
-                  This device is locked, so there&apos;s nothing real to send.
-                  Enter your passphrase in Settings first.
+                  Locked. Unlock in Settings first.
                 </p>
               ) : shareData ? (
-                <p className="text-sm leading-relaxed text-label">
-                  Your raw data — every entry, amount and note, in the clear —
-                  is sent with this report. It is used only to fix the bug, and
-                  deleted once the bug is fixed.
+                <p className="text-sm text-label">
+                  Your entries go in the clear. Used to fix the bug, then
+                  deleted.
                 </p>
               ) : (
                 <p className="text-sm text-label-secondary">
-                  Off. Only your message and screenshots are sent. Turn it on if
-                  a bug is about your own numbers.
+                  Off. Message and screenshots only.
                 </p>
               )}
             </div>
@@ -308,12 +303,10 @@ export function Feedback() {
               disabled={!account || message.trim().length === 0 || busy}
               className="press rounded-pill bg-carrot py-3.5 font-display text-base font-semibold text-white shadow-carrot transition disabled:bg-separator disabled:text-label-secondary disabled:shadow-none"
             >
-              {busy ? "Sending…" : "Send feedback"}
+              {busy ? "Sending…" : "Send"}
             </button>
             <p className="px-1 text-center text-xs text-label-secondary">
-              Sent as {account?.email ?? "your account"} — that&apos;s the
-              address we reply to. Your device and browser come along so the bug
-              can be reproduced.
+              Sent as {account?.email ?? "your account"}, with your device info.
             </p>
             {err && (
               <p className="px-1 text-center text-sm font-medium text-danger">{err}</p>
@@ -326,7 +319,7 @@ export function Feedback() {
 }
 
 // The thank-you. Deliberately says nothing about issue numbers: the repo is
-// private, so a link would only 404 for the person who just wrote in.
+// private, so a link would only 404 for whoever just wrote in.
 function Sent({ onAgain }: { onAgain: () => void }) {
   return (
     <section className="flex flex-col items-center gap-4 rounded-card bg-surface p-6 text-center shadow-card">
@@ -334,10 +327,9 @@ function Sent({ onAgain }: { onAgain: () => void }) {
         <Check className="h-7 w-7" strokeWidth={3} />
       </span>
       <div>
-        <p className="text-base font-semibold text-label">That&apos;s filed.</p>
-        <p className="mt-1 text-sm leading-relaxed text-label-secondary">
-          Thanks — it landed straight on the to-do pile. We&apos;ll reply to
-          your account email if we need more.
+        <p className="text-base font-semibold text-label">Sent.</p>
+        <p className="mt-1 text-sm text-label-secondary">
+          We&apos;ll reply by email if we need more.
         </p>
       </div>
       <button
@@ -345,7 +337,7 @@ function Sent({ onAgain }: { onAgain: () => void }) {
         onClick={() => navigate("/")}
         className="press w-full rounded-pill bg-carrot py-3 font-display text-base font-semibold text-white shadow-carrot"
       >
-        Back to the money
+        Done
       </button>
       <button
         type="button"

@@ -105,12 +105,12 @@ export function Legal() {
           </p>
           <p>
             Feedback sent from the app reaches us as an issue on BucksBuddy&apos;s
-            private code repository: your message, the screenshots you attach,
-            your account email so we can reply, and which device and browser you
-            sent it from. If — and only if — you switch on{" "}
+            private code repository: your message, any screenshots you attach,
+            your account email so we can reply, and your device and browser. If
+            you switch on{" "}
             <span className="font-semibold">Include my data</span>, your entries
-            are sent with it in the clear, including on an end-to-end encrypted
-            account. We use them only to fix the bug you reported, and delete
+            are sent in the clear, including on an end-to-end encrypted
+            account. We use them only to fix the bug, and delete
             them once it is fixed. The switch is off unless you turn it on.
           </p>
 

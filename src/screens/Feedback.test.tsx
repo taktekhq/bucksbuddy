@@ -14,7 +14,7 @@ vi.mock("@/lib/router", () => ({ navigate }));
 let storeValue = makeStoreValue();
 vi.mock("@/lib/store", () => ({ useStore: () => storeValue }));
 
-// Only the network call is faked — the validation, the snapshot and the masking
+// Only the network call is faked. The validation, the snapshot and the masking
 // rules are the real ones from lib/feedback.
 const submitFeedback = vi.hoisted(() =>
   vi.fn(async () => ({ error: null as string | null })),
@@ -65,7 +65,7 @@ function gold(overrides: Partial<SafeGoldEntry> = {}): SafeGoldEntry {
 /** Render and wait for the session lookup to land. */
 async function open() {
   render(<Feedback />);
-  await screen.findByRole("button", { name: "Send feedback" });
+  await screen.findByRole("button", { name: "Send" });
 }
 
 const write = async (text: string) =>
@@ -85,14 +85,14 @@ beforeEach(() => {
   });
 });
 
-describe("Feedback — the form", () => {
+describe("Feedback: the form", () => {
   it("won't send an empty report", async () => {
     await open();
-    expect(screen.getByRole("button", { name: "Send feedback" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     await write("   ");
-    expect(screen.getByRole("button", { name: "Send feedback" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     await write("the keypad eats zeros");
-    expect(screen.getByRole("button", { name: "Send feedback" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
   });
 
   it("names the account the reply goes to", async () => {
@@ -110,7 +110,7 @@ describe("Feedback — the form", () => {
     const capture = vi.spyOn(posthog, "capture");
     await open();
     await write("the keypad eats zeros");
-    await userEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(submitFeedback).toHaveBeenCalledWith({
       userId: "u1",
@@ -122,14 +122,14 @@ describe("Feedback — the form", () => {
       screenshots: 0,
       shared_data: false,
     });
-    expect(await screen.findByText("That's filed.")).toBeInTheDocument();
+    expect(await screen.findByText("Sent.")).toBeInTheDocument();
   });
 
   it("surfaces a failure and leaves what was typed alone", async () => {
     submitFeedback.mockResolvedValue({ error: "Couldn't send that." });
     await open();
     await write("nope");
-    await userEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText("Couldn't send that.")).toBeInTheDocument();
     expect(screen.getByLabelText("Your feedback")).toHaveValue("nope");
   });
@@ -151,10 +151,10 @@ describe("Feedback — the form", () => {
   });
 });
 
-describe("Feedback — screenshots", () => {
+describe("Feedback: screenshots", () => {
   it("attaches picks from the photo library and can drop one again", async () => {
     await open();
-    const input = screen.getByLabelText("Add from your photos");
+    const input = screen.getByLabelText("Add from photos");
     await userEvent.upload(input, [image("a.png"), image("b.png")]);
 
     expect(screen.getByAltText("a.png")).toHaveAttribute("src", "blob:fake");
@@ -165,7 +165,7 @@ describe("Feedback — screenshots", () => {
     expect(screen.getByAltText("b.png")).toBeInTheDocument();
 
     await write("here you go");
-    await userEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(submitFeedback).toHaveBeenCalledWith(
       expect.objectContaining({ screenshots: [expect.objectContaining({ name: "b.png" })] }),
     );
@@ -173,7 +173,7 @@ describe("Feedback — screenshots", () => {
 
   it("says why a pick was ignored", async () => {
     await open();
-    fireEvent.change(screen.getByLabelText("Add from your photos"), {
+    fireEvent.change(screen.getByLabelText("Add from photos"), {
       target: { files: [image("notes.pdf", "application/pdf")] },
     });
     expect(
@@ -184,31 +184,31 @@ describe("Feedback — screenshots", () => {
 
   it("copes with a picker that hands back nothing", async () => {
     await open();
-    const input = screen.getByLabelText("Add from your photos");
+    const input = screen.getByLabelText("Add from photos");
     fireEvent.change(input, { target: { files: null } });
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
   it("hides the picker once the cap is reached", async () => {
     await open();
-    await userEvent.upload(screen.getByLabelText("Add from your photos"), [
+    await userEvent.upload(screen.getByLabelText("Add from photos"), [
       image("a.png"),
       image("b.png"),
       image("c.png"),
       image("d.png"),
     ]);
-    expect(screen.queryByLabelText("Add from your photos")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add from photos")).not.toBeInTheDocument();
     expect(screen.getAllByRole("img")).toHaveLength(4);
   });
 });
 
-describe("Feedback — including account data", () => {
+describe("Feedback: including account data", () => {
   it("is off to start with, and says what it would send", async () => {
     storeValue = makeStoreValue({ transactions: [tx(), tx({ id: "t2" })] });
     await open();
     const toggle = screen.getByRole("switch", { name: "Include my data" });
     expect(toggle).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByText(/Only your message and screenshots are sent/)).toBeInTheDocument();
+    expect(screen.getByText("Off. Message and screenshots only.")).toBeInTheDocument();
     expect(screen.getByText("2 entries · 0 gold entries")).toBeInTheDocument();
   });
 
@@ -230,12 +230,11 @@ describe("Feedback — including account data", () => {
     await userEvent.click(screen.getByRole("switch", { name: "Include my data" }));
 
     expect(
-      screen.getByText(/deleted once the bug is fixed/),
+      screen.getByText("Your entries go in the clear. Used to fix the bug, then deleted."),
     ).toBeInTheDocument();
-    expect(screen.getByText(/every entry, amount and note, in the clear/)).toBeInTheDocument();
 
     await write("my totals are wrong");
-    await userEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(submitFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -262,35 +261,35 @@ describe("Feedback — including account data", () => {
     await userEvent.click(toggle);
     await userEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByText(/Only your message and screenshots are sent/)).toBeInTheDocument();
+    expect(screen.getByText("Off. Message and screenshots only.")).toBeInTheDocument();
   });
 
   it("is unavailable while the device is locked", async () => {
     storeValue = makeStoreValue({ locked: true });
     await open();
     expect(screen.getByRole("switch", { name: "Include my data" })).toBeDisabled();
-    expect(screen.getByText(/This device is locked/)).toBeInTheDocument();
+    expect(screen.getByText("Locked. Unlock in Settings first.")).toBeInTheDocument();
   });
 
   it("is unavailable while masked rows are still in memory", async () => {
     storeValue = makeStoreValue({ transactions: [tx({ amountMask: "a8F2" })] });
     await open();
     expect(screen.getByRole("switch", { name: "Include my data" })).toBeDisabled();
-    expect(screen.getByText(/This device is locked/)).toBeInTheDocument();
+    expect(screen.getByText("Locked. Unlock in Settings first.")).toBeInTheDocument();
   });
 });
 
-describe("Feedback — after sending", () => {
+describe("Feedback: after sending", () => {
   async function send() {
     await open();
     await write("the keypad eats zeros");
-    await userEvent.click(screen.getByRole("button", { name: "Send feedback" }));
-    await screen.findByText("That's filed.");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Sent.");
   }
 
   it("offers the way back to the app", async () => {
     await send();
-    await userEvent.click(screen.getByRole("button", { name: "Back to the money" }));
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(navigate).toHaveBeenCalledWith("/");
   });
 
@@ -302,6 +301,6 @@ describe("Feedback — after sending", () => {
       "aria-checked",
       "false",
     );
-    expect(screen.getByRole("button", { name: "Send feedback" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 });

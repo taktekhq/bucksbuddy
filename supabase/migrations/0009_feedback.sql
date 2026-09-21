@@ -57,7 +57,7 @@ create table if not exists public.feedback_reports (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null references auth.users(id) on delete cascade,
   issue_number   integer,
-  -- `<user id>/<ticket>` — the storage folder holding this report's
+  -- `<user id>/<ticket>`, the storage folder holding this report's
   -- attachments. Delete it when the issue closes.
   storage_prefix text,
   -- True when the reporter switched on "Include my data", i.e. the folder above

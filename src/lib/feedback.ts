@@ -1,13 +1,13 @@
-// Feedback — the speech-bubble button next to the Safe on Home files a GitHub
+// Feedback: the speech-bubble button next to the Safe on Home files a GitHub
 // issue on the user's behalf.
 //
 // The browser can't talk to GitHub: that needs a token, and a token in a
 // client-side bundle is a token everyone has. So this is the same shape as
-// delete-account — the client gathers, the `feedback` edge function (which
+// delete-account: the client gathers, the `feedback` edge function (which
 // holds the token) posts the issue. See supabase/functions/feedback/index.ts.
 //
-// Binaries never go through the function body. Screenshots — and, only when the
-// user deliberately turns it on, a snapshot of their account — are uploaded to
+// Binaries never go through the function body. Screenshots, and (only when the
+// user deliberately turns it on) a snapshot of their account, are uploaded to
 // the private `feedback` storage bucket under `<user id>/<ticket>/`, and the
 // function signs those objects into the issue. That keeps the only copy of the
 // sensitive attachment somewhere it can actually be deleted again once the bug
@@ -41,7 +41,7 @@ export const SCREENSHOT_ERRORS = {
 // than trusting a filename from the photo library.
 //
 // This map is also the allow-list, and it is the same one the bucket enforces
-// (see supabase/migrations/0009_feedback.sql) — a type the bucket would refuse
+// (see supabase/migrations/0009_feedback.sql): a type the bucket would refuse
 // should be turned away here, with a reason, rather than dying as a failed
 // upload. It deliberately leaves out SVG, which is a script in a trenchcoat.
 //
@@ -99,7 +99,7 @@ export function addScreenshots(
   return { files, error };
 }
 
-// Where the report came from. Non-sensitive and always attached — it's the
+// Where the report came from. Non-sensitive and always attached, and it is the
 // difference between "the keypad is broken" and a bug someone can reproduce.
 export type DeviceInfo = {
   user_agent: string;
@@ -121,7 +121,7 @@ export function deviceInfo(): DeviceInfo {
 
 // The account dump behind the "Include my data" toggle: the decrypted rows
 // exactly as the app holds them, plus the settings that decide how they're
-// read. Everything in here is money — it only leaves the device when the user
+// read. It is all money, and it only leaves the device when the user
 // turns the toggle on and reads what it says.
 export type AccountSnapshot = {
   taken_at: string;
@@ -162,7 +162,7 @@ export function accountSnapshot(
 
 /**
  * True while the values on screen are the garbled stand-ins. `locked` alone
- * isn't enough — store.unlock() clears it *before* awaiting the reload, so for
+ * isn't enough: store.unlock() clears it *before* awaiting the reload, so for
  * one window the rows are still masked while locked reads false (same test
  * ExportCard and Receipts use). Attaching then would ship a file of real dates
  * against zeroed amounts, which is worse than attaching nothing.
@@ -213,7 +213,7 @@ export async function submitFeedback({
   }
 
   async function abort(): Promise<{ error: string }> {
-    // Best effort — an orphan in a private bucket is harmless, but it shouldn't
+    // Best effort. An orphan in a private bucket is harmless, but it shouldn't
     // be left behind for a report nobody ever received.
     if (uploaded.length > 0) {
       await supabase.storage.from(FEEDBACK_BUCKET).remove(uploaded);

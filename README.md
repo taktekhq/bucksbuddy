@@ -37,7 +37,7 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   purchase it is meant to become is written and tested but **not deployed**. See **Spending
   reviews** below.
 - **Feedback:** a speech bubble next to the Safe on Home opens a form that files a
-  **GitHub issue** — the message, screenshots picked from the phone's photo library, the
+  **GitHub issue**: the message, screenshots picked from the phone's photo library, the
   account email to reply to, and (off by default, behind a toggle that says exactly what
   it means) a dump of the account's raw entries. See **Feedback** below.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
@@ -502,8 +502,8 @@ suite; switching it on is configuration, not code:
 ## Feedback (the GitHub issue button)
 
 The speech bubble next to the Safe on Home opens `#/feedback`. Sending files an issue on
-this repo. The browser can't do that itself — GitHub needs a token, and a token in a
-client-side bundle is a token everyone has — so it works the same way as account deletion:
+this repo. The browser can't do that itself: GitHub needs a token, and a token in a
+client-side bundle is a token everyone has. So it works the same way as account deletion:
 the app sends its session JWT to the
 [`feedback`](supabase/functions/feedback/index.ts) edge function, which holds the token and
 posts the issue.
@@ -524,12 +524,12 @@ What rides along with a report:
 
 - **The message**, quoted in the issue body so it never reads as our own prose.
 - **The account email + user id**, so a reply has somewhere to go.
-- **Device and browser**, always — the difference between "the keypad is broken" and a bug
+- **Device and browser**, always: the difference between "the keypad is broken" and a bug
   someone can reproduce.
 - **Screenshots**, up to 4 × 5 MB, picked from the photo library. They upload straight from
   the browser into the private `feedback` bucket at `<user id>/<ticket>/`, and the function
   signs them into the issue. Binaries never go through the function body.
-- **The account's raw data — only if the reporter turns it on.** The toggle is off by
+- **The account's raw data, only if the reporter turns it on.** The toggle is off by
   default and, once on, says plainly that the raw data is sent, used only to fix the bug,
   and deleted once the bug is fixed. For an end-to-end encrypted account this is the one
   way that data ever leaves the device, so it is deliberately a decision rather than a
@@ -547,7 +547,7 @@ order by created_at desc;
 ```
 
 Delete that folder from the `feedback` bucket when the issue closes. Nothing does it
-automatically — "once the bug is fixed" isn't something a cron job can know.
+automatically, because "once the bug is fixed" isn't something a cron job can know.
 
 `feedback_reports` is also the rate limit: 20 reports per account per day, so an issue
 tracker can't be turned into a firehose.
