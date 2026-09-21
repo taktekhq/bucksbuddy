@@ -575,7 +575,7 @@ function Shell({ children }: { children: ReactNode }) {
   useFloorColor(ROOM_FLOOR);
   return (
     <main
-      className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))] text-review-text"
+      className="mx-auto flex min-h-full max-w-md flex-col gap-5 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[var(--top-gutter)] text-review-text"
       style={{ background: ROOM_BG }}
     >
       <div

@@ -162,7 +162,7 @@ export function Landing() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(2rem+var(--safe-top))]">
+    <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(2rem+var(--glass-clearance)+var(--safe-top))]">
       {/* Top spacer is larger than the bottom one so the whole stack sits a
           little below centre, rather than dead-centred. */}
       <div aria-hidden className="flex-[2]" />
