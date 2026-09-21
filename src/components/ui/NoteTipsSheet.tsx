@@ -12,8 +12,10 @@ type Props = {
 // sheet opened from the tiny info button next to the note field, so the
 // tricks are one tap away without cluttering the form. "subscription" and
 // "membership" still work — people write them anyway — but the cadence words
-// do the same and more, so only those are taught. Drag down or tap the
-// backdrop to dismiss, same as the category sheet.
+// do the same and more, so only those are taught. The bracketed tag is taught
+// with them: two of the same service is common enough (a work login and a
+// personal one) that people need to know how to say which is which. Drag down
+// or tap the backdrop to dismiss, same as the category sheet.
 type Tip = {
   icon: LucideIcon;
   title: string;
@@ -39,6 +41,10 @@ const TIPS: Tip[] = [
       {
         title: "Stop a recurring item",
         body: "Last note: add `(ended)`.",
+      },
+      {
+        title: "Tell two of the same apart",
+        body: "Tag one of them: `(personal)`. Any word in brackets does.",
       },
     ],
   },

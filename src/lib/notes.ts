@@ -7,7 +7,9 @@
 //
 // A note can also carry a cadence hint — "Domain (yearly)", "gym monthly" —
 // which the detector takes as the user's word on how often it recurs. The hint
-// is peeled off here so it never gets in the way of matching.
+// is peeled off here so it never gets in the way of matching. Brackets that
+// are left over once the hints are gone are a tag — "Claude (taktekbot)" —
+// which does the opposite: it keeps that one apart from the plain "Claude".
 
 import type { Transaction } from "@/types/db";
 
@@ -41,6 +43,14 @@ const ENDED_WORDS = /[([]?\s*\b(ended|cancel{1,2}ed|stopped|final)\b\s*[)\]]?/i;
 // don't merge on the name — and "Netflix with Ali" every month is still Netflix.
 const WITH_SUFFIX = /\bwith\b.*$/i;
 
+// "Claude (taktekbot)", "Netflix (Sara's)": brackets left over once the cheat
+// codes have been peeled off are a *tag* — which one of them this is. The same
+// service is often paid for twice, once for work and once for yourself, and
+// the tag is how someone says so, so unlike an ordinary extra word it is not
+// something two entries can differ on: see `namesMatch`. The tag stays in the
+// text too, because it's part of the name on screen.
+const TAG = /[([]([^)\]]*)[)\]]/g;
+
 export type ParsedNote = {
   // The note with the hints and "with …" removed, whitespace collapsed.
   text: string;
@@ -48,6 +58,8 @@ export type ParsedNote = {
   cadence: Cadence | null;
   recurring: boolean; // the note says it comes back (subscription, membership, a domain)
   ended: boolean; // the note says this was the last one
+  // The bracketed tag(s) left in the text, normalized ("" when there are none).
+  tag: string;
 };
 
 /** Split a raw note into its text and the hints it may carry. */
@@ -72,7 +84,12 @@ export function parseNote(raw: string | null): ParsedNote {
     .replace(WITH_SUFFIX, " ")
     .replace(/\s+/g, " ")
     .replace(/^[\s\-–—:,.]+|[\s\-–—:,.]+$/g, "");
-  return { text, cadence: cadence ?? (domain ? "yearly" : null), recurring, ended };
+  // Whatever brackets survived all that name *which* one this is.
+  const tag = [...text.matchAll(TAG)]
+    .map((m) => normalizeNote(m[1]))
+    .filter(Boolean)
+    .join(" ");
+  return { text, cadence: cadence ?? (domain ? "yearly" : null), recurring, ended, tag };
 }
 
 // Words that say nothing about *what* the payment is, so sharing one of them
@@ -160,6 +177,48 @@ export function notesMatch(a: string, b: string): boolean {
   // Jaccard ≥ ½: shared / (|a| + |b| − shared).
   if (shared > 0 && 2 * shared >= ta.length + tb.length - shared) return true;
   return isTypoOf(a, b);
+}
+
+/** A note reduced to what it is compared by: its name, and the tag on it. */
+export type NoteName = {
+  normalized: string; // the whole name, normalized — the tag's words included
+  tag: string; // the bracketed tag, normalized ("" when there is none)
+};
+
+/** Everything `namesMatch` needs from a raw note. */
+export function noteName(raw: string | null): NoteName {
+  const parsed = parseNote(raw);
+  return { normalized: normalizeNote(parsed.text), tag: parsed.tag };
+}
+
+/**
+ * Is every word of `tag` in `other`? The brackets themselves are not required
+ * of the other note — "Claude (taktekbot)" and a later "Claude taktekbot" are
+ * still the same thing — and a typo in the tag is forgiven like anywhere else.
+ * Words too short to be tokens count here: "Sara (1)" and "Sara (2)" differ by
+ * nothing else.
+ */
+function tagHolds(tag: string, other: string): boolean {
+  if (tag === "") return true;
+  const words = other.split(" ").filter(Boolean);
+  return tag
+    .split(" ")
+    .filter(Boolean)
+    .every((w) => words.some((v) => v === w || isTypoOf(w, v)));
+}
+
+/**
+ * Do two notes name the same payment? Their words have to mostly agree
+ * (`notesMatch`), *and* a bracketed tag on either side has to turn up in the
+ * other. The tag is the one word you can't drop: "Claude (taktekbot)" shares
+ * half its words with the "Claude" that was already there, which is normally
+ * enough to fold them together ("Canva" / "Canva for family"), but a tag says
+ * the opposite — it is there precisely to tell this one from that one, so the
+ * work subscription stays a subscription of its own.
+ */
+export function namesMatch(a: NoteName, b: NoteName): boolean {
+  if (!tagHolds(a.tag, b.normalized) || !tagHolds(b.tag, a.normalized)) return false;
+  return notesMatch(a.normalized, b.normalized);
 }
 
 /**

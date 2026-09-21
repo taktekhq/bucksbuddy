@@ -27,10 +27,11 @@ describe("NoteTipsSheet", () => {
     expect(points).toEqual([
       "Start a recurring itemFirst note: add (monthly), (yearly) or (weekly).",
       "Stop a recurring itemLast note: add (ended).",
+      "Tell two of the same apartTag one of them: (personal). Any word in brackets does.",
     ]);
     // The keywords themselves read as code (plain, with nowhere to put them).
     expect([...keywords.querySelectorAll("code")].map((c) => c.textContent)).toEqual([
-      "(monthly)", "(yearly)", "(weekly)", "(ended)",
+      "(monthly)", "(yearly)", "(weekly)", "(ended)", "(personal)",
     ]);
     // "subscription" still works, it just isn't taught.
     expect(sheet).not.toHaveTextContent("subscription");
