@@ -234,6 +234,35 @@ describe("detectRecurring", () => {
     expect(payments[0].key).toBe("false:fees/subscriptions:netflix family");
   });
 
+  it("keeps a tagged note out of the untagged series of the same name", () => {
+    const rows = [
+      // The Claude that has been running for months…
+      ...monthly(4, { note: "Claude subscription", amount_usd_cents: 2000 }),
+      // …and a second one, on its first entry, tagged to say which it is.
+      tx({
+        note: "Claude (taktekbot) (monthly)",
+        amount_usd_cents: 10000,
+        occurred_at: at(2026, 5, 4),
+      }),
+    ];
+    const { payments, monthlyOutCents } = detectRecurring(rows, "u1", NOW);
+    expect(payments.map((p) => [p.note, p.count, p.amountCents])).toEqual([
+      ["Claude", 4, 2000],
+      ["Claude (taktekbot)", 1, 10000],
+    ]);
+    // Two payments, so the total is both — not one series with a price hike.
+    expect(monthlyOutCents).toBe(12000);
+  });
+
+  it("folds a tagged note together with the same tag written plainly", () => {
+    const rows = [
+      tx({ note: "Claude (taktekbot) (monthly)", occurred_at: at(2026, 4, 4) }),
+      tx({ note: "Claude taktekbot", occurred_at: at(2026, 5, 4) }),
+    ];
+    const { payments } = detectRecurring(rows, "u1", NOW);
+    expect(payments.map((p) => [p.note, p.count])).toEqual([["Claude taktekbot", 2]]);
+  });
+
   it("groups note-less entries by category alone, apart from the noted ones", () => {
     const rows = [
       ...monthly(4, { category: "rent", note: null, amount_usd_cents: 80000 }),

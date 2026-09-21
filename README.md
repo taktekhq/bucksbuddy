@@ -142,7 +142,13 @@ which is what "all time" needs. Re-runnable, and required before a review can be
 > how often (monthly until they can), a domain name ("sillyguy.com", or the word "domain")
 > is yearly, and "(ended)" on the last entry stops it. Every one of those words is dropped
 > from the name before comparing. Who it was "with" is dropped too, so "dinner with Sara"
-> and "lunch with Sara" don't merge on her name. A series that stops, stops showing: a
+> and "lunch with Sara" don't merge on her name. Brackets that survive all that are a
+> **tag** — "Claude (taktekbot)" — and a tag is the one word that can't be dropped: it has
+> to be in both notes before two entries are the same payment, so a second subscription to
+> something you already pay for is counted on its own instead of folding into the first
+> (without it "Claude (taktekbot)" shares half its words with "Claude", which is normally
+> enough to merge them). Written without the brackets next time it still counts, so
+> "Claude taktekbot" carries the series on. A series that stops, stops showing: a
 > whole period past its due date with nothing logged and it's gone; logged again within
 > that time it carries on, and after a longer break the new entries start over as a series
 > of their own. Amounts are compared to the price before them: within 10% is the same
@@ -152,8 +158,8 @@ which is what "all time" needs. Re-runnable, and required before a review can be
 > When the note vouched for the series the amounts are taken as they come. The page shows
 > the new price with the old one underneath. To keep notes from drifting, the composer offers the past
 > notes of the chosen category (the exact one) as chips under the note field, and a
-> tiny info button next to the note opens the cheat codes worth teaching: the cadence words and
-> "(ended)" ("subscription" and "membership" still work but aren't advertised). The page is read-only; it
+> tiny info button next to the note opens the cheat codes worth teaching: the cadence words,
+> "(ended)" and the tag ("subscription" and "membership" still work but aren't advertised). The page is read-only; it
 > sits behind the same unlock nudge as the rest of the app when the device is locked.
 
 ### 2. Create your user (password sign-in)

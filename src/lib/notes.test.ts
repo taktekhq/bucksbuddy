@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   TYPO_DISTANCE,
   editDistance,
+  namesMatch,
+  noteName,
   normalizeNote,
   noteSuggestions,
   noteTokens,
@@ -11,7 +13,7 @@ import {
 import type { Transaction } from "@/types/db";
 
 describe("parseNote", () => {
-  const plain = { recurring: false, ended: false };
+  const plain = { recurring: false, ended: false, tag: "" };
 
   it("peels a cadence hint off the note, brackets and all", () => {
     expect(parseNote("Insurance (yearly)")).toEqual({ ...plain, text: "Insurance", cadence: "yearly" });
@@ -54,6 +56,21 @@ describe("parseNote", () => {
     expect(parseNote("Dinner with Sara")).toEqual({ ...plain, text: "Dinner", cadence: null });
     expect(parseNote("Netflix with Ali (monthly)")).toEqual({ ...plain, text: "Netflix", cadence: "monthly" });
     expect(parseNote("Withdrawal").text).toBe("Withdrawal"); // whole word only
+  });
+
+  it("reads the brackets the cheat codes left behind as a tag, keeping them in the name", () => {
+    expect(parseNote("Claude (taktekbot) (monthly)")).toEqual({
+      ...plain,
+      text: "Claude (taktekbot)",
+      cadence: "monthly",
+      tag: "taktekbot",
+    });
+    // A hint or "(ended)" is not a tag — it's already gone by then.
+    expect(parseNote("Insurance (yearly)").tag).toBe("");
+    expect(parseNote("Framer subscription (ended)").tag).toBe("");
+    expect(parseNote("[monthly] Gym").tag).toBe("");
+    // Several tags read as one, normalized like any other note text.
+    expect(parseNote("Netflix (Türkiye) (Ali's)").tag).toBe("turkiye ali s");
   });
 });
 
@@ -112,6 +129,33 @@ describe("notesMatch", () => {
     expect(notesMatch("", "")).toBe(true);
     expect(notesMatch("", "netflix")).toBe(false);
     expect(notesMatch("netflix", "")).toBe(false);
+  });
+});
+
+describe("namesMatch", () => {
+  const name = (raw: string) => noteName(raw);
+
+  it("keeps a tagged note apart from the untagged one it would otherwise join", () => {
+    // The whole point: half the words are shared, which is normally enough.
+    expect(notesMatch("claude", "claude taktekbot")).toBe(true);
+    expect(namesMatch(name("Claude subscription"), name("Claude (taktekbot) (monthly)"))).toBe(
+      false,
+    );
+    expect(namesMatch(name("Claude (personal)"), name("Claude (taktekbot)"))).toBe(false);
+    expect(namesMatch(name("Sara (1)"), name("Sara (2)"))).toBe(false);
+  });
+
+  it("still folds the same tag together, brackets or not, typos and all", () => {
+    expect(namesMatch(name("Claude (taktekbot)"), name("claude (TaktekBot)"))).toBe(true);
+    expect(namesMatch(name("Claude (taktekbot)"), name("Claude taktekbot"))).toBe(true);
+    expect(namesMatch(name("Claude (taktekbot)"), name("Claude (taktekbo)"))).toBe(true);
+    expect(namesMatch(name("Claude (taktekbot) sub"), name("Claude (taktekbot)"))).toBe(true);
+  });
+
+  it("leaves untagged notes to the word rules", () => {
+    expect(namesMatch(name("Netflix"), name("netflix sub"))).toBe(true);
+    expect(namesMatch(name("Canva"), name("Canva for family"))).toBe(true);
+    expect(namesMatch(name("Claude"), name("Claude extra credits"))).toBe(false);
   });
 });
 

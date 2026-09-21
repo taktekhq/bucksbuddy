@@ -13,7 +13,9 @@
 //      only have to *mean* the same thing (see lib/notes: a shared word or a
 //      typo apart), not read the same.
 //      Who it was "with" is dropped first, so "dinner with Sara" and "lunch
-//      with Sara" don't merge on her name.
+//      with Sara" don't merge on her name. A bracketed tag pulls the other
+//      way: "Claude (taktekbot)" is the work one, not the "Claude" already
+//      there, so the two are counted as separate payments.
 //   2. A note can say how often it recurs — "Domain (yearly)" — and that hint
 //      is taken at its word, even for a single entry. "Subscription" or
 //      "membership" in the note says it recurs without saying how often: the
@@ -41,7 +43,14 @@
 // Anything money-valued here is wrong while the device is locked (masked rows
 // carry amount_usd_cents: 0); callers check `anyMasked` first.
 
-import { normalizeNote, notesMatch, parseNote, type Cadence } from "@/lib/notes";
+import {
+  namesMatch,
+  noteName,
+  normalizeNote,
+  parseNote,
+  type Cadence,
+  type NoteName,
+} from "@/lib/notes";
 import type { Transaction } from "@/types/db";
 
 export type { Cadence };
@@ -258,21 +267,34 @@ function gapsOf(occurrences: Occurrence[]): number[] {
 
 // Group a bucket's rows by note meaning: every pair of distinct notes that
 // match (lib/notes) is joined, so "Netflix" / "netflix sub" / "Netlfix" end up
-// together. Notes with nothing left after the hint is removed form their own
-// group and never join a named one.
+// together, while "Claude (taktekbot)" keeps to itself. Notes with nothing
+// left after the hint is removed form their own group and never join a named
+// one.
 function clusterByNote(rows: Transaction[]): Transaction[][] {
-  const norms = rows.map((r) => normalizeNote(parseNote(r.note).text));
-  const distinct = [...new Set(norms)];
+  const names = rows.map((r) => noteName(r.note));
+  // The same name written twice is one node in the union-find below; a name
+  // and its tag together are what makes it the same.
+  const seen = new Map<string, number>();
+  const distinct: NoteName[] = [];
+  const node = names.map((n) => {
+    const key = `${n.tag}\u0000${n.normalized}`;
+    let i = seen.get(key);
+    if (i === undefined) {
+      i = distinct.push(n) - 1;
+      seen.set(key, i);
+    }
+    return i;
+  });
   const parent = distinct.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
   for (let i = 0; i < distinct.length; i++) {
     for (let j = i + 1; j < distinct.length; j++) {
-      if (notesMatch(distinct[i], distinct[j])) parent[find(j)] = find(i);
+      if (namesMatch(distinct[i], distinct[j])) parent[find(j)] = find(i);
     }
   }
   const groups = new Map<number, Transaction[]>();
   rows.forEach((r, k) => {
-    const root = find(distinct.indexOf(norms[k]));
+    const root = find(node[k]);
     const g = groups.get(root);
     if (g) g.push(r);
     else groups.set(root, [r]);
