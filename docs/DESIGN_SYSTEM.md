@@ -194,11 +194,6 @@ never numbers and never long body copy.
 - **Safe areas:** `viewport-fit=cover` + `env(safe-area-inset-*)`, exposed as the
   `--safe-top`/`--safe-bottom` CSS vars and `safe-top`/`safe-bottom` tokens.
   Bottom controls clear the home indicator: `pb-[calc(2rem+var(--safe-bottom))]`.
-- **Top gutter:** every screen starts with `pt-[var(--top-gutter)]` — the safe
-  inset plus `2rem`, never the inset plus `1rem`. iOS paints its status bar as
-  glass and the blur feathers *past* the inset, so a chevron or a title any
-  closer than that comes out smeared and the page appears to be blurring itself.
-  Only flat background belongs under the glass.
 - **Touch targets:** minimum 44×44pt. Buttons (`py-3.5`) and category tiles
   (`py-5`) keep generous padding.
 

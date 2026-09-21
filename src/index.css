@@ -19,18 +19,6 @@
 :root {
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
-  /* Where a screen's first row of chrome starts.
-     The safe-area inset alone is not enough clearance. iOS paints its own
-     status bar over the top of the page, and on recent versions that bar is
-     glass rather than a flat fill: it blurs whatever the page draws beneath
-     it, and the blur feathers out a dozen or so points PAST the inset instead
-     of stopping at it. A back chevron or a title sitting one rem below the
-     inset lands inside that feather and comes out smeared — the page looks
-     like it is applying a blur of its own, when the blur belongs to the
-     status bar and nothing in CSS can turn it off.
-     Two rem clears the feather, so the first row is crisp and only flat
-     background sits under the glass, where a blur has nothing to smear. */
-  --top-gutter: calc(2rem + var(--safe-top));
 }
 
 html,
