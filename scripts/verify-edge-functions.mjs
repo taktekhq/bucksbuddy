@@ -297,15 +297,23 @@ async function verifyNumberGuard() {
 // it contain a digit at all" and evidence by exact membership.
 async function verifyFindingsGuard() {
   console.log("\ngenerate-review — the findings guard");
-  const { collectAmounts, collectNumbers, collectLabels, reviewProblems, parseReview, clamp } =
-    await loadRegion("supabase/functions/generate-review/index.ts", [
-      "collectAmounts",
-      "collectNumbers",
-      "collectLabels",
-      "reviewProblems",
-      "parseReview",
-      "clamp",
-    ]);
+  const {
+    collectAmounts,
+    collectNumbers,
+    collectLabels,
+    reviewProblems,
+    parseReview,
+    clamp,
+    sanitizePrior,
+  } = await loadRegion("supabase/functions/generate-review/index.ts", [
+    "collectAmounts",
+    "collectNumbers",
+    "collectLabels",
+    "reviewProblems",
+    "parseReview",
+    "clamp",
+    "sanitizePrior",
+  ]);
 
   const digest = {
     version: 2,
@@ -435,6 +443,88 @@ async function verifyFindingsGuard() {
   })(), true);
   check("a basis the model omitted defaults rather than throwing",
     parseReview(review({ findings: [finding({ basis: undefined })] })).findings[0].basis, "logged");
+
+  // --- what Dad is allowed to remember ---
+  //
+  // The previous review travels as judgement with the figures taken out, so
+  // there is nothing in his context to misquote as a figure of THIS window.
+  // These are the two halves of that: what survives the trip, and the fact that
+  // a review cannot claim to be remembering a conversation that never happened.
+  console.log("\n  sanitizePrior keeps the judgement and nothing else:");
+  const priorFinding = (over = {}) => ({
+    kind: "improve",
+    title: "Delivery is the line to hold down",
+    detail: "It carries about a fifth of what you spent.",
+    evidence: [{ label: "Delivery", value: "$210.00" }],
+    category: "Food · Delivery",
+    ...over,
+  });
+  const priorBody = (over = {}) => ({
+    version: 2,
+    headline: "Steady months, with delivery climbing",
+    standing: "steady",
+    findings: [priorFinding()],
+    blindSpots: ["Nearly half the days have nothing logged."],
+    ...over,
+  });
+
+  const kept = sanitizePrior(priorBody());
+  check("the headline and the verdict survive",
+    `${kept.headline} / ${kept.standing}`,
+    "Steady months, with delivery climbing / steady");
+  check("a finding keeps its kind, claim and reasoning",
+    JSON.stringify(kept.findings[0]),
+    JSON.stringify({
+      kind: "improve",
+      title: "Delivery is the line to hold down",
+      detail: "It carries about a fifth of what you spent.",
+    }));
+  // The single most important property in the whole feature: an old amount
+  // cannot reach the model, so it cannot be copied into a new review and cost
+  // an attempt at the guard.
+  check("no digit survives anywhere", /\d/.test(JSON.stringify(kept)), false);
+  check("evidence is gone entirely",
+    JSON.stringify(kept).includes("210"), false);
+  check("blind spots do not travel",
+    JSON.stringify(kept).includes("blindSpots"), false);
+
+  check("a digit-bearing headline is dropped whole, not scrubbed",
+    sanitizePrior(priorBody({ headline: "Up 30% on delivery" })).headline, "");
+  check("a digit-bearing detail is dropped whole",
+    sanitizePrior(priorBody({ findings: [priorFinding({ detail: "Up 30% since June." })] }))
+      .findings[0].detail, "");
+  check("a finding with nothing left is not a memory of anything",
+    sanitizePrior(priorBody({
+      findings: [priorFinding({ title: "Up 30%", detail: "Up 30%." })],
+    })).findings.length, 0);
+  check("a prior with nothing usable left is null",
+    sanitizePrior(priorBody({
+      headline: "Up 30%",
+      findings: [priorFinding({ title: "Up 30%", detail: "Up 30%." })],
+    })), null);
+  check("no prior at all is null", sanitizePrior(undefined), null);
+  check("a prior that is not an object is null", sanitizePrior("last time"), null);
+  check("a prior whose findings are not an array keeps its headline",
+    sanitizePrior(priorBody({ findings: "several" })).headline,
+    "Steady months, with delivery climbing");
+  check("a long remembered detail is cut, not dropped",
+    sanitizePrior(priorBody({ findings: [priorFinding({ detail: long })] }))
+      .findings[0].detail.length <= 150, true);
+
+  console.log("\n  a followup has to have something to follow up:");
+  const followup = (n) =>
+    review({ findings: Array.from({ length: n }, () => finding({ basis: "followup" })) });
+  const bases = (parsed) => parsed.findings.map((f) => f.basis).join(",");
+  check("with no prior sent, a followup is re-filed as logged",
+    bases(parseReview(followup(1), false)), "logged");
+  check("with a prior sent, a followup stands",
+    bases(parseReview(followup(1), true)), "followup");
+  check("at most two survive, the rest are re-filed",
+    bases(parseReview(followup(4), true)), "followup,followup,logged,logged");
+  check("hadPrior defaults to false, so the claim needs asking for",
+    bases(parseReview(followup(1))), "logged");
+  check("a followup is downgraded, never dropped",
+    parseReview(followup(3), false).findings.length, 3);
 }
 
 await verifyWebhookSignatures();

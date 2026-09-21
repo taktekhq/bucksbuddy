@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ReviewDocument } from "@/components/ReviewDocument";
-import type { ReviewFindings, ReviewProse } from "@/types/db";
+import { buildDigest } from "@/lib/reportDigest";
+import { detectRecurring } from "@/lib/recurring";
+import type { ReviewFindings, ReviewProse, Transaction } from "@/types/db";
 
 const findings = (over: Partial<ReviewFindings> = {}): ReviewFindings => ({
   version: 2,
@@ -214,5 +216,119 @@ describe("ReviewDocument — the superseded prose shape", () => {
       />,
     );
     expect(screen.queryByRole("definition")).toBeNull();
+  });
+});
+
+// --- Dad picking up where he left off ---
+describe("ReviewDocument — since last time", () => {
+  it("marks a finding that revisits what Dad said last time", () => {
+    render(
+      <ReviewDocument
+        review={findings({
+          findings: [finding({ basis: "followup", title: "I said this already" })],
+        })}
+        subtitle="x"
+      />,
+    );
+    screen.getByText("Since last time");
+    screen.getByText("I said this already");
+  });
+
+  it("says nothing of the sort on an ordinary finding", () => {
+    render(<ReviewDocument review={findings()} subtitle="x" />);
+    expect(screen.queryByText("Since last time")).toBeNull();
+  });
+
+  it("leaves a basis it has never met unmarked rather than unopenable", () => {
+    // A newer server can file a finding under a basis this build predates; it
+    // is still a finding, and the review still opens. Same rule as `kind`.
+    render(
+      <ReviewDocument
+        review={findings({ findings: [finding({ basis: "goal" })] })}
+        subtitle="x"
+      />,
+    );
+    screen.getByText("Groceries held flat");
+    expect(screen.queryByText("Since last time")).toBeNull();
+  });
+});
+
+// --- putting a name to the charge Dad could only describe ---
+//
+// The matching itself is exercised in lib/reviewNaming.test.ts. These are about
+// the one thing the component decides: whether the answer is on screen, and
+// that nothing appears when there is no answer to give.
+describe("ReviewDocument — naming a repeating charge", () => {
+  const at = (y: number, m: number, d: number) =>
+    new Date(y, m, d, 12).toISOString();
+  const NOW = new Date(2026, 5, 10, 15);
+
+  const rows: Transaction[] = [2, 3, 4, 5].map((month, i) => ({
+    id: `t${i}`,
+    user_id: "u1",
+    is_income: false,
+    category: "fees/subscriptions",
+    amount_usd_cents: 1599,
+    original_currency: "USD" as const,
+    original_amount: 15.99,
+    rate_used: 1,
+    occurred_at: at(2026, month, 1),
+    note: "Netflix",
+    created_at: at(2026, month, 1),
+  }));
+
+  const digest = buildDigest(
+    rows,
+    { id: "last_3_months", from: new Date(2026, 2, 1), to: NOW },
+    "USD",
+  );
+  const recurring = detectRecurring(rows, "u1", NOW);
+
+  const repeat = findings({
+    findings: [
+      finding({
+        kind: "swap",
+        title: "Something repeats in Fees",
+        detail: "Go and find out what that is.",
+        evidence: [{ label: "Each time", value: "$15.99" }],
+      }),
+    ],
+  });
+
+  it("answers the errand with the note the reader typed", () => {
+    render(
+      <ReviewDocument
+        review={repeat}
+        subtitle="x"
+        digest={digest}
+        recurring={recurring}
+        homeCurrency="USD"
+      />,
+    );
+    // The name and the cadence, beside the finding that asked for them.
+    screen.getByText("Netflix");
+    screen.getByText(/Your note says/);
+    screen.getByText(/Monthly/);
+  });
+
+  it("says nothing when it has no figures to match against", () => {
+    // The archive opens reviews with no digest on screen for them; a finding
+    // renders exactly as written rather than guessing.
+    render(<ReviewDocument review={repeat} subtitle="x" />);
+    expect(screen.queryByText("Netflix")).toBeNull();
+    expect(screen.queryByText(/Your note says/)).toBeNull();
+  });
+
+  it("says nothing for a finding that is not about a repeating charge", () => {
+    render(
+      <ReviewDocument
+        review={findings()}
+        subtitle="x"
+        digest={digest}
+        recurring={recurring}
+        homeCurrency="USD"
+      />,
+    );
+    expect(screen.queryByText(/Your note says/)).toBeNull();
   });
 });

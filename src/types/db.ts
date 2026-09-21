@@ -162,10 +162,13 @@ export type ReviewFinding = {
    */
   kind: string;
   /**
-   * What the judgement stands on. `"logged"` is all there is today; the field
-   * exists now so that a goals-aware server can emit `"goal"` later without a
-   * migration — a review body is one opaque encrypted string, so the only
-   * compatibility surface is this validator.
+   * What the judgement stands on. `"logged"` is read off this window's figures
+   * alone; `"followup"` revisits something Dad said about the window before it,
+   * which the server only allows when a previous review was actually sent with
+   * the request. A plain string for the same forward-compatibility reason as
+   * `kind`: a review body is one opaque encrypted string, so this validator is
+   * the whole compatibility surface, and a basis a build has never heard of
+   * renders unmarked rather than making the review unopenable.
    */
   basis: string;
   /** The claim, one line. Contains no digits. */

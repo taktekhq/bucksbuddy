@@ -174,14 +174,69 @@ export async function startReview(
   };
 }
 
-/** Ask for the review to be written. The digest is computed on this device. */
+/**
+ * What Dad is reminded of: the judgement in the reader's previous review, with
+ * every figure taken out of it.
+ *
+ * This is the whole of the continuity feature's payload, and its shape is the
+ * argument for it. A stored review is prose plus `evidence`, and `evidence` is
+ * the only field allowed to contain a digit at all — so dropping it leaves a
+ * record of what he SAID with no record of what anything WAS. He can hold
+ * himself to "delivery is the line to hold down" without being able to quote a
+ * number he can no longer verify, which is exactly the division the numbers
+ * guarantee already draws: judgement from the model, figures from the device.
+ *
+ * It also keeps what leaves the device honest. This adds no new KIND of data to
+ * what the digest already sends — it is the model's own words about this
+ * account, going back to the same function that wrote them.
+ */
+export type ReviewPrior = {
+  headline: string;
+  standing: string;
+  findings: { kind: string; title: string; detail: string }[];
+};
+
+/**
+ * Reduce a stored review to that. Null for anything there is no honest memory
+ * to take from: the superseded prose shape, which was never written in
+ * findings, and a review with nothing left once the figures are gone.
+ *
+ * The digit check is belt and braces — `title`, `detail` and `headline` are
+ * digit-free by construction, checked by the generating function before the
+ * review was ever returned — but this is the last place it can be cheaply
+ * true, and the server strips it again on arrival.
+ */
+export function priorFrom(review: SpendingReview | null): ReviewPrior | null {
+  if (review === null || review.version !== 2) return null;
+  const clean = (text: string) => (/\d/.test(text) ? "" : text);
+  const findings = review.findings
+    .map((f) => ({
+      kind: f.kind,
+      title: clean(f.title),
+      detail: clean(f.detail),
+    }))
+    .filter((f) => f.title !== "" || f.detail !== "");
+  const headline = clean(review.headline);
+  if (headline === "" && findings.length === 0) return null;
+  return { headline, standing: review.standing, findings };
+}
+
+/**
+ * Ask for the review to be written. The digest is computed on this device, and
+ * `prior` — when there is one — is what Dad said last time, so he picks up
+ * where he left off instead of meeting the reader fresh.
+ */
 export async function generateReview(
   reviewId: string,
   digest: SpendingDigest,
+  prior: ReviewPrior | null = null,
 ): Promise<{ review: SpendingReview | null; error: string | null }> {
   const { data, error } = await invoke<{ review: unknown }>("generate-review", {
     review_id: reviewId,
     digest,
+    // Omitted entirely rather than sent as null: there is no first review to
+    // remember, and an empty key in the payload is one more thing to explain.
+    ...(prior === null ? {} : { prior }),
   });
   if (error) return { review: null, error };
   const review = asSpendingReview(data?.review);

@@ -39,6 +39,8 @@ import {
   storeReviewBody,
   waitForPaidReview,
   asSpendingReview,
+  priorFrom,
+  type ReviewPrior,
 } from "@/lib/reviews";
 import type { SpendingReview, SpendingReviewRow, Transaction } from "@/types/db";
 
@@ -159,6 +161,34 @@ export function Review() {
     return { reviews, error: listError };
   }, []);
 
+  // What Dad told this reader about the window before this one — the newest
+  // written review for the same scope that is not this one — reduced to his
+  // judgement with every figure removed (lib/reviews).
+  //
+  // Decrypted here, on the device, because that is the only place it can be:
+  // the archive holds ciphertext and the server has no key for it. So the memory
+  // Dad is handed is one this device chose to give him, and it never includes a
+  // number he could misquote.
+  const priorForWindow = useCallback(
+    async (row: SpendingReviewRow): Promise<ReviewPrior | null> => {
+      const { reviews } = await listReviews();
+      // Newest first from the query, so the first match is the last one written.
+      const previous = reviews.find(
+        (r) =>
+          r.id !== row.id &&
+          r.period_id === row.period_id &&
+          r.status !== "refunded" &&
+          r.body_enc !== null,
+      );
+      if (!previous?.body_enc) return null;
+      // A body this device cannot open is not an error worth stopping for: the
+      // review being written is the one that matters, and it is written as a
+      // first review instead.
+      return priorFrom(asSpendingReview(await openReview(previous.body_enc)));
+    },
+    [openReview],
+  );
+
   // Write a review that has been paid for: read the window, total it here, have
   // it written, then seal it with the account's own key and store that.
   //
@@ -191,8 +221,13 @@ export function Review() {
         { id: row.period_id, from, to },
         row.home_currency,
       );
+      // What he said last time, when there is a last time. Read fresh from the
+      // archive rather than from the rows in state, for the same reason the
+      // entries above are: this is the request that costs something, and every
+      // part of it should come from a read taken for it.
+      const prior = await priorForWindow(row);
       setBusy("Showing it to Dad…");
-      const { review, error: writeError } = await generateReview(row.id, digest);
+      const { review, error: writeError } = await generateReview(row.id, digest, prior);
       if (!review) {
         setBusy(null);
         setError(writeError);
@@ -209,7 +244,7 @@ export function Review() {
       setOpen({ row, review });
       await refreshRows();
     },
-    [reviewRange, sealReview, refreshRows],
+    [reviewRange, sealReview, refreshRows, priorForWindow],
   );
 
   // First paint: the archive, and anything Stripe just sent us back with. Runs
@@ -512,6 +547,12 @@ export function Review() {
         <ReviewDocument
           review={open.review}
           subtitle={reviewWindowLabelFor(open.row)}
+          // So a finding about a charge Dad could only describe can be answered
+          // with the name the reader typed. Both are this device's, and neither
+          // has ever been sent anywhere (lib/reviewNaming).
+          digest={digest}
+          recurring={recurring}
+          homeCurrency={homeCurrency}
         />
       ) : (
         <Offer facts={facts} copy={copy} factsError={factsError} onBuy={buy} />

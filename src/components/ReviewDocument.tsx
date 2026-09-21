@@ -8,6 +8,10 @@ import {
 } from "lucide-react";
 import { CHART_RAMP, CHART_REST } from "@/lib/reviewChart";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { CADENCE_LABEL, type RecurringPayment, type RecurringSummary } from "@/lib/recurring";
+import { namedCharge } from "@/lib/reviewNaming";
+import type { Currency } from "@/lib/currency";
+import type { SpendingDigest } from "@/lib/reportDigest";
 import type {
   ReviewFigure,
   ReviewFinding,
@@ -37,13 +41,33 @@ import type {
 export function ReviewDocument({
   review,
   subtitle,
+  digest = null,
+  recurring = null,
+  homeCurrency = "USD",
 }: {
   review: SpendingReview;
   subtitle: string;
+  /**
+   * The figures on screen above this, for putting a name to a charge Dad could
+   * only describe (lib/reviewNaming). Absent means no naming is attempted —
+   * every finding renders exactly as it was written.
+   */
+  digest?: SpendingDigest | null;
+  /** Recurring payments read off this device, from notes that never leave it. */
+  recurring?: RecurringSummary | null;
+  homeCurrency?: Currency;
 }) {
   return review.version === 2 ? (
-    <Findings review={review} subtitle={subtitle} />
+    <Findings
+      review={review}
+      subtitle={subtitle}
+      digest={digest}
+      recurring={recurring}
+      homeCurrency={homeCurrency}
+    />
   ) : (
+    // The superseded shape has no findings to name against, and a review bought
+    // before this existed is not rewritten under its reader.
     <Prose review={review} subtitle={subtitle} />
   );
 }
@@ -100,9 +124,15 @@ const STANDINGS: Record<string, string> = {
 function Findings({
   review,
   subtitle,
+  digest,
+  recurring,
+  homeCurrency,
 }: {
   review: ReviewFindings;
   subtitle: string;
+  digest: SpendingDigest | null;
+  recurring: RecurringSummary | null;
+  homeCurrency: Currency;
 }) {
   const rank = (kind: string) => {
     const i = KIND_ORDER.indexOf(kind);
@@ -130,7 +160,15 @@ function Findings({
       </div>
 
       {sorted.map((finding, i) => (
-        <FindingCard key={`${i}-${finding.title.slice(0, 16)}`} finding={finding} />
+        <FindingCard
+          key={`${i}-${finding.title.slice(0, 16)}`}
+          finding={finding}
+          named={
+            digest === null
+              ? null
+              : namedCharge(finding, digest, recurring, homeCurrency)
+          }
+        />
       ))}
 
       {review.blindSpots.length > 0 && (
@@ -157,7 +195,13 @@ function Findings({
   );
 }
 
-function FindingCard({ finding }: { finding: ReviewFinding }) {
+function FindingCard({
+  finding,
+  named,
+}: {
+  finding: ReviewFinding;
+  named: RecurringPayment | null;
+}) {
   const { icon: Icon, color, label } = markFor(finding.kind);
   return (
     <div className="flex gap-3 rounded-card bg-review-card p-4 ring-1 ring-inset ring-white/10">
@@ -170,17 +214,56 @@ function FindingCard({ finding }: { finding: ReviewFinding }) {
       </span>
       <div className="flex min-w-0 flex-col gap-1">
         <span className="sr-only">{label}:</span>
+        {/* Dad revisiting his own word from the window before this one. It is a
+            caption rather than a fourth icon: the kinds own the icon column,
+            and this cuts across all three — he can come back to something that
+            went right as readily as to something that did not. The server only
+            lets a finding claim this when a previous review was actually sent
+            with the request, so it can never appear on a first one. */}
+        {finding.basis === "followup" && (
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-review-muted">
+            Since last time
+          </span>
+        )}
         <h4 className="text-[15px] font-semibold leading-snug text-review-text">
           {finding.title}
         </h4>
         <p className="text-[14px] leading-relaxed text-review-muted">
           {finding.detail}
         </p>
+        {named !== null && <NamedCharge payment={named} />}
         {finding.evidence.length > 0 && (
           <EvidencePills figures={finding.evidence} />
         )}
       </div>
     </div>
+  );
+}
+
+// The app answering the errand Dad just set.
+//
+// He tells the reader to go and find out what a repeating charge is because he
+// genuinely cannot see it — notes never leave the device, so the digest gave him
+// an amount, a category and a cadence and nothing else. The note that says
+// "Netflix" is right here though, and so is the matching this is drawn from
+// (lib/reviewNaming), which only prints a name when exactly one repeating
+// payment can be it.
+//
+// It sits BETWEEN the detail and the evidence on purpose: it is the answer to
+// the sentence above it, not another figure. And it says "your note" rather
+// than naming the merchant flatly, because that is what it is — what the reader
+// typed, read back to them, not something the app went and looked up.
+function NamedCharge({ payment }: { payment: RecurringPayment }) {
+  return (
+    <p className="mt-0.5 flex w-fit items-center gap-1.5 rounded-pill bg-review-tile px-2.5 py-1 text-[12px] leading-snug text-review-muted">
+      <Repeat2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden />
+      <span>
+        Your note says{" "}
+        <b className="font-semibold text-review-text">{payment.note}</b>
+        {" · "}
+        {CADENCE_LABEL[payment.cadence]}
+      </span>
+    </p>
   );
 }
 

@@ -28,6 +28,7 @@ import {
   fetchReview,
   startReview,
   generateReview,
+  priorFrom,
   storeReviewBody,
   asSpendingReview,
   reviewPrice,
@@ -453,7 +454,22 @@ describe("generateReview", () => {
     expect(got).toEqual(findings());
     expect(mock.supabase.functions.invoke).toHaveBeenCalledWith(
       "generate-review",
+      // No `prior` key at all, rather than a null one: there is no first review
+      // to remember and an empty key is one more thing for the function to
+      // explain away.
       { body: { review_id: "rev-1", digest } },
+    );
+  });
+
+  it("carries what Dad said last time when there is a last time", async () => {
+    set({
+      "fn:generate-review": () => ({ data: { review: findings() }, error: null }),
+    });
+    const prior = priorFrom(asSpendingReview(findings()));
+    await generateReview("rev-1", digest, prior);
+    expect(mock.supabase.functions.invoke).toHaveBeenCalledWith(
+      "generate-review",
+      { body: { review_id: "rev-1", digest, prior } },
     );
   });
 
@@ -812,5 +828,99 @@ describe("waitForPaidReview", () => {
     const got = await waitForPaidReview("rev-1");
     expect(got?.status).toBe("paid");
     expect(mock.supabase.from).toHaveBeenCalledWith("spending_reviews");
+  });
+});
+
+// --- what Dad is allowed to remember ---
+//
+// The continuity feature's whole payload. It exists to make him the same person
+// the reader spoke to last month; it must not become a second, unverifiable
+// source of figures, which is why `evidence` never survives the trip.
+describe("priorFrom", () => {
+  it("keeps the judgement and drops every figure behind it", () => {
+    const prior = priorFrom(asSpendingReview(findings()));
+    expect(prior).toEqual({
+      headline: "Steady months, with delivery climbing",
+      standing: "steady",
+      findings: [
+        {
+          kind: "improve",
+          title: "Delivery is the line to hold down",
+          detail: "It carries about a fifth of what you spent.",
+        },
+      ],
+    });
+    // The one field in a stored review allowed to hold a digit is the one field
+    // that does not travel. Nothing Dad is handed can be misquoted as a figure
+    // of this window, because there is no figure in it at all.
+    expect(JSON.stringify(prior)).not.toContain("$210.00");
+    expect(JSON.stringify(prior)).not.toMatch(/\d/);
+  });
+
+  it("refuses the superseded prose shape", () => {
+    // v1 was never written in findings, and there is no honest way to reduce an
+    // essay to "what you told them" without paraphrasing it.
+    const prose = asSpendingReview({
+      title: "Your spending",
+      summary: "A quiet quarter.",
+      sections: [],
+      notables: [],
+      caveats: [],
+    });
+    expect(prose?.version).toBe(1);
+    expect(priorFrom(prose)).toBeNull();
+  });
+
+  it("refuses nothing at all", () => {
+    expect(priorFrom(null)).toBeNull();
+  });
+
+  it("drops a string carrying a digit rather than scrubbing it", () => {
+    // Digit-free is guaranteed by the generating function before a review is
+    // ever returned, so this is the belt to that braces — and a sentence with
+    // its numerals cut out is a different sentence, so it goes whole.
+    const prior = priorFrom(
+      asSpendingReview(
+        findings({
+          headline: "Up 30% on delivery",
+          findings: [
+            {
+              kind: "improve",
+              basis: "logged",
+              title: "Delivery climbed",
+              detail: "It went up 30% since June.",
+              evidence: [],
+              category: null,
+            },
+          ],
+        }),
+      ),
+    );
+    expect(prior?.headline).toBe("");
+    expect(prior?.findings).toEqual([
+      { kind: "improve", title: "Delivery climbed", detail: "" },
+    ]);
+  });
+
+  it("is null when nothing survives the stripping", () => {
+    expect(
+      priorFrom(
+        asSpendingReview(
+          findings({
+            headline: "Up 30%",
+            findings: [
+              {
+                kind: "improve",
+                basis: "logged",
+                title: "Up 30%",
+                detail: "Up 30%.",
+                evidence: [],
+                category: null,
+              },
+            ],
+          }),
+        ),
+      ),
+    ).toBeNull();
   });
 });

@@ -57,6 +57,28 @@ vi.mock("@/lib/reviews", () => ({
     }
     return null;
   },
+  // Faithful to the real one (which lib/reviews.test.ts exercises directly):
+  // findings only, figures dropped, prose shape refused. It stays honest here
+  // because what this screen is responsible for is picking the RIGHT previous
+  // review — and an assertion about what was stripped out of it is worth
+  // nothing if the stripping is the mock's.
+  priorFrom: (value: unknown) => {
+    const r = value as {
+      headline?: unknown;
+      standing?: unknown;
+      findings?: unknown;
+    } | null;
+    if (!r || !Array.isArray(r.findings)) return null;
+    return {
+      headline: r.headline,
+      standing: r.standing,
+      findings: (r.findings as Record<string, unknown>[]).map((f) => ({
+        kind: f.kind,
+        title: f.title,
+        detail: f.detail,
+      })),
+    };
+  },
 }));
 
 const posthogMock = vi.hoisted(() => ({ capture: vi.fn() }));
@@ -840,7 +862,9 @@ describe("Review — back from Stripe", () => {
       await screen.findByText("That review came back unreadable."),
     ).toBeInTheDocument();
     expect(sealReview).not.toHaveBeenCalled();
-    expect(reviewsMock.listReviews).toHaveBeenCalledTimes(2);
+    // Three reads of the archive: the one on mount, the one writing takes to
+    // find what Dad said last time, and the re-read after the failure.
+    expect(reviewsMock.listReviews).toHaveBeenCalledTimes(3);
   });
 
   it("shows the review even when storing the sealed copy fails", async () => {
@@ -1006,6 +1030,8 @@ describe("Review — the archive", () => {
     expect(reviewsMock.generateReview).toHaveBeenCalledWith(
       "e",
       expect.objectContaining({ version: 2 }),
+      // No prior: this account's only review is the one being written.
+      null,
     );
   });
 
@@ -1208,5 +1234,118 @@ describe("Review — the archive lock", () => {
     expect(
       screen.getByLabelText("Enter your encryption passphrase"),
     ).toBeInTheDocument();
+  });
+});
+
+// --- what Dad said last time ---
+//
+// A review is a snapshot, and a snapshot with no memory of the one before it
+// makes Dad a stranger every month. So writing one first reads the archive for
+// the newest written review of the SAME window and hands his own judgement back
+// to him — stripped of every figure, because the figures in it belong to a
+// window he is no longer being asked about (lib/reviews, priorFrom).
+describe("Review — picking up where Dad left off", () => {
+  /** The prior a call to generateReview carried, if any. */
+  const priorSent = () => reviewsMock.generateReview.mock.calls[0]?.[2] ?? null;
+
+  const written = (over: Partial<SpendingReviewRow> = {}) =>
+    row({ id: "old", status: "ready", body_enc: "sealed-old", ...over });
+
+  it("hands Dad his own last review for the same window", async () => {
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [row({ id: "new", status: "paid" }), written()],
+      error: null,
+    });
+    openReview.mockResolvedValue(
+      review({ headline: "Delivery is creeping", standing: "slipping" }),
+    );
+
+    render(<Review />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /tap to write it/ }),
+    );
+    await waitFor(() => expect(reviewsMock.generateReview).toHaveBeenCalled());
+
+    const prior = priorSent();
+    expect(prior).toMatchObject({
+      headline: "Delivery is creeping",
+      standing: "slipping",
+    });
+    // His judgement travels; the figures behind it do not. That is what keeps
+    // the numbers guarantee intact across two windows — there is no old amount
+    // in his context to carry into a new review by mistake.
+    expect(prior.findings[0]).toEqual({
+      kind: "improve",
+      title: "Groceries did most of the damage",
+      detail: "Two trips to the market carried the window.",
+    });
+    expect(JSON.stringify(prior)).not.toContain("$30.00");
+  });
+
+  it("sends nothing to remember when this is the first review", async () => {
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [row({ id: "only", status: "paid" })],
+      error: null,
+    });
+    render(<Review />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /tap to write it/ }),
+    );
+    await waitFor(() => expect(reviewsMock.generateReview).toHaveBeenCalled());
+    expect(priorSent()).toBeNull();
+  });
+
+  it("never remembers a review of the other window", async () => {
+    // "All time" and "recent months" are different questions. Answering one
+    // with what was said about the other is worse than starting fresh.
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [
+        row({ id: "new", status: "paid" }),
+        written({ period_id: "all_time" }),
+      ],
+      error: null,
+    });
+    render(<Review />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /tap to write it/ }),
+    );
+    await waitFor(() => expect(reviewsMock.generateReview).toHaveBeenCalled());
+    expect(priorSent()).toBeNull();
+  });
+
+  it("never remembers a review that was refunded", async () => {
+    // The body goes with the money (migration 0009). A refunded row may still
+    // be readable on this device from a cache; it is not his to quote back.
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [
+        row({ id: "new", status: "paid" }),
+        written({ status: "refunded" }),
+      ],
+      error: null,
+    });
+    render(<Review />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /tap to write it/ }),
+    );
+    await waitFor(() => expect(reviewsMock.generateReview).toHaveBeenCalled());
+    expect(priorSent()).toBeNull();
+  });
+
+  it("writes the review anyway when the last one cannot be opened", async () => {
+    // A body this device can't decrypt is not a reason to fail a generation
+    // that has already been paid for.
+    reviewsMock.listReviews.mockResolvedValue({
+      reviews: [row({ id: "new", status: "paid" }), written()],
+      error: null,
+    });
+    openReview.mockResolvedValue(null);
+
+    render(<Review />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /tap to write it/ }),
+    );
+    await waitFor(() => expect(reviewsMock.generateReview).toHaveBeenCalled());
+    expect(priorSent()).toBeNull();
+    expect(await screen.findByText("Three quiet months")).toBeInTheDocument();
   });
 });

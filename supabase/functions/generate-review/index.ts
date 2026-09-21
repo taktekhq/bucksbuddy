@@ -184,6 +184,16 @@ Every finding has to land. Name the line, say what you make of it, and where the
   (b) A "subcategories" pair inside the same parent where one is the convenience mode and the other is the cheaper mode, and the convenience one is carrying real money: "Food · Delivery" against "Groceries · Supermarket" or "Food · Restaurant"; "Coffee · Café" against "Coffee · Beans"; "Transport · Taxi" against "Transport · Bus"; "Groceries · Mini-market" against "Groceries · Supermarket". Quote the convenience line's total and say the cheaper mode of the same thing is worth shifting some of it to.
   Never state or imply what an alternative costs, or how much would be saved. You have no prices for anything. Phrase a swap as the check the reader should run, not as a saved amount.
 
+WHAT YOU SAID LAST TIME. The user turn may carry a "lastTime" block: the review you gave this same reader for the window before this one — your headline, your verdict, and each finding's kind, title and detail. It is there so that you are the same person they showed their spending to last time, rather than a stranger starting over. When it is absent, this is the first one and there is nothing to remember.
+
+- It carries NO FIGURES, deliberately, and that is not an oversight to work around. You cannot see what anything was last window and you must not write as though you can: never say what a line came to before, never say how much anything has moved since, never set then against now as two numbers. Every figure you quote still comes from THIS digest and nowhere else.
+- What it lets you do is hold yourself to your own word. If you named a line to hold down and this digest still shows it large or climbing, say that you already said it, and say it again with less patience. If this digest shows it came down, say so and give them the credit for it plainly.
+- Ground every one of those in a field of THIS digest — a "monthOverMonth" direction, a "sharePct", a category total — never in a memory of a number. Your memory is of what you SAID, not of what it was.
+- You may set your old verdict against your new one, because you hold both and neither is a figure: "steady, after slipping" is worth saying and costs nothing to support.
+- Mark a finding that revisits something you said last time with "basis": "followup". Every other finding keeps "basis": "logged". AT MOST TWO followups — this is a review of this window, not a hearing about the last one.
+- If nothing you said last time can be graded from this digest, let it go and say nothing about it. A forced callback is worse than no callback.
+- Never mention that you were handed a record of it, never call it a previous review, and never say "as I said in my last review". You are their dad. You simply remember what you told them.
+
 WHAT YOU MAY NOT DO. These are not stylistic:
 - No investments, securities, funds or crypto. No loans, credit, refinancing or debt advice. No insurance recommendation — "Health · Insurance" and "Transport · Insurance" are categories you will see spending in, and you may note the spending and nothing more. No tax positions.
 - No named products, services, brands, merchants, apps or providers, in any finding, for any reason.
@@ -250,9 +260,12 @@ const SCHEMA = {
         type: "object",
         properties: {
           kind: { type: "string", enum: ["good", "improve", "swap"] },
-          // One value today. It exists now so a goals-aware server can add
-          // "goal" later without the stored bodies changing shape.
-          basis: { type: "string", enum: ["logged"] },
+          // Where the finding stands: read off this window's figures alone, or
+          // revisiting something Dad said about the window before it. The app
+          // marks a "followup" so the reader can see he remembered; the figures
+          // behind it are this window's either way, which is the whole reason
+          // the previous review is sent without any of its own.
+          basis: { type: "string", enum: ["logged", "followup"] },
           title: {
             type: "string",
             description:
@@ -600,8 +613,22 @@ const LIMITS = {
   blindSpot: 110,
 } as const;
 
-/** Shape-check the model's JSON before anything downstream trusts it. */
-function parseReview(raw: unknown): Review {
+/**
+ * The most findings that may claim to revisit the last review. The prompt asks
+ * for at most two; this is what makes it so. A review where every finding is a
+ * callback is a hearing about last month rather than a review of this one.
+ */
+const MAX_FOLLOWUPS = 2;
+
+/**
+ * Shape-check the model's JSON before anything downstream trusts it.
+ *
+ * `hadPrior` says whether this request actually carried a previous review. With
+ * no last time, "I said this last time" is a claim about a conversation that
+ * did not happen, so it is re-filed rather than shown — the app would otherwise
+ * print "Since last time" over the reader's very first review.
+ */
+function parseReview(raw: unknown, hadPrior = false): Review {
   const r = raw as Record<string, unknown> | null;
   if (
     !r ||
@@ -656,6 +683,14 @@ function parseReview(raw: unknown): Review {
   if (findings.length === 0) {
     throw new Error("The review came back with nothing in it.");
   }
+  // Downgraded, never dropped: the finding itself is fine — it is only the
+  // claim to be remembering something that has to hold up.
+  let followups = 0;
+  for (const f of findings) {
+    if (f.basis !== "followup") continue;
+    if (hadPrior && followups < MAX_FOLLOWUPS) followups += 1;
+    else f.basis = "logged";
+  }
   return {
     version: 2,
     headline: clamp(r.headline, LIMITS.headline),
@@ -692,6 +727,73 @@ function proseOf(review: Review): string[] {
  *      which is how a percentage or a day count is allowed through.
  *   4. A finding's `category` names a line the digest actually carries.
  */
+/**
+ * The previous review, reduced to the part Dad may be reminded of.
+ *
+ * WHY IT IS STRIPPED THIS HARD. The point of sending it at all is continuity —
+ * a father who remembers what he told you last month is worth more than one who
+ * meets you fresh every time. The risk is the numbers guarantee: a review is
+ * accepted only if every figure in it is a figure THIS digest contains, so an
+ * old amount carried across in the model's context is a draft thrown away and
+ * an attempt spent. The fix is not to ask it nicely. It is to make the old
+ * figures unavailable:
+ *
+ *   * `evidence` is dropped whole — it is the only field in a stored review
+ *     that may hold a digit at all, so dropping it leaves nothing to misquote;
+ *   * every surviving string is checked anyway and discarded if it holds a
+ *     digit. Those fields are digit-free by construction (the prompt's numerals
+ *     rule, enforced by `hasDigit` before any review is returned), and
+ *     "by construction" is exactly the sort of thing that quietly stops being
+ *     true two shapes later;
+ *   * the window's own label never travels, because it is made of dates and Dad
+ *     has no reason to name the previous window out loud.
+ *
+ * What is left is prose about judgement, which is the only part worth
+ * remembering. Null when there is nothing usable, and the request then runs as
+ * a first review.
+ */
+type Prior = {
+  headline: string;
+  standing: string;
+  findings: { kind: string; title: string; detail: string }[];
+};
+
+/** The most followups a prior may describe; the prompt asks for at most two. */
+const PRIOR_FINDINGS = 5;
+
+function sanitizePrior(raw: unknown): Prior | null {
+  const p = raw as Record<string, unknown> | null;
+  if (!p || typeof p !== "object") return null;
+
+  // A digit-bearing string is dropped rather than scrubbed: a sentence with its
+  // numerals removed is a different sentence, and a wrong one is worse than a
+  // missing one.
+  const keep = (value: unknown, max: number): string =>
+    typeof value === "string" && !hasDigit(value) ? clamp(value, max) : "";
+
+  const findings: Prior["findings"] = [];
+  if (Array.isArray(p.findings)) {
+    for (const entry of p.findings.slice(0, PRIOR_FINDINGS)) {
+      const f = entry as Record<string, unknown> | null;
+      if (!f || typeof f !== "object") continue;
+      const title = keep(f.title, LIMITS.title);
+      const detail = keep(f.detail, LIMITS.detail);
+      // A finding with nothing left to say is not a memory of anything.
+      if (title === "" && detail === "") continue;
+      findings.push({
+        kind: typeof f.kind === "string" ? f.kind : "logged",
+        title,
+        detail,
+      });
+    }
+  }
+
+  const headline = keep(p.headline, LIMITS.headline);
+  const standing = typeof p.standing === "string" ? p.standing : "";
+  if (headline === "" && findings.length === 0) return null;
+  return { headline, standing, findings };
+}
+
 function reviewProblems(
   review: Review,
   amounts: Set<string>,
@@ -755,9 +857,14 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as {
       review_id?: unknown;
       digest?: unknown;
+      prior?: unknown;
     };
     reviewId = typeof body.review_id === "string" ? body.review_id : null;
     const digest = body.digest as Record<string, unknown> | undefined;
+    // Optional, and never fatal: a malformed or figure-bearing prior is dropped
+    // and the review is written as a first one. Continuity is worth having and
+    // not worth failing a paid generation over.
+    const prior = sanitizePrior(body.prior);
     if (!reviewId || !digest || typeof digest !== "object") {
       return json({ error: "Bad request." }, 400);
     }
@@ -846,12 +953,22 @@ Deno.serve(async (req) => {
 
     // Gemini takes the conversation as `contents`; the model's own turn has the
     // role "model". The corrective re-ask below appends to this.
+    // The prior goes in the SAME turn as the digest, under its own heading,
+    // rather than being replayed as an earlier exchange. A fabricated
+    // conversation would invite the model to treat last time's text as its own
+    // context to continue from — including the figures it no longer has — while
+    // a labelled block is plainly what it is: a note of what he said, handed to
+    // him with this window's numbers.
     const contents: Turn[] = [
       {
         role: "user",
         parts: [
           {
-            text: `Write my spending review from this digest.\n\n${JSON.stringify(digest, null, 1)}`,
+            text:
+              `Write my spending review from this digest.\n\n${JSON.stringify(digest, null, 1)}` +
+              (prior
+                ? `\n\nlastTime — what you told me about the window before this one. No figures: quote only the digest above.\n\n${JSON.stringify(prior, null, 1)}`
+                : ""),
           },
         ],
       },
@@ -898,7 +1015,7 @@ Deno.serve(async (req) => {
       } catch {
         throw new Error("The review came back in an unexpected shape.");
       }
-      return { review: parseReview(parsed), raw };
+      return { review: parseReview(parsed, prior !== null), raw };
     }
 
     /**
