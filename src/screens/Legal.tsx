@@ -84,7 +84,7 @@ export function Legal() {
           <p>
             We count how the app gets used: signing in, adding, editing or
             deleting an entry, exporting a CSV or PDF, turning encryption on or
-            off, and adding the app to your Home Screen. If the app crashes, we
+            off, sending feedback, and adding the app to your Home Screen. If the app crashes, we
             also receive a report of what broke, so we can fix it. Those counts
             carry your account ID so that one person using BucksBuddy ten times
             isn&apos;t counted as ten people. We use PostHog for this. It never
@@ -98,6 +98,20 @@ export function Legal() {
             instantly, and, once you turn on end-to-end encryption, your
             passphrase too so you aren&apos;t asked for it every time. Both are
             erased when you sign out or delete your account.
+          </p>
+
+          <p className="pt-2 font-semibold text-label">
+            Feedback you send us
+          </p>
+          <p>
+            Feedback sent from the app reaches us as an issue on BucksBuddy&apos;s
+            private code repository: your message, any screenshots you attach,
+            your account email so we can reply, and your device and browser. If
+            you switch on{" "}
+            <span className="font-semibold">Include my data</span>, your entries
+            are sent in the clear, including on an end-to-end encrypted
+            account. We use them only to fix the bug, and delete
+            them once it is fixed. The switch is off unless you turn it on.
           </p>
 
           <p>
