@@ -26,9 +26,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          # 22, not 20: scripts/verify-edge-functions.mjs imports the Edge
-          # Functions' own TypeScript through Node's type stripping, which landed
-          # in 22.6 and is unflagged from 22.18.
           node-version: 22
           cache: npm
       - run: npm ci
@@ -36,9 +33,4 @@ jobs:
       - run: npm run build
       # Enforces the 100% coverage thresholds from vitest.config.ts.
       - run: npm run coverage
-      # The Edge Functions are Deno and sit outside the Vitest project, so their
-      # two load-bearing pieces — the Stripe webhook signature check and the
-      # guard that stops a generated review quoting an amount the device never
-      # computed — are checked by their own script.
-      - run: npm run verify:functions
 

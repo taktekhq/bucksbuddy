@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Banknote,
+  ChartColumn,
   ChevronRight,
   Coins,
   Eye,
@@ -8,7 +9,6 @@ import {
   Lock,
   MessageSquarePlus,
   Settings,
-  Sparkles,
   Vault,
 } from "lucide-react";
 import { NetTotal } from "@/components/ui/NetTotal";
@@ -132,18 +132,17 @@ export function Home() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          {/* Sparkles is this feature's own glyph — the archive marks each stored
-              review with it — so the icon means the same thing in both places.
-              It shows for every account, including one that cannot have a review
-              yet: the screen's job is to say where you stand against the bar, and
-              that is the only way anyone finds out. */}
+          {/* A column chart, because that is what the screen is: the months and
+              the categories, charted. It shows for every account — a breakdown
+              is worth reading from the first entry, and there is no longer any
+              bar to clear before it says anything. */}
           <button
             type="button"
             onClick={() => navigate("/review")}
             className="press -m-2 p-2 text-label-secondary"
             aria-label="Spending review"
           >
-            <Sparkles className="h-6 w-6" strokeWidth={1.75} />
+            <ChartColumn className="h-6 w-6" strokeWidth={1.75} />
           </button>
           {/* Feedback sits next to the Safe: a bug is worth reporting the
               moment it bites, and the page it bit you on is one tap away. */}

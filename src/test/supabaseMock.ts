@@ -82,7 +82,7 @@ export function makeSupabaseMock(handlers: Record<string, Handler> = {}) {
   };
 
   // `rpc` and `functions.invoke` are keyed the same way as tables, by name:
-  // "rpc:report_eligibility" and "fn:review-start".
+  // "rpc:public_stats" and "fn:feedback".
   const rpc = vi.fn(async (name: string, ..._args: unknown[]) => {
     calls.push({ table: name, op: "rpc" });
     const handler = handlers[`rpc:${name}`];

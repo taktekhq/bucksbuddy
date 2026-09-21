@@ -3,7 +3,6 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { makeSupabaseMock, type Handler } from "@/test/supabaseMock";
 import {
-  encryptString,
   generateMasterKey,
   makeVerifier,
   wrapMasterKey,
@@ -776,19 +775,13 @@ describe("StoreProvider / useStore", () => {
       (c) => c.table === "transactions",
     ).length;
     let rows: Transaction[] | null = [tx()];
-    let sealed: string | null = "not-null";
-    let opened: unknown = "not-null";
     await act(async () => {
       rows = await result.current.reviewRange(REVIEW_FROM, REVIEW_TO);
-      sealed = await result.current.sealReview({ headline: "nope" });
-      opened = await result.current.openReview("whatever.blob");
     });
     // Null, not [] — an empty array would be indistinguishable from a window
-    // with nothing in it, and a review computed from that is a paid document
-    // full of zeroes.
+    // with nothing in it, and a breakdown charted from that is a page of zeroes
+    // presented as this account's spending.
     expect(rows).toBeNull();
-    expect(sealed).toBeNull();
-    expect(opened).toBeNull();
     // And it bailed before touching the database: no page was ever requested.
     expect(mock.ranges).toEqual([]);
     expect(mock.calls.filter((c) => c.table === "transactions")).toHaveLength(
@@ -928,45 +921,5 @@ describe("StoreProvider / useStore", () => {
       { from: 0, to: 499 },
       { from: 500, to: 999 },
     ]);
-  }, 30_000);
-
-  it("seals a review that openReview round-trips, and rejects a foreign body", async () => {
-    // Default tier: unlocked with the device-held key, which is all sealing needs.
-    const { result } = setup();
-    await waitFor(() => expect(result.current.loading).toBe(false), {
-      timeout: 20_000,
-    });
-
-    const review = {
-      headline: "Taxis were the story of June",
-      totals: { taxi: 18_400 },
-      notes: ["four late nights"],
-    };
-    let sealed: string | null = "";
-    await act(async () => {
-      sealed = await result.current.sealReview(review);
-    });
-    const body = String(sealed);
-    expect(body).not.toContain("Taxis"); // actually encrypted
-    expect(body).toContain("."); // iv.ct envelope
-
-    let opened: unknown = null;
-    await act(async () => {
-      opened = await result.current.openReview(body);
-    });
-    expect(opened).toEqual(review);
-
-    // A body sealed under a key this device does not have (passphrase changed
-    // elsewhere), and outright junk, both come back null rather than throwing.
-    const alienKey = await generateMasterKey();
-    const alien = await encryptString(alienKey, JSON.stringify(review));
-    let fromAlien: unknown = "x";
-    let fromJunk: unknown = "x";
-    await act(async () => {
-      fromAlien = await result.current.openReview(alien);
-      fromJunk = await result.current.openReview("not-a-sealed-body");
-    });
-    expect(fromAlien).toBeNull();
-    expect(fromJunk).toBeNull();
   }, 30_000);
 });
