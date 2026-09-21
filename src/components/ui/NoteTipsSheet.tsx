@@ -44,7 +44,7 @@ const TIPS: Tip[] = [
       },
       {
         title: "Tell two of the same apart",
-        body: "Tag one of them: `(work)`. Any word in brackets does.",
+        body: "Tag one of them: `(personal)`. Any word in brackets does.",
       },
     ],
   },
