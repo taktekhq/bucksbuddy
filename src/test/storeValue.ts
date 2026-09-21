@@ -32,8 +32,6 @@ export function makeStoreValue(overrides: Record<string, unknown> = {}) {
     deleteSafeGoldEntry: vi.fn(async () => ({ error: null })),
     refresh: vi.fn(async () => {}),
     reviewRange: vi.fn(async () => []),
-    sealReview: vi.fn(async () => "sealed"),
-    openReview: vi.fn(async () => null),
     ...overrides,
   };
 }

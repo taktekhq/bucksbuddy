@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 // "/history", "/recurring", "/stats", "/legal", "/contact", "/reset". Hash-based
 // so the static SPA needs no server rewrites and the back button works.
 //
-// "/review" is the paid spending-review screen (signed-in only).
+// "/review" is the charted breakdown of what has been logged (signed-in only).
 //
 // "/" is the home/landing entry (the marketing landing for signed-out visitors,
 // the app for signed-in ones); "/feedback" files a bug report or an idea as a

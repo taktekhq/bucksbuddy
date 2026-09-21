@@ -437,6 +437,24 @@ describe("ReviewBreakdown — how complete this is", () => {
     );
   });
 
+  it("counts a busiest day of several in the plural", () => {
+    // The main fixture has at most one entry on any day, so it only ever says
+    // "1 entry". "1 entries" is the kind of thing nobody notices until it
+    // ships, and so is its opposite.
+    const digest = buildDigest(
+      [
+        out("groceries", 900, at(2026, 5, 2)),
+        out("coffee", 400, at(2026, 5, 2)),
+        out("food", 700, at(2026, 5, 3)),
+      ],
+      { id: "all_time", from: new Date(2026, 5, 1), to: new Date(2026, 5, 5) },
+      "USD",
+    );
+    expect(digest.coverage.busiestDay?.count).toBe(2);
+    show({ digest });
+    screen.getByText(/Busiest day of logging: [\d-]+, 2 entries totalling/);
+  });
+
   it("says so plainly when every day has something on it", () => {
     const from = new Date(2026, 5, 1);
     const to = new Date(2026, 5, 3);
