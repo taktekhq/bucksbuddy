@@ -138,7 +138,7 @@ export type SpendingReviewRow = {
 // stored (encrypted) in `body_enc`. Rendered field by field — never as markup.
 export type ReviewFigure = { label: string; value: string };
 
-// --- v2: an auditor's findings ---
+// --- v2: what Dad made of it ---
 //
 // A review is a list of short findings, not an essay. The model's only real
 // value is judgement — what is going right, what to hold down, what is worth

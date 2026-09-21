@@ -31,7 +31,7 @@ const finding = (over: Partial<ReviewFindings["findings"][0]> = {}) => ({
   ...over,
 });
 
-describe("ReviewDocument — the auditor's findings", () => {
+describe("ReviewDocument — what Dad said", () => {
   it("leads with the verdict, the window and the direction of travel", () => {
     render(<ReviewDocument review={findings()} subtitle="Recent months · June 2026" />);
     screen.getByText("Recent months · June 2026");
@@ -56,8 +56,8 @@ describe("ReviewDocument — the auditor's findings", () => {
         subtitle="x"
       />,
     );
-    screen.getByText("Working:");
-    screen.getByText("Worth a look:");
+    screen.getByText("Doing right:");
+    screen.getByText("Keep an eye on this:");
     screen.getByText("Could cost less:");
   });
 
@@ -147,7 +147,7 @@ describe("ReviewDocument — the auditor's findings", () => {
 
   it("says what this is and is not, every time", () => {
     render(<ReviewDocument review={findings()} subtitle="x" />);
-    screen.getByText("Reads what you logged. Not financial advice.");
+    screen.getByText("Dad only sees what you logged. Not financial advice.");
   });
 });
 

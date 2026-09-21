@@ -285,18 +285,18 @@ async function verifyNumberGuard() {
     unsupportedAmounts("You spent LL 95,000 this month.", lbp, lbpNumbers).length === 0, false);
 }
 
-// ---------------------------------------------------------- the auditor ----
+// -------------------------------------------------------- the findings ----
 // The whole-review guard, which is a different claim from the token guard above.
 //
-// A review is now a set of auditor's findings in which EVERY NUMERAL lives in
+// A review is now a short set of findings in which EVERY NUMERAL lives in
 // one field, `evidence[].value`. That is what makes the numbers guarantee
 // airtight rather than best-effort: the token scan above can only see decimals,
 // comma-grouped numbers and runs of four or more digits, so "up 30%",
 // "3 times" and "12 days" were invisible to it and a model could state any of
 // them, wrongly, and ship. With the digits confined, prose is checked by "does
 // it contain a digit at all" and evidence by exact membership.
-async function verifyAuditorGuard() {
-  console.log("\ngenerate-review — the auditor's findings guard");
+async function verifyFindingsGuard() {
+  console.log("\ngenerate-review — the findings guard");
   const { collectAmounts, collectNumbers, collectLabels, reviewProblems, parseReview, clamp } =
     await loadRegion("supabase/functions/generate-review/index.ts", [
       "collectAmounts",
@@ -441,7 +441,7 @@ await verifyWebhookSignatures();
 await verifyWindowCheck();
 await verifyRetryClassification();
 await verifyNumberGuard();
-await verifyAuditorGuard();
+await verifyFindingsGuard();
 
 console.log(`\n${passed} checks passed, ${failures.length} failed`);
 if (failures.length > 0) {
