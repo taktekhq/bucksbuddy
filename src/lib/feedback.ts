@@ -41,7 +41,7 @@ export const SCREENSHOT_ERRORS = {
 // than trusting a filename from the photo library.
 //
 // This map is also the allow-list, and it is the same one the bucket enforces
-// (see supabase/migrations/0009_feedback.sql): a type the bucket would refuse
+// (see supabase/migrations/0012_feedback.sql): a type the bucket would refuse
 // should be turned away here, with a reason, rather than dying as a failed
 // upload. It deliberately leaves out SVG, which is a script in a trenchcoat.
 //

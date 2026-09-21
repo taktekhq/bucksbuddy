@@ -7,7 +7,7 @@
 // privileged part.
 //
 // The client has already uploaded any attachments to the private `feedback`
-// bucket under `<user id>/<ticket>/` (see supabase/migrations/0009_feedback.sql
+// bucket under `<user id>/<ticket>/` (see supabase/migrations/0012_feedback.sql
 // and src/lib/feedback.ts). This function signs those objects into the issue.
 // Binaries never travel through the request body.
 //

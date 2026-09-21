@@ -107,7 +107,7 @@ which is what "all time" needs. Re-runnable, and required before a review can be
 >   check (price_cents >= 0);
 > ```
 
-Finally [`0009_feedback.sql`](supabase/migrations/0009_feedback.sql) sets up in-app
+Finally [`0012_feedback.sql`](supabase/migrations/0012_feedback.sql) sets up in-app
 feedback: the private `feedback` storage bucket its screenshots go to, and the
 `feedback_reports` log. The Feedback screen needs the edge function below as well; until
 both are in place the form renders but sending fails.
@@ -617,7 +617,7 @@ src/types/db.ts         row types
 vite.config.ts          Vite + PWA (manifest, service worker; Supabase calls never cached)
 supabase/migrations/    0001_init.sql … 0007_currencies.sql, 0008_drop_legacy.sql,
                         0009_spending_reviews.sql, 0010_drop_review_access.sql,
-                        0011_review_periods.sql, 0009_feedback.sql
+                        0011_review_periods.sql, 0012_feedback.sql
 supabase/functions/     delete-account, review-start, stripe-webhook, generate-review,
                         feedback
 docs/DESIGN_SYSTEM.md   reusable design system

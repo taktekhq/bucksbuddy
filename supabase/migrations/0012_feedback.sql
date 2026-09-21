@@ -1,11 +1,11 @@
 -- BucksBuddy: in-app feedback (Home → the speech bubble next to the Safe).
--- Run this in Supabase Dashboard → SQL Editor, after 0008_drop_legacy.sql.
+-- Run this in Supabase Dashboard → SQL Editor, after 0011_review_periods.sql.
 --
 -- Two pieces:
 --   1. a PRIVATE `feedback` storage bucket the app uploads screenshots to (and,
 --      only when the reporter deliberately switches it on, a JSON dump of their
 --      own entries). The `feedback` edge function signs those objects into the
---      GitHub issue it files; nothing here is ever public.
+--      GitHub issue it files. Nothing here is ever public.
 --   2. `feedback_reports`, one row per filed issue. It is the rate limit, and
 --      it is the list of what to delete: the app promises a reporter that data
 --      shared for a bug is deleted once the bug is fixed, and this is the table
