@@ -1,0 +1,16 @@
+// Build settings shared by the app and its tests.
+//
+// The Supabase project is the same one the web app uses. The host is written
+// without "https://" because `//` starts a comment in an .xcconfig file; the
+// app adds the scheme. The anon key is public (it ships in the web bundle
+// too) but isn't kept in the repo: put it in Secrets.xcconfig, which is
+// git-ignored. Copy Secrets.example.xcconfig to get started.
+
+SUPABASE_HOST = bucksbuddy.supabase.co
+SUPABASE_ANON_KEY =
+
+// Change to your own identifier (and set your team) to run on a device.
+BB_BUNDLE_ID = com.bucksbuddy.app
+DEVELOPMENT_TEAM =
+
+#include? "Secrets.xcconfig"

@@ -37,6 +37,9 @@ browser, and every navigation is instant (no server, no per-tap round-trips).
   account email to reply to, and (off by default, behind a toggle that says exactly what
   it means) a dump of the account's raw entries. See **Feedback** below.
 - **Design system:** see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+- **Native iOS app:** a SwiftUI version lives in [`ios/`](ios/README.md). Same Supabase
+  project, same accounts, same encryption format, so an entry added on the phone shows up
+  on the web and the other way round.
 
 ## Setup (what you need to do)
 
@@ -393,6 +396,7 @@ supabase/migrations/    0001_init.sql … 0007_currencies.sql, 0008_drop_legacy.
                         0013_drop_spending_reviews.sql
 supabase/functions/     delete-account, feedback
 docs/DESIGN_SYSTEM.md   reusable design system
+ios/                    the native SwiftUI app (see ios/README.md)
 ```
 
 > A React Native port lived in `mobile/` for a few days in September 2026 and was
