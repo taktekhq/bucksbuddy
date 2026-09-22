@@ -272,7 +272,7 @@ export function Safe() {
 
   return (
     <main
-      className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[var(--top-gutter)] text-white"
+      className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))] text-white"
       style={{ background: VAULT_BG }}
     >
       {/* Fixed vault floor behind the content: fills the viewport at all times

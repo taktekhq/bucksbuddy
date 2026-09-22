@@ -12,7 +12,7 @@ import { navigate } from "@/lib/router";
 export function Legal() {
   // Back returns to the landing (the signed-out home).
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[var(--top-gutter)]">
+    <main className="mx-auto flex min-h-full max-w-md flex-col gap-6 px-4 pb-[calc(2rem+var(--safe-bottom))] pt-[calc(1rem+var(--safe-top))]">
       {/* Plain iOS nav: back chevron + centered title — matches Settings. */}
       <header className="relative flex items-center justify-center py-1">
         <button
