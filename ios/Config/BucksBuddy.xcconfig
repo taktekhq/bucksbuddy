@@ -9,8 +9,9 @@
 SUPABASE_HOST = bucksbuddy.supabase.co
 SUPABASE_ANON_KEY =
 
-// Change to your own identifier (and set your team) to run on a device.
-BB_BUNDLE_ID = com.bucksbuddy.app
+// The App Store / TestFlight identifier. Override it (and set your team) in
+// Secrets.xcconfig to run a personal build on a device.
+BB_BUNDLE_ID = io.taktek.bucksbuddy
 DEVELOPMENT_TEAM =
 
 #include? "Secrets.xcconfig"

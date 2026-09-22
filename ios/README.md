@@ -25,8 +25,9 @@ encrypted accounts.
    `bucksbuddy.supabase.co` (see `Config/BucksBuddy.xcconfig`).
 2. Open `ios/BucksBuddy.xcodeproj` and run the **BucksBuddy** scheme on a
    simulator.
-3. To run on a device, set `DEVELOPMENT_TEAM`, and set `BB_BUNDLE_ID` if you
-   need a different bundle id, in `Secrets.xcconfig`.
+3. To run on a device, set `DEVELOPMENT_TEAM` in `Secrets.xcconfig`. The bundle
+   id is `io.taktek.bucksbuddy`. Set `BB_BUNDLE_ID` there too if you sign with a
+   different team.
 
 Tests: ⌘U in Xcode, or
 
@@ -37,6 +38,36 @@ xcodebuild test -project ios/BucksBuddy.xcodeproj -scheme BucksBuddy \
 
 The `iOS` GitHub workflow (`.github/workflows/ios.yml`) runs the same build and
 tests on every change under `ios/`.
+
+### TestFlight
+
+`ios/testflight.sh` archives the app as **`io.taktek.bucksbuddy`**, signs it
+with an App Store Connect API key (Xcode creates the certificate and profile
+itself, `-allowProvisioningUpdates`) and uploads it. It's the same recipe as
+taktekhq/closet. The **TestFlight** workflow (`.github/workflows/testflight.yml`)
+runs it on a macOS runner on pushes to `main` that touch `ios/`, or by hand.
+
+It needs these repo (or org) secrets:
+
+| Secret | What |
+|---|---|
+| `ASC_KEY_P8` | The App Store Connect API key's `.p8`, base64-encoded |
+| `ASC_KEY_ID` | That key's ID |
+| `ASC_ISSUER_ID` | The issuer ID (App Store Connect → Users and Access → Integrations) |
+| `ASC_TEAM_ID` | The 10-character Apple team ID |
+| `SUPABASE_ANON_KEY` | The public anon key (same value as the web's `VITE_SUPABASE_ANON_KEY`) |
+
+It also needs an app record for `io.taktek.bucksbuddy` in App Store Connect
+(My Apps → + → New App); the API key can create the bundle id but not the
+app. From a Mac you can run it locally instead:
+
+```bash
+ASC_KEY_ID=… ASC_ISSUER_ID=… ASC_TEAM_ID=… ./ios/testflight.sh
+```
+
+App Store Connect sets the build number on each upload
+(`manageAppVersionAndBuildNumber`). The version is `MARKETING_VERSION` in the
+project.
 
 ### Supabase settings for sign-in
 
@@ -101,6 +132,9 @@ tests on every change under `ios/`.
   offer **Sign in with Apple** too. Supabase supports it
   (`auth.signInWithIdToken` with `.apple`); `docs/AUTH_SETUP.md` Part C covers
   the Apple side.
-- Export compliance: the app uses standard encryption (AES-GCM, PBKDF2) to
-  protect user data. Answer the encryption questions in App Store Connect
-  accordingly.
+- Export compliance: the app only uses encryption built into iOS (HTTPS,
+  CryptoKit, CommonCrypto), so `Info.plist` declares
+  `ITSAppUsesNonExemptEncryption = NO` and TestFlight doesn't ask each build.
+- `PrivacyInfo.xcprivacy` declares the account email and the logged entries as
+  collected for app functionality, linked to the account and not used for
+  tracking. Answer App Privacy in App Store Connect the same way.

@@ -1,0 +1,63 @@
+name: TestFlight
+
+# Builds the iPhone app on a GitHub macOS runner and uploads it to TestFlight
+# as io.taktek.bucksbuddy, signed with the App Store Connect API key (secrets
+# ASC_KEY_P8, base64 of the .p8; ASC_KEY_ID; ASC_ISSUER_ID; ASC_TEAM_ID — the
+# same ones taktekhq/closet uses) plus SUPABASE_ANON_KEY, the public anon key
+# the web app ships. Runs when ios/ changes on main, or by hand from the
+# Actions tab.
+on:
+  push:
+    branches: [main, claude/optimistic-ptolemy-kp1nf8]
+    paths: [ios/**, .github/workflows/testflight.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ios        # the app only; skips the web app
+
+      # App Store Connect refuses builds from beta Xcodes: take the newest
+      # released one on the runner
+      - name: Pick the newest released Xcode
+        run: |
+          app=$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|_rc' | sort -V | tail -1)
+          echo "XCODE_APP=$app" >> "$GITHUB_ENV"
+          echo "Using $app"
+
+      - name: Install the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$ASC_KEY_P8" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: Build, sign and upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: ./ios/testflight.sh
+
+      - name: Keep the build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-logs
+          path: ~/Library/Logs/DistributionTool/
+          if-no-files-found: ignore
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf ~/.appstoreconnect ios/Config/Secrets.xcconfig

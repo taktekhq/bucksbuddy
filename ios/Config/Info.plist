@@ -11,6 +11,9 @@
 	<array>
 		<string>Grobold.ttf</string>
 	</array>
+	<!-- Only encryption built into iOS (HTTPS, CryptoKit, CommonCrypto) -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
