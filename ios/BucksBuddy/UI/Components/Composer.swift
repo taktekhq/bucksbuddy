@@ -20,6 +20,8 @@ struct ComposerView: View {
     @State private var saving = false
     @State private var error: String?
     @State private var savedTick = 0
+    /// List rows re-appear when scrolled back into view; only set up once.
+    @State private var initialized = false
     @FocusState private var focus: Field?
 
     enum Field { case amount, note }
@@ -92,7 +94,9 @@ struct ComposerView: View {
         // Many buttons live in one List row on Home; borderless keeps a tap
         // from firing all of them.
         .buttonStyle(.borderless)
-        .onAppear(perform: reset)
+        .onAppear {
+            if !initialized { reset(); initialized = true }
+        }
         .onChange(of: editing?.id) { reset() }
         .sheet(isPresented: $showCategories) {
             CategorySheet(isIncome: $isIncome, selected: category) { picked in

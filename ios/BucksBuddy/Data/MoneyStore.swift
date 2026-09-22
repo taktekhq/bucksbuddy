@@ -148,7 +148,7 @@ final class MoneyStore {
     }
 
     private nonisolated static func tryUnwrap(_ row: KeyRow, passphrase: String) async -> SymmetricKey? {
-        await Task.detached {
+        await Task.detached { () -> SymmetricKey? in
             guard let key = try? BBCrypto.unwrapMasterKey(row.wrappedKey, passphrase: passphrase),
                   BBCrypto.checkVerifier(key, verifier: row.verifier) else { return nil }
             return key

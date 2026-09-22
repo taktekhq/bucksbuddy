@@ -1,6 +1,7 @@
 import CommonCrypto
 import CryptoKit
 import Foundation
+import Security
 
 // Encryption primitives, byte-compatible with the web app's WebCrypto code
 // (src/lib/crypto.ts) — both apps read and write the same rows.
@@ -73,7 +74,8 @@ enum BBCrypto {
 
     static func deriveWrapKey(passphrase: String, salt: Data) throws -> SymmetricKey {
         let passwordLength = passphrase.utf8.count
-        var derived = [UInt8](repeating: 0, count: 32)
+        let keyLength = 32
+        var derived = [UInt8](repeating: 0, count: keyLength)
         let status = passphrase.withCString { pwPtr in
             salt.withUnsafeBytes { saltBytes in
                 CCKeyDerivationPBKDF(
@@ -82,7 +84,7 @@ enum BBCrypto {
                     saltBytes.bindMemory(to: UInt8.self).baseAddress, salt.count,
                     CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
                     pbkdf2Iterations,
-                    &derived, derived.count
+                    &derived, keyLength
                 )
             }
         }
@@ -97,7 +99,8 @@ enum BBCrypto {
         guard ok == errSecSuccess else { throw CryptoError.keyDerivationFailed }
         let wrapKey = try deriveWrapKey(passphrase: passphrase, salt: salt)
         let raw = masterKey.withUnsafeBytes { Data($0) }
-        return "\(version).\(salt.base64EncodedString()).\(try encrypt(raw, key: wrapKey))"
+        let sealed = try encrypt(raw, key: wrapKey)
+        return "\(version).\(salt.base64EncodedString()).\(sealed)"
     }
 
     /// Recover the master key. Throws on a wrong passphrase (GCM

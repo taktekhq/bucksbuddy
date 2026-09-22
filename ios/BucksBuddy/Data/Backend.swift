@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Supabase
 
 // The one Supabase client, configured from Info.plist (which reads it from
