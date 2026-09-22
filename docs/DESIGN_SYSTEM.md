@@ -194,14 +194,6 @@ never numbers and never long body copy.
 - **Safe areas:** `viewport-fit=cover` + `env(safe-area-inset-*)`, exposed as the
   `--safe-top`/`--safe-bottom` CSS vars and `safe-top`/`safe-bottom` tokens.
   Bottom controls clear the home indicator: `pb-[calc(2rem+var(--safe-bottom))]`.
-- **Top gutter:** screens start at `pt-[var(--top-gutter)]`, never at a raw
-  `calc(1rem + var(--safe-top))`. Since iOS 26 the system draws a progressive
-  blur ("scroll edge effect") about 44px deep from the safe-area boundary of an
-  **installed** app, and nothing in CSS can switch it off — a title or an icon
-  drawn inside that band comes out smeared, which reads as the page blurring
-  itself. `--top-gutter` adds `--glass-clearance` (2rem under
-  `display-mode: standalone`, 0 in a browser tab) so the band only ever falls on
-  flat background. See the comment in `index.css` before changing either.
 - **Touch targets:** minimum 44×44pt. Buttons (`py-3.5`) and category tiles
   (`py-5`) keep generous padding.
 

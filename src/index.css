@@ -19,39 +19,6 @@
 :root {
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
-  /* Extra head-room for iOS's scroll edge effect. Zero in a browser tab,
-     where the effect does not exist — see the standalone rule below. */
-  --glass-clearance: 0rem;
-  /* Where a screen's first row of chrome starts. Identical to the old
-     `1rem + safe inset` on the web; taller in an installed app. */
-  --top-gutter: calc(1rem + var(--glass-clearance) + var(--safe-top));
-}
-
-/* THE BLUR AT THE TOP OF THE INSTALLED APP IS NOT OURS, AND CANNOT BE TURNED
-   OFF. Since iOS 26 the system draws a "scroll edge effect" — a progressive
-   Liquid Glass blur — across the top of a home-screen web app. It is anchored
-   to the safe-area boundary on the SCREEN, not to anything the page draws, so
-   no CSS reaches it: there is no property and no meta switch to disable it,
-   `env(safe-area-inset-top)` does not grow to account for it, and the old
-   backdrop-filter overlay trick stopped working in standalone. Dropping
-   `black-translucent` is the fix everyone reaches for; we have never used it
-   (see index.html) and the band is there anyway.
-   Measured off a 3x device screenshot: content is smeared down to ~102 CSS px
-   from the top of the viewport and crisp below it. With a 58px inset that is a
-   band about 44px deep, which matches the ~38-40pt others have measured. The
-   header used to start at inset + 1rem — 28px INSIDE the band, which is why the
-   wordmark and the row of icons came out smeared while the same font a little
-   further down the page stayed sharp.
-   So the only lever is to stop drawing in the band: 3rem of head-room clears
-   it, and the blur is then left smearing flat background, where it has nothing
-   to smear. The cost is 32px at the top of an installed app, and it is keyed on
-   `display-mode` so a browser tab is untouched. An Android install pays the
-   same 32px without needing it — the alternative is sniffing WebKit with an
-   @supports hack that fails silently on the one platform this is for. */
-@media (display-mode: standalone) {
-  :root {
-    --glass-clearance: 2rem;
-  }
 }
 
 html,
