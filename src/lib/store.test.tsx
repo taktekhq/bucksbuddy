@@ -201,6 +201,58 @@ describe("StoreProvider / useStore", () => {
     expect(result.current.safeGoldGrams).toBe(3); // 5 deposited - 2 withdrawn
   });
 
+  it("totals the balance and the Safe over every row, not the newest 500 (#101)", async () => {
+    // 500 recent expenses fill the first page; the opening balance and a Safe
+    // deposit are older, on page two. Summing only the first page read
+    // −$5,000 where the account really stands at +$4,000.
+    const recent = Array.from({ length: 500 }, (_, i) =>
+      tx({ id: `e${i}`, amount_usd_cents: 1000 }),
+    );
+    const opening = tx({
+      id: "open",
+      is_income: true,
+      amount_usd_cents: 1_000_000,
+      occurred_at: new Date("2025-01-01").toISOString(),
+    });
+    const toSafe = tx({
+      id: "safe",
+      category: "safe",
+      amount_usd_cents: 100_000,
+      occurred_at: new Date("2025-01-02").toISOString(),
+    });
+    let page = 0;
+    const { result } = setup({
+      "transactions:select": () => ({
+        data: page++ === 0 ? recent : [toSafe, opening],
+        error: null,
+      }),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.balanceCents).toBe(1_000_000 - 100_000 - 500 * 1000);
+    expect(result.current.safeTotalCents).toBe(100_000);
+    // Screens still get the newest FETCH_CAP rows to render.
+    expect(result.current.transactions).toHaveLength(500);
+    expect(result.current.transactions[499].id).toBe("e499");
+    // Both tables were paged with a tiebreaker, so no row is read twice or never.
+    expect(mock.ranges).toContainEqual({ from: 500, to: 999 });
+    expect(mock.orders).toContainEqual({ column: "id", ascending: false });
+  });
+
+  it("keeps what it has when a page of the ledger fails, rather than a partial total", async () => {
+    let page = 0;
+    const { result } = setup({
+      "transactions:select": () =>
+        page++ === 0
+          ? { data: Array.from({ length: 500 }, (_, i) => tx({ id: `e${i}` })), error: null }
+          : { data: null, error: { message: "upstream timeout" } },
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    // Nothing was cached, so nothing — not the 500 rows it managed to read.
+    expect(result.current.transactions).toEqual([]);
+    expect(result.current.balanceCents).toBe(0);
+  });
+
   it("tolerates null data and a missing profile rate", async () => {
     const { result } = setup({
       "profiles:select": () => ({ data: null, error: null }),
@@ -774,6 +826,8 @@ describe("StoreProvider / useStore", () => {
     const txReadsAtLoad = mock.calls.filter(
       (c) => c.table === "transactions",
     ).length;
+    // The load itself pages through the ledger; only what comes after counts.
+    const rangesAtLoad = mock.ranges.length;
     let rows: Transaction[] | null = [tx()];
     await act(async () => {
       rows = await result.current.reviewRange(REVIEW_FROM, REVIEW_TO);
@@ -783,7 +837,7 @@ describe("StoreProvider / useStore", () => {
     // presented as this account's spending.
     expect(rows).toBeNull();
     // And it bailed before touching the database: no page was ever requested.
-    expect(mock.ranges).toEqual([]);
+    expect(mock.ranges).toHaveLength(rangesAtLoad);
     expect(mock.calls.filter((c) => c.table === "transactions")).toHaveLength(
       txReadsAtLoad,
     );
