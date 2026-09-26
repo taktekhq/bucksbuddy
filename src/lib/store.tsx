@@ -55,6 +55,9 @@ type Store = {
   loading: boolean;
   /** The signed-in account, for tables and screens the store doesn't own. */
   userId: string;
+  // The newest FETCH_CAP transactions: what the lists and charts render. The
+  // store holds every row (see `ledger` below), but screens that would draw
+  // thousands of them get the same window they always have.
   transactions: Transaction[];
   // Currency settings (see lib/currency): totals are kept and shown in
   // `homeCurrency`; `currencies` are the secondary ones, each with its rate
@@ -118,8 +121,9 @@ type Store = {
   reviewRange: (from: Date, to: Date) => Promise<Transaction[] | null>;
 };
 
-// Rows per page when reading a review's window. Matches FETCH_CAP, which this
-// project already relies on being under the API's own row ceiling.
+// Rows per page for every paged read — the whole ledger at load, and a review's
+// window. Matches FETCH_CAP, which this project already relies on being under
+// the API's own row ceiling.
 const REVIEW_PAGE = 500;
 // A stop so a misbehaving page loop can't spin forever. 250k entries in one
 // window is far past anything real — and an "all time" review really does ask
@@ -243,6 +247,25 @@ function txInMemory(row: TransactionRow, tx: NewTransaction): Transaction {
   };
 }
 
+// Every row of one of the user's tables, newest first, or null if any page
+// failed. `id` breaks ties so a page boundary inside a group of rows logged in
+// the same second can't return one row twice and another never.
+function readAllRows<T>(table: "transactions" | "safe_gold_entries") {
+  return readAllPages<T>(
+    async (from, to) => {
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .order("occurred_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to);
+      if (error) return null;
+      return (data ?? []) as T[];
+    },
+    { pageSize: REVIEW_PAGE, maxPages: REVIEW_MAX_PAGES },
+  );
+}
+
 export function StoreProvider({
   userId,
   children,
@@ -255,7 +278,11 @@ export function StoreProvider({
   // only starts true when there's nothing cached to show.
   const cached = useMemo(() => loadCache(userId), [userId]);
   const [loading, setLoading] = useState(cached === null);
-  const [transactions, setTransactions] = useState<Transaction[]>(
+  // Every transaction on the account, newest first. The balance and the Safe
+  // are sums over all of it: summing only the newest FETCH_CAP rows let the
+  // oldest ones — an opening balance, a first salary — silently fall off the
+  // total the day an account passed 500 entries (#101).
+  const [ledger, setLedger] = useState<Transaction[]>(
     cached?.transactions ?? [],
   );
   const [homeCurrency, setHome] = useState<Currency>(
@@ -293,36 +320,33 @@ export function StoreProvider({
       setCurrencyList(settings.currencies);
     }
 
-    const [{ data: txData }, { data: goldData }] = await Promise.all([
-      supabase
-        .from("transactions")
-        .select("*")
-        .order("occurred_at", { ascending: false })
-        // The cap lives in lib/stats so the daily series knows where the
-        // fetched data ends and "unknown" begins.
-        .limit(FETCH_CAP),
-      supabase
-        .from("safe_gold_entries")
-        .select("*")
-        .order("occurred_at", { ascending: false })
-        .limit(FETCH_CAP),
+    // Every row, not the newest FETCH_CAP: the totals are all-time. Paged,
+    // because the API caps a single response.
+    const [txRows, goldRows] = await Promise.all([
+      readAllRows<TransactionRow>("transactions"),
+      readAllRows<SafeGoldEntryRow>("safe_gold_entries"),
     ]);
-    const txRows = (txData ?? []) as TransactionRow[];
-    const goldRows = (goldData ?? []) as SafeGoldEntryRow[];
+    if (txRows === null || goldRows === null) {
+      // A page failed. Keep whatever is on screen (the cached snapshot, or the
+      // last good read) rather than swap in a partial ledger: half the rows
+      // would show as a confident, wrong balance.
+      setLoading(false);
+      return;
+    }
 
     const key = masterKey.current;
     if (!key) {
       // Locked: we can't decrypt, so show the rows with obscured amounts rather
       // than a blank wall. Drop any cached plaintext too — this device isn't
       // entitled to it until it's unlocked.
-      setTransactions(txRows.map(maskedTransaction));
+      setLedger(txRows.map(maskedTransaction));
       setSafeGoldEntries(goldRows.map(maskedGold));
       clearCache(userId);
       setLoading(false);
       return;
     }
 
-    setTransactions(
+    setLedger(
       await Promise.all(txRows.map((r) => rowToTransaction(r, key))),
     );
     setSafeGoldEntries(await Promise.all(goldRows.map((r) => rowToGold(r, key))));
@@ -365,8 +389,8 @@ export function StoreProvider({
   // (and the cleared cache) from being written back as if they were real.
   useEffect(() => {
     if (loading || locked) return;
-    saveCache(userId, { transactions, homeCurrency, currencies, safeGoldEntries });
-  }, [userId, loading, locked, transactions, homeCurrency, currencies, safeGoldEntries]);
+    saveCache(userId, { transactions: ledger, homeCurrency, currencies, safeGoldEntries });
+  }, [userId, loading, locked, ledger, homeCurrency, currencies, safeGoldEntries]);
 
   const unlock = useCallback(
     async (pass: string) => {
@@ -446,7 +470,7 @@ export function StoreProvider({
         .select()
         .single();
       if (error) return { error: error.message };
-      setTransactions((prev) => [txInMemory(data as TransactionRow, tx), ...prev]);
+      setLedger((prev) => [txInMemory(data as TransactionRow, tx), ...prev]);
       return { error: null };
     },
     [userId],
@@ -464,7 +488,7 @@ export function StoreProvider({
       .single();
     if (error) return { error: error.message };
     const row = data as TransactionRow;
-    setTransactions((prev) =>
+    setLedger((prev) =>
       prev.map((t) => (t.id === id ? txInMemory(row, tx) : t)),
     );
     return { error: null };
@@ -473,16 +497,16 @@ export function StoreProvider({
   const deleteTransaction = useCallback(
     async (id: string) => {
       // Optimistic remove; restore on failure.
-      const prev = transactions;
-      setTransactions((cur) => cur.filter((t) => t.id !== id));
+      const prev = ledger;
+      setLedger((cur) => cur.filter((t) => t.id !== id));
       const { error } = await supabase.from("transactions").delete().eq("id", id);
       if (error) {
-        setTransactions(prev);
+        setLedger(prev);
         return { error: error.message };
       }
       return { error: null };
     },
-    [transactions],
+    [ledger],
   );
 
   const setHomeCurrency = useCallback(
@@ -597,32 +621,36 @@ export function StoreProvider({
     );
   }, []);
 
-  // The carried-forward balance: net of everything we hold, all-time. Bounded by
-  // the same FETCH_CAP as the rest of the store — with more than FETCH_CAP rows
-  // it reflects the most recent window, exactly like the Safe total.
-  const balanceCents = useMemo(() => netCents(transactions), [transactions]);
+  // What the screens render: the newest FETCH_CAP rows, as before.
+  const transactions = useMemo(
+    () => (ledger.length > FETCH_CAP ? ledger.slice(0, FETCH_CAP) : ledger),
+    [ledger],
+  );
+
+  // The carried-forward balance: net of every transaction on the account.
+  const balanceCents = useMemo(() => netCents(ledger), [ledger]);
 
   const monthlyNetCents = useMemo(() => {
     const { from, to } = currentMonthRange();
-    const inMonth = transactions.filter((t) => {
+    const inMonth = ledger.filter((t) => {
       const d = new Date(t.occurred_at);
       return d >= from && d < to;
     });
     return netCents(inMonth);
-  }, [transactions]);
+  }, [ledger]);
 
   // Cash in the safe = all-time net of "safe" transactions. Money sent to the
   // safe is an expense (Out) and adds to it; taking it back is income (In).
   const safeTotalCents = useMemo(
     () =>
-      transactions.reduce(
+      ledger.reduce(
         (sum, t) =>
           t.category === SAFE_CATEGORY_ID
             ? sum + (t.is_income ? -t.amount_usd_cents : t.amount_usd_cents)
             : sum,
         0,
       ),
-    [transactions],
+    [ledger],
   );
 
   const safeGoldGrams = useMemo(
