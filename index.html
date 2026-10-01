@@ -60,6 +60,26 @@
       crossorigin
     />
     <title>BucksBuddy</title>
+
+    <!-- Structured data: identifies BucksBuddy as a software entity for search
+         engines / AI answer engines (helps the brand query resolve to this
+         site). Facts here mirror the OG description above — nothing invented. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "BucksBuddy",
+        "description": "An on-the-go money tracker for every buck in and out, right from your pocket. Free, no ads, install anywhere.",
+        "url": "https://bucksbuddy.com/",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Web",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
