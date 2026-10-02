@@ -300,6 +300,12 @@ export function StoreProvider({
   // The decrypted master key for this session. A ref (not state) so it never
   // lands in React state / devtools and changing it doesn't trigger renders.
   const masterKey = useRef<CryptoKey | null>(null);
+  // Settles once startup — unwrapping the vault, then the first full read — is
+  // done, whether that ends unlocked or locked. Until then `masterKey` is null
+  // even on a device that is about to unlock, while the cached snapshot already
+  // shows a ready screen: an entry typed in that first second or two was
+  // refused as "Locked", and the same entry went through a moment later.
+  const startup = useRef<Promise<void>>(Promise.resolve());
 
   // Load the currency settings plus, when unlocked, the decrypted transactions
   // and gold. Backfilling any legacy plaintext rows into the `_enc` columns was
@@ -354,7 +360,18 @@ export function StoreProvider({
   }, [userId]);
 
   useEffect(() => {
+    let settle!: () => void;
+    startup.current = new Promise((resolve) => (settle = resolve));
     void (async () => {
+      try {
+        await openVault();
+        await loadData();
+      } finally {
+        settle();
+      }
+    })();
+
+    async function openVault() {
       const vault = await loadVault(userId);
       if (vault.status === "unlocked") {
         // Default tier: no user passphrase, always unlocked.
@@ -379,9 +396,16 @@ export function StoreProvider({
           setPassphrase(null);
         }
       }
-      await loadData();
-    })();
+    }
   }, [userId, loadData]);
+
+  // The master key for a write, once startup has settled; null means locked.
+  // It waits for the first read too, not just the key, so that read can't
+  // land after the insert and swap in a ledger without the new entry.
+  const writeKey = useCallback(async () => {
+    await startup.current;
+    return masterKey.current;
+  }, []);
 
   // Keep the on-device snapshot in step with what's on screen, so a later cold
   // start paints the latest data instantly. Only while unlocked and settled:
@@ -408,7 +432,7 @@ export function StoreProvider({
 
   const enableEncryption = useCallback(
     async (pass: string) => {
-      const key = masterKey.current;
+      const key = await writeKey();
       if (!key) return { error: LOCKED_MSG };
       await enablePassphrase(userId, key, pass);
       storeStoredPassphrase(userId, pass);
@@ -416,18 +440,18 @@ export function StoreProvider({
       setE2eMode("passphrase");
       return { error: null };
     },
-    [userId],
+    [userId, writeKey],
   );
 
   const disableEncryption = useCallback(async () => {
-    const key = masterKey.current;
+    const key = await writeKey();
     if (!key) return { error: LOCKED_MSG };
     await disablePassphrase(userId, key);
     clearStoredPassphrase(userId);
     setPassphrase(null);
     setE2eMode("default");
     return { error: null };
-  }, [userId]);
+  }, [userId, writeKey]);
 
   const signOut = useCallback(async () => {
     // Drop the cached passphrase first so it doesn't linger on this device for
@@ -461,7 +485,7 @@ export function StoreProvider({
 
   const addTransaction = useCallback(
     async (tx: NewTransaction) => {
-      const key = masterKey.current;
+      const key = await writeKey();
       if (!key) return { error: LOCKED_MSG };
       const enc = await encryptTxValues(key, tx);
       const { data, error } = await supabase
@@ -473,11 +497,11 @@ export function StoreProvider({
       setLedger((prev) => [txInMemory(data as TransactionRow, tx), ...prev]);
       return { error: null };
     },
-    [userId],
+    [userId, writeKey],
   );
 
   const updateTransaction = useCallback(async (id: string, tx: NewTransaction) => {
-    const key = masterKey.current;
+    const key = await writeKey();
     if (!key) return { error: LOCKED_MSG };
     const enc = await encryptTxValues(key, tx);
     const { data, error } = await supabase
@@ -492,7 +516,7 @@ export function StoreProvider({
       prev.map((t) => (t.id === id ? txInMemory(row, tx) : t)),
     );
     return { error: null };
-  }, []);
+  }, [writeKey]);
 
   const deleteTransaction = useCallback(
     async (id: string) => {
@@ -539,7 +563,7 @@ export function StoreProvider({
 
   const addSafeGoldEntry = useCallback(
     async (entry: NewSafeGoldEntry) => {
-      const key = masterKey.current;
+      const key = await writeKey();
       if (!key) return { error: LOCKED_MSG };
       const enc = await encryptGoldValues(key, entry);
       const { data, error } = await supabase
@@ -563,7 +587,7 @@ export function StoreProvider({
       ]);
       return { error: null };
     },
-    [userId],
+    [userId, writeKey],
   );
 
   const deleteSafeGoldEntry = useCallback(
