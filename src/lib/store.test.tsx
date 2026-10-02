@@ -308,6 +308,59 @@ describe("StoreProvider / useStore", () => {
     expect(res.error).toBe("nope");
   });
 
+  it("holds an entry saved before the vault opens, instead of refusing it as locked", async () => {
+    // The cached snapshot paints a ready screen at once, but the key is a
+    // network read and a 600k-iteration unwrap away. An entry saved in that
+    // window came back "Locked", and the same entry went through a moment later.
+    localStorage.setItem(
+      "bb-cache:u1",
+      JSON.stringify({
+        v: 2,
+        transactions: [tx({ id: "cached" })],
+        homeCurrency: "USD",
+        currencies: [],
+        safeGoldEntries: [],
+      }),
+    );
+    let openVault!: () => void;
+    const keyRead = new Promise<void>((resolve) => (openVault = resolve));
+    const inserted = tx({ id: "new", category: "clothes", amount_usd_cents: 8500 });
+    const { result } = setup({
+      "e2e_keys:select": async () => {
+        await keyRead;
+        return { data: null };
+      },
+      "transactions:insert": () => ({ data: inserted, error: null }),
+    });
+    expect(result.current.loading).toBe(false); // the screen looks ready
+
+    let res: Res | null = null;
+    let saving!: Promise<unknown>;
+    await act(async () => {
+      saving = result.current
+        .addTransaction({
+          is_income: false,
+          category: "clothes",
+          amount_usd_cents: 8500,
+          original_currency: "USD",
+          original_amount: 85,
+          rate_used: 1,
+        })
+        .then((r) => (res = r));
+    });
+    // Still waiting on the key: no answer yet, and nothing sent.
+    expect(res).toBeNull();
+    expect(mock.calls).not.toContainEqual({ table: "transactions", op: "insert" });
+
+    await act(async () => {
+      openVault();
+      await saving;
+    });
+    expect(res).toEqual({ error: null });
+    // Saved after the startup read, so that read didn't swap it back out.
+    expect(result.current.transactions.map((t) => t.id)).toEqual(["new"]);
+  });
+
   it("updates a transaction in place, and surfaces update errors", async () => {
     const existing = tx({ id: "t1", note: "old" });
     const other = tx({ id: "t2", note: "keep" });
